@@ -36,7 +36,9 @@ Ein EMS auf Home-Assistant-Basis, das:
 
 ## Rahmenentscheidungen
 
-- **Eigenbau, EVCC wird ersetzt** (Leo, 2026-07-12): Das EMS bildet EVCCs Lade-Funktionen selbst nach (REQ-007) und löst die bestehende EVCC-Installation ab (REQ-008). Die ADR in Phase 3 klärt nur noch den Tech-Stack (AppDaemon / Custom Integration / Add-on) und die UI-Frage (HA-Dashboard vs. separate App).
+- **Eigenbau, EVCC wird ersetzt** (Leo, 2026-07-12): Das EMS bildet EVCCs Lade-Funktionen selbst nach (REQ-007) und löst die bestehende EVCC-Installation ab (REQ-008). Die ADR in Phase 3 klärt nur noch den Tech-Stack.
+- **UI: eigenständige App, LAN-lokal** (Leo, 2026-07-12): Kein HA-Dashboard — eine separate App, die vollständig im Heim-LAN ohne Cloud funktioniert (REQ-074).
+- **70 %-Regel:** Arbeitsannahme lt. Elektriker — die Wechselrichter setzen die Begrenzung selbst durch; das EMS optimiert nur wirtschaftlich (REQ-043).
 - **Plattform:** Home Assistant ist gesetzt (alle Geräte sind dort bereits integriert).
 - **PV-Prognose:** Forecast.Solar.
 - **Dynamischer Tarif:** geplant, noch kein Anbieter gewählt → Requirements als *Should* führen, Adapter für Top-5-Anbieter DE.

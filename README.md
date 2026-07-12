@@ -43,4 +43,4 @@ src/            Implementierung (ab Phase 4)
 
 **Phase 1 (Requirements) ist abgeschlossen** (2026-07-12): 39 Requirements, priorisiert per MoSCoW — 26 Must, 13 Should, 3 Won't — gegliedert in drei Ausbaustufen (1: EVCC-Ersatz, 2: Wärmepumpe, 3: dynamischer Tarif). Einzige offene Flanke: die 70 %-Frage für die Neuanlage (REQ-043, wartet auf den Elektriker). Nächster Schritt: Phase 2 — testbare Spezifikation der Stufe-1-Musts.
 
-**Architektur-Richtung (2026-07-12):** Eigenbau — das EMS ersetzt die bestehende EVCC-Installation und bildet deren Lade-Funktionen äquivalent nach. Tech-Stack und UI-Form (HA-Dashboard vs. separate App) werden in Phase 3 entschieden.
+**Architektur-Richtung (2026-07-12):** Eigenbau — das EMS ersetzt die bestehende EVCC-Installation (läuft als HA-Add-on, Baseline in [docs/evcc-baseline.md](docs/evcc-baseline.md)) und bildet deren Lade-Funktionen äquivalent nach. Die UI wird eine **eigenständige, LAN-lokale App** (kein HA-Dashboard). Nur der Tech-Stack wird noch in Phase 3 entschieden.

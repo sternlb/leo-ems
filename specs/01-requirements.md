@@ -1,7 +1,7 @@
 # 01 — Requirements
 
-**Status:** ✅ **Phase 1 abgeschlossen** — alle Requirements per MoSCoW priorisiert (26 Must, 13 Should). Einzige offene Flanke: REQ-043 ist vorläufig eingestuft, bis Elektriker Waldemar die 70 %-Frage für die Neuanlage klärt.
-**Stand:** 2026-07-12 (MoSCoW-Priorisierung)
+**Status:** ✅ **Phase 1 abgeschlossen** — alle Requirements per MoSCoW priorisiert (26 Must, 13 Should), keine offenen Flanken. Zur 70 %-Regel der Neuanlage gilt eine dokumentierte Arbeitsannahme (REQ-043), die bei der Sungrow-Inbetriebnahme verifiziert wird.
+**Stand:** 2026-07-12 (MoSCoW + finale Entscheidungen UI/70 %-Regel)
 
 > **Architektur-Richtung (Runde 2, von Leo entschieden):** Das EMS ist ein **Eigenbau und ersetzt das bestehende EVCC** (aktuell als HACS-Installation in HA). EVCC dient als Funktions-Referenz fürs Laden (REQ-007/008), wird aber nicht eingebunden. Die ADR in Phase 3 dokumentiert nur noch das *Wie* (Tech-Stack: AppDaemon / Custom Integration / Add-on), nicht mehr das *Ob*.
 
@@ -60,7 +60,7 @@ Konventionen:
 | REQ-040 | Das EMS muss die Erzeugung beider Anlagen (E3DC-DC-seitig + Sungrow AC-seitig) zu einer Gesamterzeugung zusammenführen. | Must | Priorisiert |
 | REQ-041 | Das EMS soll eine PV-Ertragsprognose (mind. 24 h) über **Forecast.Solar** nutzen, um Ladeplanung und WP-Vorziehen vorausschauend zu steuern — konfiguriert für beide Anlagen (Ost 22° + Garagendach Ost/West 15°). | Must | Priorisiert |
 | REQ-042 | Das EMS soll den Sungrow SG 6.0RT lokal auslesen (Modbus TCP bevorzugt, keine Cloud-Pflicht). | Must | Priorisiert |
-| REQ-043 | Das EMS soll die **70 %-Einspeisebegrenzung** berücksichtigen und drohende Abregelung durch lokale Verwertung des Überschusses vermeiden. Bestandsanlage: Regel aktiv, in der E3DC-Steuerung hinterlegt. *Für die Neuanlage (Sungrow) noch zu klären.* | Should | Priorisiert |
+| REQ-043 | Das EMS soll Abregelungsverluste durch die **70 %-Einspeisebegrenzung** minimieren, indem Überschuss lokal verwertet wird (EV, WP, Batterie), statt ihn abregeln zu lassen. Die Begrenzung selbst **durchsetzen muss das EMS nicht**: Bestandsanlage → in der E3DC-Steuerung hinterlegt; Neuanlage → *Annahme lt. Elektriker Waldemar (2026-07-12): der Sungrow-Wechselrichter übernimmt das selbst.* Annahme bei Inbetriebnahme verifizieren. | Should | Priorisiert |
 
 ## F — Monitoring / Dashboard
 
@@ -89,7 +89,7 @@ Konventionen:
 | REQ-071 | Die SoC-Reserve der Hausbatterie muss über die App/UI einstellbar sein. **Default: 0 %.** | Must | Priorisiert |
 | REQ-072 | Harte Grenzen (z.B. WW-Mindesttemperatur, EV-Mindest-SoC, Batterie-Limits) müssen über die App/UI einstellbar sein. **Default: keine Grenze aktiv** — das System läuft zunächst ohne harte Grenzen, sie sind aber nachrüstbar ohne Codeänderung. | Should | Priorisiert |
 | REQ-073 | Konfigurationsänderungen über die UI müssen sofort wirken (kein Neustart) und persistent gespeichert werden. | Must | Priorisiert |
-| REQ-074 | Die Bedienoberfläche soll entweder als **HA-Dashboard** oder als **separate App** realisierbar sein — die EMS-Logik ist von der UI zu entkoppeln (Steuerung über definierte Schnittstelle/Entities), damit die Entscheidung offen bleiben kann. | Must | Priorisiert |
+| REQ-074 | Die Bedienoberfläche wird als **eigenständige App** realisiert, die **vollständig im Heim-LAN funktioniert** — lokal gehostet, vom Smartphone/PC im LAN erreichbar, ohne Cloud- oder Internet-Abhängigkeit. Die EMS-Logik bleibt von der UI entkoppelt (definierte lokale Schnittstelle). *(Entschieden 2026-07-12: separate App statt HA-Dashboard.)* | Must | Priorisiert |
 
 ---
 
@@ -123,8 +123,8 @@ Konventionen:
 
 ## Offene Fragen (Runde 3)
 
-1. **70 %-Regel Neuanlage:** Antwort von Elektriker Waldemar einholen — gilt die Begrenzung auch für die Sungrow-Anlage bzw. den Summenzähler? *(externe Abhängigkeit)*
-2. **UI-Entscheidung:** HA-Dashboard vs. separate App — kann bis zur Architekturphase offen bleiben (REQ-074 hält beides möglich), sollte aber vor Phase 4 fallen.
+1. ~~**70 %-Regel Neuanlage**~~ ✅ Beantwortet (2026-07-12, Elektriker Waldemar): Arbeitsannahme — **der Wechselrichter kümmert sich selbst darum**. In REQ-043 dokumentiert, bei Sungrow-Inbetriebnahme verifizieren.
+2. ~~**UI-Entscheidung**~~ ✅ Entschieden (2026-07-12): **eigenständige App, funktioniert komplett im Heim-LAN** (REQ-074).
 3. **MyVaillant-Steuerbarkeit:** Reichen die per Cloud verfügbaren Stellgrößen (WW-Boost, Sollwerte) praktisch aus? → in Phase 2 mit einem kurzen Praxistest verifizieren.
 4. ~~**Migrations-Baseline**~~ ✅ Erledigt (2026-07-12): siehe [docs/evcc-baseline.md](../docs/evcc-baseline.md) — EVCC läuft als **Add-on** (nicht HACS), Site-Parameter, Loadpoint „Garage", Vehicle und Statistik-Baseline (99,4 % Solaranteil 30d) dokumentiert. Rest-Todo dort: `evcc.yaml`/Zugangsdaten vor der Ablösung sichern.
 

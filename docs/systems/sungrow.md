@@ -19,4 +19,4 @@
 - [x] ~~LAN in der Garage?~~ **Ja, LAN vorhanden** (2026-07-12) → Modbus TCP ist der Weg.
 - [x] ~~Zeitplan?~~ **Installation bis Ende 2026** (2026-07-12) — REQ-040/042 werden erst danach real testbar; bis dahin ggf. mit simulierten Werten arbeiten.
 - [ ] WiNet-S-Dongle im Lieferumfang / Modbus TCP darüber freigeschaltet? (Firmware-Versionen unterscheiden sich hier.)
-- [ ] Gilt die 70 %-Regel (Bestandsanlage: in E3DC hinterlegt) auch für die Neuanlage bzw. den Summenzähler? → Stadtwerke Röthenbach.
+- [x] ~~Gilt die 70 %-Regel auch für die Neuanlage?~~ **Arbeitsannahme lt. Elektriker Waldemar (2026-07-12): der Wechselrichter setzt die Begrenzung selbst durch.** Bei Inbetriebnahme verifizieren (Einstellung im WR prüfen).
