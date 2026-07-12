@@ -23,8 +23,8 @@ Erst die Spezifikation, dann der Code. Jede Phase erzeugt ein prüfbares Artefak
 
 | Phase | Artefakt | Status |
 |---|---|---|
-| 1. Requirements | [specs/01-requirements.md](specs/01-requirements.md) | 🔵 laufend |
-| 2. Spezifikation | specs/02-specification.md | ⚪ offen |
+| 1. Requirements | [specs/01-requirements.md](specs/01-requirements.md) | ✅ abgeschlossen (2026-07-12) |
+| 2. Spezifikation | specs/02-specification.md | 🔵 nächster Schritt |
 | 3. Architektur/Design (ADR: Tech-Stack, UI-Form) | specs/03-architecture.md | ⚪ offen |
 | 4. Implementierung | src/ | ⚪ offen |
 | 5. Test/Validierung | Testprotokolle | ⚪ offen |
@@ -41,6 +41,6 @@ src/            Implementierung (ab Phase 4)
 
 ## Status
 
-Phase 1 (Requirements) läuft. Der Katalog in `specs/01-requirements.md` enthält Kandidaten im Status *Entwurf*; am Phasenende werden sie gemeinsam sortiert und per MoSCoW priorisiert.
+**Phase 1 (Requirements) ist abgeschlossen** (2026-07-12): 39 Requirements, priorisiert per MoSCoW — 26 Must, 13 Should, 3 Won't — gegliedert in drei Ausbaustufen (1: EVCC-Ersatz, 2: Wärmepumpe, 3: dynamischer Tarif). Einzige offene Flanke: die 70 %-Frage für die Neuanlage (REQ-043, wartet auf den Elektriker). Nächster Schritt: Phase 2 — testbare Spezifikation der Stufe-1-Musts.
 
 **Architektur-Richtung (2026-07-12):** Eigenbau — das EMS ersetzt die bestehende EVCC-Installation und bildet deren Lade-Funktionen äquivalent nach. Tech-Stack und UI-Form (HA-Dashboard vs. separate App) werden in Phase 3 entschieden.
