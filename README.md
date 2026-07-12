@@ -24,7 +24,7 @@ Erst die Spezifikation, dann der Code. Jede Phase erzeugt ein prüfbares Artefak
 | Phase | Artefakt | Status |
 |---|---|---|
 | 1. Requirements | [specs/01-requirements.md](specs/01-requirements.md) | ✅ abgeschlossen (2026-07-12) |
-| 2. Spezifikation | specs/02-specification.md | 🔵 nächster Schritt |
+| 2. Spezifikation | [specs/02-specification.md](specs/02-specification.md) | 🔵 laufend (Entwurf Stufe 1 steht) |
 | 3. Architektur/Design (ADR: Tech-Stack, UI-Form) | specs/03-architecture.md | ⚪ offen |
 | 4. Implementierung | src/ | ⚪ offen |
 | 5. Test/Validierung | Testprotokolle | ⚪ offen |
