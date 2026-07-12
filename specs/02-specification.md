@@ -72,7 +72,18 @@ Hysterese (Baseline-Werte, konfigurierbar):
 
 ### 4.3 Zielladung & Garantie-SoC (REQ-003/004) ⚡ *neu*
 
-Konfiguration je Regel (§9.2): Abfahrtszeit `T_ab` (Default **07:30**), Garantie-SoC `SoC_min` (Default **50 %**).
+**Regel-Modell** (Leo, 2026-07-12): Die Zielladung wird über eine **frei konfigurierbare Regelliste** gesteuert — beliebig viele Regeln, jede vollständig über die App anleg-, änder- und löschbar (REQ-070):
+
+```
+Regel = { Wochentage ⊆ {Mo…So}, Abfahrtszeit T_ab, Mindest-SoC SoC_min, aktiv: ja/nein }
+```
+
+- **Default-Regel** (bei Erstinstallation): Mo–Fr, 07:30, 50 %.
+- Beispiel-Konfiguration: `Mo–Fr 07:30 → 50 %`, `Sa 09:00 → 30 %`, `So — keine Regel`.
+- **Auswertung:** Das EMS bestimmt aus allen aktiven Regeln die **nächste zukünftige Abfahrt** und plant auf deren `SoC_min`. Treffen mehrere Regeln auf denselben Zeitpunkt, gilt der **höchste** `SoC_min`.
+- Keine aktive Regel für die kommende Zeit ⇒ reines PV-Laden ohne Garantie.
+
+**Planungsrechnung** (je nächster Abfahrt):
 
 ```
 E_fehlt  = max(0, SoC_min − SoC_ist) × 77 kWh × 1/η        (η = 0,90 Ladewirkungsgrad, ⚙ Festlegung)
@@ -85,8 +96,9 @@ T_start  = T_ab − T_dauer − 15 min Puffer
 3. Oberhalb `SoC_min` wird nur noch PV-Überschuss geladen, bis fahrzeugseitiges Limit (aktuell 80 %).
 4. Kein Fahrzeug angesteckt ⇒ keine Aktion; ab `T_start` Benachrichtigungs-Hook (Stufe: Should, REQ-053).
 
-**Akzeptanz:** SoC 30 %, Regel 07:30/50 % ⇒ E_fehlt = 17,1 kWh, T_dauer ≈ 1:33 h ⇒ Garantieladung startet spätestens 05:42, Ziel um 07:30 erreicht.
-**Akzeptanz:** SoC 55 % um 23:00 ⇒ keine Garantieladung; PV-Laden am Morgen falls Überschuss.
+**Akzeptanz:** SoC 30 %, Regel Mo–Fr 07:30/50 %, Mittwochabend ⇒ E_fehlt = 17,1 kWh, T_dauer ≈ 1:33 h ⇒ Garantieladung startet spätestens 05:42, Ziel Donnerstag 07:30 erreicht.
+**Akzeptanz:** Freitagabend, Regeln `Mo–Fr 07:30/50 %` + `Sa 09:00/30 %` ⇒ nächste Abfahrt = Sa 09:00, geplant wird auf 30 %.
+**Akzeptanz:** Regel per App deaktiviert ⇒ ab dem nächsten Regelintervall keine Garantieplanung mehr für diese Regel.
 
 ### 4.4 Fahrzeug-SoC (REQ-006)
 
@@ -116,11 +128,11 @@ Grundprinzip: **Das EMS steuert nur aktiv, wenn seine Datenlage frisch ist.** Je
 
 | # | Ausfall | Erkennung | Verhalten |
 |---|---|---|---|
-| E1 | E3DC/RSCP weg | keine Daten > 60 s | Kein Überschusswert ⇒ PV-Regelung pausiert. Läuft eine Garantieladung, läuft sie weiter (netzbasiert). Entladesperren laufen per TTL aus. |
+| E1 | E3DC/RSCP weg | keine Daten > 60 s | **Abschalten** (Leo, 2026-07-12): laufende Ladung wird gestoppt, das EMS stellt die Steuerung ein, bis wieder Daten kommen. Entladesperren laufen per TTL aus. Alarm-Hook. |
 | E2 | go-e weg | API-Timeout > 60 s | Keine Steuerbefehle mehr; Wallbox behält letzten/eigenen Zustand (autonomes Standardverhalten). Alarm-Hook. |
-| E3 | Škoda-Cloud weg | Daten > 30 min alt | SoC-Schätzung (§4.4). > 12 h ohne Wert: Garantieladung nutzt konservativ SoC_letzt. |
-| E4 | Forecast.Solar weg | HTTP-Fehler | Letzte Prognose weiterverwenden (max. 24 h); danach Zielladung rein zeitbasiert (T_start ohne PV-Annahme = konservativ früh). |
-| E5 | Sungrow weg | Modbus-Timeout | Erzeugung = E3DC-only; Überschussrechnung bleibt korrekt (Sungrow speist AC-seitig ein → erscheint am Netzpunkt). |
+| E3 | Škoda-Cloud weg | Daten > 30 min alt | **Keine Änderung am Betrieb** (Leo, 2026-07-12): EMS arbeitet unverändert weiter, SoC per Schätzung (§4.4). |
+| E4 | Forecast.Solar weg | HTTP-Fehler | **Keine Änderung am Betrieb** (Leo, 2026-07-12): EMS arbeitet unverändert weiter mit der letzten gespeicherten Prognose. |
+| E5 | Sungrow weg | Modbus-Timeout | **Sungrow-Werte auf 0 setzen und weiterarbeiten** (Leo, 2026-07-12): Erzeugung = E3DC-only; Überschussrechnung am Netzpunkt bleibt korrekt. |
 | E6 | EMS selbst stirbt | — | Keine persistenten Übersteuerungen: alle Overrides tragen TTL (max. 15 min). Wallbox und E3DC laufen autonom weiter. **Watchdog-Test ist Teil der Abnahme.** |
 
 ## 8. Sicherheit & Nachvollziehbarkeit
@@ -146,7 +158,7 @@ Das EMS stellt eine **lokale HTTP-API + WebSocket** im LAN bereit (kein Cloud-Pf
 |---|---|
 | `GET /api/v1/status` | Live-Zustand: Leistungen, SoCs, Modus, aktive Regel, Begründung („warum lädt/lädt nicht") (REQ-050) |
 | `GET/PUT /api/v1/mode` | Lademodus |
-| `GET/POST/PUT/DELETE /api/v1/rules` | Laderegeln (Abfahrtszeit, Garantie-SoC) — CRUD ohne Neustart (REQ-070/073) |
+| `GET/POST/PUT/DELETE /api/v1/rules` | Laderegeln — CRUD ohne Neustart (REQ-070/073). Schema: `{wochentage[], abfahrtszeit, soc_min, aktiv}` (§4.3) |
 | `GET/PUT /api/v1/config` | residualPower, prioritySoc, SoC_reserve, Hysteresen, harte Grenzen (REQ-071/072) |
 | `GET /api/v1/history` | Kennzahlen & Entscheidungs-Log |
 | `WS /api/v1/live` | Push der Live-Werte für das Dashboard |
@@ -162,7 +174,7 @@ Pflicht-Inhalte: **Hausverbrauch**, **Wallbox** (Leistung, Modus, Fahrzeug-SoC, 
 |---|---|---|
 | T1 Überschussfolge | REQ-001/002 | Bei simuliertem Einspeise-Sprung 0→3 kW startet Ladung nach 60 s mit ~12 A 1p; bei Wegfall stoppt sie nach 180 s |
 | T2 Phasenwechsel | REQ-002/064 | Überschuss 5 kW ⇒ 3p nach 60 s; zurück auf 1p erst nach 180 s UND ≥ 10 min Abstand |
-| T3 Garantieladung | REQ-003/004 | Szenario aus §4.3 erreicht 50 % vor 07:30, auch bei Prognose = 0 |
+| T3 Garantieladung | REQ-003/004 | Szenario aus §4.3 erreicht 50 % vor 07:30, auch bei Prognose = 0. Mehrere Regeln: Freitagabend mit Mo–Fr- und Sa-Regel ⇒ Planung auf Sa 09:00/30 % |
 | T4 Entladesperre | REQ-020/024 | Beim Ladestart wird Sperre gesetzt; nach Kill des EMS-Prozesses ist sie ≤ 15 min später ausgelaufen (Watchdog-Test) |
 | T5 Fail-Safe | REQ-060 | Jede Zeile der Matrix §7 einzeln provoziert; kein Gerät bleibt gesperrt |
 | T6 Regel-CRUD | REQ-070/073 | Regel in App anlegen/ändern/löschen ⇒ wirkt ohne Neustart, übersteht EMS-Neustart |
@@ -175,7 +187,12 @@ Pflicht-Inhalte: **Hausverbrauch**, **Wallbox** (Leistung, Modus, Fahrzeug-SoC, 
 
 3. **Entladesperre auch bei „PV+Min" und „Schnell" aktiv** (§5.1) — die 12 kWh bleiben fürs Haus, kein doppelter Wandlungsverlust.
 4. **Override-Gültigkeit: bis Abstecken oder max. 24 h** (§8.1).
-5. **Garantieladung übersteuert Modus „Aus"** (§3) — das Auto ist um 07:30 immer fahrbereit; die App begründet sichtbar.
+5. **Garantieladung übersteuert Modus „Aus"** (§3) — das Auto ist zur Abfahrt immer fahrbereit; die App begründet sichtbar.
+
+**Review-Änderungen von Leo (2026-07-12):**
+
+6. **Zielladung als Regelliste** (§4.3): mehrere Regeln mit Wochentagen, Uhrzeit und frei definierbarem Mindest-SoC, komplett App-verwaltet.
+7. **Fail-Safe-Matrix angepasst** (§7): E1 E3DC weg → Abschalten (auch Garantieladung); E3/E4 → Betrieb unverändert; E5 → Sungrow = 0 und weiter.
 
 **Defaults gesetzt, im Realbetrieb zu kalibrieren (nicht blockierend):**
 

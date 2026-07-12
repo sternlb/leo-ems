@@ -85,7 +85,7 @@ Konventionen:
 
 | ID | Anforderung | MoSCoW | Status |
 |---|---|---|---|
-| REQ-070 | Der Nutzer muss Laderegeln (Abfahrtszeit + Ziel-/Mindest-SoC) über ein Eingabefenster in der App/UI **anlegen, ändern und wieder entfernen** können — ohne YAML/Code. Default-Regel: Abfahrt 07:30, Mindest-SoC 50 %. | Must | Priorisiert |
+| REQ-070 | Der Nutzer muss **beliebig viele Laderegeln** — jeweils mit **Wochentagen, Abfahrtszeit und frei definierbarem Mindest-SoC** — über ein Eingabefenster in der App **anlegen, ändern, deaktivieren und entfernen** können, ohne YAML/Code. Default-Regel: Mo–Fr, 07:30, 50 %. Regel-Modell in Spec §4.3. | Must | Priorisiert |
 | REQ-071 | Die SoC-Reserve der Hausbatterie muss über die App/UI einstellbar sein. **Default: 0 %.** | Must | Priorisiert |
 | REQ-072 | Harte Grenzen (z.B. WW-Mindesttemperatur, EV-Mindest-SoC, Batterie-Limits) müssen über die App/UI einstellbar sein. **Default: keine Grenze aktiv** — das System läuft zunächst ohne harte Grenzen, sie sind aber nachrüstbar ohne Codeänderung. | Should | Priorisiert |
 | REQ-073 | Konfigurationsänderungen über die UI müssen sofort wirken (kein Neustart) und persistent gespeichert werden. | Must | Priorisiert |
