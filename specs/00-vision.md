@@ -36,6 +36,7 @@ Ein EMS auf Home-Assistant-Basis, das:
 
 ## Rahmenentscheidungen
 
-- **Architektur offen:** Eigenbau vs. EVCC vs. Hybrid wird erst nach der Requirements-Phase als ADR entschieden.
+- **Eigenbau, EVCC wird ersetzt** (Leo, 2026-07-12): Das EMS bildet EVCCs Lade-Funktionen selbst nach (REQ-007) und löst die bestehende EVCC-Installation ab (REQ-008). Die ADR in Phase 3 klärt nur noch den Tech-Stack (AppDaemon / Custom Integration / Add-on) und die UI-Frage (HA-Dashboard vs. separate App).
 - **Plattform:** Home Assistant ist gesetzt (alle Geräte sind dort bereits integriert).
-- **Dynamischer Tarif:** geplant, noch kein Anbieter gewählt → Requirements als *Should* führen.
+- **PV-Prognose:** Forecast.Solar.
+- **Dynamischer Tarif:** geplant, noch kein Anbieter gewählt → Requirements als *Should* führen, Adapter für Top-5-Anbieter DE.

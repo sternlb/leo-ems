@@ -6,7 +6,7 @@
 
 - **HA:** MyVaillant (Cloud) — ✅ installiert. Entities u.a. `water_heater.home_domestic_hot_water_0`, Climate Zone 1, Betriebsmodus-Sensoren, Away-Mode, Legionellenschutz. Sensor `Vaillant API Request Count` deutet auf aktives Ratenlimit-Monitoring hin.
 - **Cloud-Limitierung:** MyVaillant-API ist ratenlimitiert und bietet primär Sollwerte/Modi, keine direkte Leistungsvorgabe.
-- **SG-Ready/eBUS: ✅ verdrahtet** (bestätigt 2026-07-12) → lokaler, schneller Steuerweg vorhanden. Präferenz: lokal steuern, Cloud nur lesen/Fallback (REQ-013/014).
+- **Anbindung (korrigiert 2026-07-12):** Das Vaillant-**Internetmodul hängt am eBUS** — es gibt keinen separaten SG-Ready-Kontakt. Steuerweg ist damit die **MyVaillant-Cloud** (REQ-013/014). Lokaler eBUS-Direktzugang (ebusd + Koppler) bliebe eine spätere Nachrüst-Option.
 
 ## Fähigkeiten (für das EMS relevant)
 
@@ -15,9 +15,8 @@
 
 ## Offene Fragen
 
-- [x] ~~SG-Ready-Kontakte verdrahtet?~~ **Ja, SG-Ready/eBUS verdrahtet** (2026-07-12).
-- [ ] Welche SG-Ready-Betriebsart ist an der WP konfiguriert (Einschaltempfehlung vs. Zwangslauf)? Kontakt schon mal real geschaltet?
-- [ ] Wie ist der Kontakt ansteuerbar — Relais an HA (welches?), Shelly, o.ä.?
+- [x] ~~SG-Ready-Kontakte verdrahtet?~~ **Nein — Internetmodul am eBUS, Steuerung via MyVaillant-Cloud** (korrigiert 2026-07-12).
+- [ ] Reichen die Cloud-Stellgrößen (WW-Boost, Sollwert-Anhebung) praktisch fürs Überschuss-Vorziehen? → Praxistest in Phase 2.
 - [ ] Wie schnell reagiert die WP auf MyVaillant-Sollwertänderungen (Latenz Cloud → Gerät)?
 - [ ] Gibt es einen Pufferspeicher (Heizung) und welches WW-Speichervolumen? Bestimmt das „thermische Batterie"-Potenzial.
 - [ ] Mindest-Komfortgrenzen: WW-Temperatur nie unter __ °C, Raumtemperatur-Korridor?

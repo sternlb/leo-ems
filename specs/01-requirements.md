@@ -1,9 +1,9 @@
 # 01 — Requirements
 
 **Status:** Phase 1 laufend — alle Einträge sind **Kandidaten (Entwurf)**, keine Zusagen.
-**Stand:** 2026-07-12 (aktualisiert nach Interview-Runde 1)
+**Stand:** 2026-07-12 (aktualisiert nach Interview-Runde 2)
 
-> **Architektur-Input (Runde 1):** EVCC ist bereits im Einsatz — die E3DC ist darüber via RSCP angebunden — und der EVCC-Funktionsumfang fürs Autoladen ist explizit gefordert (REQ-007). Das ist ein starker Hinweis Richtung *EVCC als Lade-Kern + EMS drumherum (Hybrid)*. Die Entscheidung fällt trotzdem erst als ADR nach Phase 1.
+> **Architektur-Richtung (Runde 2, von Leo entschieden):** Das EMS ist ein **Eigenbau und ersetzt das bestehende EVCC** (aktuell als HACS-Installation in HA). EVCC dient als Funktions-Referenz fürs Laden (REQ-007/008), wird aber nicht eingebunden. Die ADR in Phase 3 dokumentiert nur noch das *Wie* (Tech-Stack: AppDaemon / Custom Integration / Add-on), nicht mehr das *Ob*.
 
 Konventionen:
 - IDs `REQ-<Nr>` sind stabil, auch wenn ein Requirement später verworfen wird (dann Status *Verworfen*).
@@ -22,7 +22,8 @@ Konventionen:
 | REQ-004 | Das EMS muss einen Mindest-SoC des Enyaq garantieren, der unabhängig vom PV-Angebot immer schnellstmöglich hergestellt wird (Wert über UI einstellbar, → REQ-070). | | Entwurf |
 | REQ-005 | Das EMS muss Lademodi anbieten (mindestens: Nur-PV, PV+Min, Schnell/Egal-woher, Aus), umschaltbar über HA. | | Entwurf |
 | REQ-006 | Das EMS soll den SoC und Ladezustand des Enyaq aus der Fahrzeug-Integration einbeziehen (nicht nur Wallbox-Zählerstand). | | Entwurf |
-| REQ-007 | Das EMS muss fürs Autoladen den Funktionsumfang von EVCC bereitstellen (Überschussregelung mit Phasenumschaltung, Ladeplanung auf Zielzeit, Fahrzeug-SoC-Integration, Lademodi) — entweder durch Einbindung von EVCC selbst oder funktionsäquivalent. | | Entwurf |
+| REQ-007 | Das EMS muss fürs Autoladen den Funktionsumfang von EVCC **funktionsäquivalent nachbilden** (Überschussregelung mit Phasenumschaltung, Ladeplanung auf Zielzeit, Fahrzeug-SoC-Integration, Lademodi). EVCC ist Referenz, wird aber nicht eingebunden. | | Entwurf |
+| REQ-008 | Das EMS muss die bestehende EVCC-Installation (HACS in HA) vollständig ablösen: Nach der Migration übernimmt das EMS alle EVCC-Aufgaben (E3DC-Messung via RSCP, Wallbox-Steuerung, Enyaq-Anbindung); EVCC wird deinstalliert. | | Entwurf |
 
 ## B — Wärmepumpen-Steuerung
 
@@ -31,8 +32,8 @@ Konventionen:
 | REQ-010 | Das EMS soll bei anhaltendem PV-Überschuss die Warmwasserbereitung der Vaillant WP vorziehen (Boost/Sollwert-Anhebung mittags statt abends). | | Entwurf |
 | REQ-011 | Das EMS soll bei PV-Überschuss die Heizkreis-Solltemperatur moderat anheben können (thermische Speicherung im Gebäude/Puffer). | | Entwurf |
 | REQ-012 | Das EMS darf Komfortgrenzen nie verletzen (Warmwasser-Mindesttemperatur, Raumtemperatur-Korridor); Grenzen sind konfigurierbar. | | Entwurf |
-| REQ-013 | Das EMS soll die WP bevorzugt lokal über die **verdrahtete SG-Ready-/eBUS-Anbindung** ansteuern; die MyVaillant-Cloud dient als Lese- und Fallback-Pfad. | | Entwurf |
-| REQ-014 | Sofern die MyVaillant-Cloud genutzt wird, muss das EMS deren Ratenlimits respektieren (Anfrage-Budget, keine Dauerschleifen). | | Entwurf |
+| REQ-013 | Das EMS soll die WP über die **MyVaillant-Cloud** ansteuern (Vaillant-Internetmodul hängt am eBUS). Ein lokaler eBUS-Direktzugang (z.B. ebusd, zusätzliche Hardware nötig) bleibt als spätere Option offen, ist aber kein Requirement. | | Entwurf |
+| REQ-014 | Das EMS muss die Ratenlimits der MyVaillant-Cloud respektieren (Anfrage-Budget, keine Dauerschleifen) und mit Cloud-Latenz/Aussetzern robust umgehen. | | Entwurf |
 
 ## C — Batterie-Management (E3DC)
 
@@ -57,7 +58,7 @@ Konventionen:
 | ID | Anforderung | MoSCoW | Status |
 |---|---|---|---|
 | REQ-040 | Das EMS muss die Erzeugung beider Anlagen (E3DC-DC-seitig + Sungrow AC-seitig) zu einer Gesamterzeugung zusammenführen. | | Entwurf |
-| REQ-041 | Das EMS soll eine PV-Ertragsprognose (mind. 24 h) nutzen, um Ladeplanung und WP-Vorziehen vorausschauend zu steuern (Quelle offen: Forecast.Solar / Solcast / E3DC). | | Entwurf |
+| REQ-041 | Das EMS soll eine PV-Ertragsprognose (mind. 24 h) über **Forecast.Solar** nutzen, um Ladeplanung und WP-Vorziehen vorausschauend zu steuern — konfiguriert für beide Anlagen (Ost 22° + Garagendach Ost/West 15°). | | Entwurf |
 | REQ-042 | Das EMS soll den Sungrow SG 6.0RT lokal auslesen (Modbus TCP bevorzugt, keine Cloud-Pflicht). | | Entwurf |
 | REQ-043 | Das EMS soll die **70 %-Einspeisebegrenzung** berücksichtigen und drohende Abregelung durch lokale Verwertung des Überschusses vermeiden. Bestandsanlage: Regel aktiv, in der E3DC-Steuerung hinterlegt. *Für die Neuanlage (Sungrow) noch zu klären.* | | Entwurf |
 
@@ -66,7 +67,7 @@ Konventionen:
 | ID | Anforderung | MoSCoW | Status |
 |---|---|---|---|
 | REQ-050 | Das EMS muss seinen Zustand und jede aktive Übersteuerung sichtbar machen (aktueller Modus, warum lädt/lädt nicht, welche Regel greift). | | Entwurf |
-| REQ-051 | Das EMS soll ein HA-Dashboard mit Energiefluss, Prognose und Ladeplan bereitstellen. | | Entwurf |
+| REQ-051 | Das EMS soll ein Dashboard mit **Hausverbrauch und allen Hauptverbrauchern** (Wallbox, Wärmepumpe, Batterie-Lade-/Entladeleistung) sowie Erzeugung, Prognose und Ladeplan bereitstellen. | | Entwurf |
 | REQ-052 | Das EMS soll Kennzahlen historisieren (Autarkie, PV-Anteil am EV-Laden, verschobene kWh), um den Nutzen gegen die Baseline 2025 zu belegen. | | Entwurf |
 | REQ-053 | Das EMS kann bei relevanten Ereignissen benachrichtigen (Ziel-SoC nicht erreichbar, Gerät nicht erreichbar, ungewöhnlicher Netzbezug). | | Entwurf |
 
@@ -88,6 +89,7 @@ Konventionen:
 | REQ-071 | Die SoC-Reserve der Hausbatterie muss über die App/UI einstellbar sein. **Default: 0 %.** | | Entwurf |
 | REQ-072 | Harte Grenzen (z.B. WW-Mindesttemperatur, EV-Mindest-SoC, Batterie-Limits) müssen über die App/UI einstellbar sein. **Default: keine Grenze aktiv** — das System läuft zunächst ohne harte Grenzen, sie sind aber nachrüstbar ohne Codeänderung. | | Entwurf |
 | REQ-073 | Konfigurationsänderungen über die UI müssen sofort wirken (kein Neustart) und persistent gespeichert werden. | | Entwurf |
+| REQ-074 | Die Bedienoberfläche soll entweder als **HA-Dashboard** oder als **separate App** realisierbar sein — die EMS-Logik ist von der UI zu entkoppeln (Steuerung über definierte Schnittstelle/Entities), damit die Entscheidung offen bleiben kann. | | Entwurf |
 
 ---
 
@@ -95,7 +97,7 @@ Konventionen:
 
 | # | Frage | Antwort | Eingeflossen in |
 |---|---|---|---|
-| 1 | WP-Anbindung | **SG-Ready/eBUS verdrahtet** → lokaler Steuerweg vorhanden | REQ-013/014 |
+| 1 | WP-Anbindung | ~~SG-Ready verdrahtet~~ **Korrektur Runde 2:** Internetmodul am eBUS → Steuerweg = MyVaillant-Cloud | REQ-013/014 |
 | 2 | E3DC schreibend | **Funktioniert — RSCP läuft bereits über EVCC** | REQ-020 ff., Architektur-Input |
 | 3 | EV-Nutzung | Abfahrt typ. **07:30**, Mindest-SoC **50 %**; per App-Eingabefenster erweiter-/entfernbar | REQ-003/004, REQ-070 |
 | 4 | Batterie-Reserve | Über App einstellbar, **Default 0 %** | REQ-021, REQ-071 |
@@ -107,14 +109,24 @@ Konventionen:
 | 10 | Harte Grenzen | Aktuell keine nötig, müssen aber **einstellbar** sein | REQ-072 |
 | 11 | Autoladen-Features | **EVCC-Funktionsumfang gefordert** | REQ-007 |
 
-## Offene Fragen (Runde 2)
+## Interview-Runde 2 — Antworten (2026-07-12)
 
-1. **Prognosequelle:** Forecast.Solar, Solcast oder E3DC-intern?
-2. **Dashboard:** Was willst du auf einen Blick sehen, und wo (HA-Dashboard, Handy, beides)?
-3. **EVCC-Bestand:** Wo läuft dein EVCC (HA-Add-on, Raspberry Pi, Docker)? Sind Wallbox und Enyaq dort schon als Loadpoint/Vehicle konfiguriert?
-4. **„App":** Meint App/UI das HA-Dashboard bzw. die HA-Companion-App — oder eine eigene EMS-Oberfläche?
-5. **SG-Ready:** Welche Betriebsart nutzt die Vaillant bei SG-Ready-Signal (Empfehlung vs. Zwangslauf)? Ist der Kontakt schon mal geschaltet worden?
-6. **70 %-Regel Neuanlage:** Gilt die Begrenzung auch für die Sungrow-Anlage bzw. den Summenzähler? (Klärung mit Stadtwerken Röthenbach.)
+| # | Frage | Antwort | Eingeflossen in |
+|---|---|---|---|
+| — | *(Grundsatz)* | **EVCC soll ersetzt werden** — EMS ist Eigenbau, EVCC nur Funktions-Referenz | Architektur-Richtung, REQ-007/008 |
+| 1 | EVCC-Bestand | In HA über **HACS** installiert | REQ-008 (Ablösung/Migration) |
+| 2 | „App" | EMS-Oberfläche **entweder HA-Dashboard oder separate App** — offen halten | REQ-074 |
+| 3 | Prognosequelle | **Forecast.Solar** | REQ-041 |
+| 4 | Dashboard | **Hausverbrauch + alle Hauptverbraucher** (Wallbox, …) | REQ-051 |
+| 5 | SG-Ready | Korrektur: kein SG-Ready-Kontakt — **Internetmodul am eBUS**, ggf. doch Cloud-Anbindung nutzen | REQ-013/014 |
+| 6 | 70 %-Regel Neuanlage | Unklar — **Elektriker Waldemar** muss antworten | REQ-043 (offen) |
+
+## Offene Fragen (Runde 3)
+
+1. **70 %-Regel Neuanlage:** Antwort von Elektriker Waldemar einholen — gilt die Begrenzung auch für die Sungrow-Anlage bzw. den Summenzähler? *(externe Abhängigkeit)*
+2. **UI-Entscheidung:** HA-Dashboard vs. separate App — kann bis zur Architekturphase offen bleiben (REQ-074 hält beides möglich), sollte aber vor Phase 4 fallen.
+3. **MyVaillant-Steuerbarkeit:** Reichen die per Cloud verfügbaren Stellgrößen (WW-Boost, Sollwerte) praktisch aus? → in Phase 2 mit einem kurzen Praxistest verifizieren.
+4. **Migrations-Baseline:** Vor der EVCC-Ablösung dessen aktuelle Konfiguration (Loadpoints, Vehicle, Meter) exportieren/dokumentieren, damit REQ-008 eine prüfbare Referenz hat.
 
 ## Priorisierung (MoSCoW)
 

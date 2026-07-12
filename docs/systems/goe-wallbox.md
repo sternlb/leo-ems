@@ -5,7 +5,7 @@
 ## Integration
 
 - **HA:** go-eCharger — ✅ installiert (Update-Entity „go-eCharger" sichtbar). Lokale HTTP-API v2 (kein Cloud-Zwang), alternativ MQTT.
-- **EVCC:** go-e wird nativ unterstützt (falls Architekturentscheidung Richtung EVCC/Hybrid fällt).
+- **Heute:** Steuerung läuft über EVCC (HACS). **Das EMS übernimmt die Wallbox-Steuerung direkt** (lokale API/MQTT), EVCC entfällt (REQ-008). EVCCs Überschussregelung inkl. Phasenumschaltung ist die Funktions-Referenz (REQ-007).
 
 ## Fähigkeiten (für das EMS relevant)
 

@@ -15,11 +15,11 @@
 
 ## Status-Update (2026-07-12)
 
-**RSCP-Anbindung läuft bereits produktiv über EVCC** — E3DC ist dort als Meter eingebunden und funktioniert. Damit ist der Steuer-/Messweg praktisch validiert. Zusätzlich: 70 %-Einspeisebegrenzung ist für die Bestandsanlage in der E3DC-Steuerung hinterlegt.
+**RSCP-Anbindung läuft bereits produktiv über EVCC** (HACS-Installation in HA) — der Mess-/Steuerweg ist damit praktisch validiert. **Aber: EVCC soll durch das EMS ersetzt werden (REQ-008)** → das EMS braucht einen eigenen RSCP-Zugang (HACS-Integration „E3DC RSCP" oder eigene RSCP-Client-Bibliothek). Zusätzlich: 70 %-Einspeisebegrenzung ist für die Bestandsanlage in der E3DC-Steuerung hinterlegt.
 
 ## Offene Fragen
 
-- [x] ~~RSCP getestet?~~ **Ja — funktioniert über EVCC** (2026-07-12).
-- [ ] Welche Steuerbefehle nutzt das Setup konkret (nur Messen, oder auch Entladesperre/Netzladen)? Braucht das EMS zusätzlich die HACS-Integration schreibend, oder läuft alles über EVCC?
+- [x] ~~RSCP getestet?~~ **Ja — funktioniert über EVCC** (2026-07-12); EVCC wird ersetzt, eigener Zugang nötig.
+- [ ] Deckt die vorhandene HACS-Integration alle nötigen Schreibbefehle ab (Entladesperre, Ladeleistungslimit, Netzladen), oder braucht das EMS einen eigenen RSCP-Client?
 - [ ] Verhält sich die E3DC-Regelung sauber, wenn extern übersteuert wird (Rückfall nach Timeout)?
 - [ ] Sieht die E3DC die AC-gekoppelte Sungrow-Erzeugung am Hausanschlusspunkt korrekt als „negative Last"?
