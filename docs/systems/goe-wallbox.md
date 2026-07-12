@@ -16,7 +16,7 @@
 
 ## Offene Fragen
 
-- [ ] Anschluss 11 kW oder 22 kW? Tatsächlicher A-Regelbereich?
-- [ ] Phasenumschaltung automatisch per API nutzbar und mit dem Enyaq problemlos (manche Fahrzeuge mögen häufiges Umschalten nicht)?
-- [ ] Integration lokal (HTTP/MQTT) oder via Cloud konfiguriert?
+- [x] ~~Anschluss 11 oder 22 kW?~~ **11 kW** — EVCC-Loadpoint regelt 6–16 A (siehe [evcc-baseline.md](../evcc-baseline.md)).
+- [x] ~~Phasenumschaltung nutzbar?~~ **Ja — in EVCC aktiv und im Einsatz** (`chargerPhases1p3p: true`, Hysterese 60 s/180 s).
+- [ ] Integration lokal (HTTP/MQTT) oder via Cloud konfiguriert? → steht in der evcc.yaml (vor Migration sichern).
 - [ ] Wird die Wallbox auch von Dritten/Gästen genutzt (Gastmodus nötig)?

@@ -126,7 +126,7 @@ Konventionen:
 1. **70 %-Regel Neuanlage:** Antwort von Elektriker Waldemar einholen — gilt die Begrenzung auch für die Sungrow-Anlage bzw. den Summenzähler? *(externe Abhängigkeit)*
 2. **UI-Entscheidung:** HA-Dashboard vs. separate App — kann bis zur Architekturphase offen bleiben (REQ-074 hält beides möglich), sollte aber vor Phase 4 fallen.
 3. **MyVaillant-Steuerbarkeit:** Reichen die per Cloud verfügbaren Stellgrößen (WW-Boost, Sollwerte) praktisch aus? → in Phase 2 mit einem kurzen Praxistest verifizieren.
-4. **Migrations-Baseline:** Vor der EVCC-Ablösung dessen aktuelle Konfiguration (Loadpoints, Vehicle, Meter) exportieren/dokumentieren, damit REQ-008 eine prüfbare Referenz hat.
+4. ~~**Migrations-Baseline**~~ ✅ Erledigt (2026-07-12): siehe [docs/evcc-baseline.md](../docs/evcc-baseline.md) — EVCC läuft als **Add-on** (nicht HACS), Site-Parameter, Loadpoint „Garage", Vehicle und Statistik-Baseline (99,4 % Solaranteil 30d) dokumentiert. Rest-Todo dort: `evcc.yaml`/Zugangsdaten vor der Ablösung sichern.
 
 ## Priorisierung (MoSCoW) — Ergebnis vom 2026-07-12
 

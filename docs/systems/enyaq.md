@@ -14,7 +14,7 @@
 
 ## Offene Fragen
 
-- [ ] Wie aktuell/zuverlässig ist der SoC über die Cloud während des Ladens? (Sonst SoC-Schätzung über Wallbox-Zähler nötig.)
+- [x] ~~SoC über Cloud zuverlässig?~~ **Ja — EVCC nutzt den Cloud-SoC produktiv** (Baseline-Auslesung: 79,96 % live, Reichweite 316 km). Langzeitverhalten beim Laden weiter beobachten.
 - [ ] Typische Abfahrtszeiten und Pendel-Muster (Neumarkt-Tage)? Fester Wochenplan oder Kalender-gesteuert?
 - [ ] Mindest-SoC, der immer verfügbar sein muss?
 - [ ] Fahrzeugseitiges Ladelimit (z.B. 80 %) fest — und soll das EMS es situativ anheben dürfen (vor Langstrecke)?
