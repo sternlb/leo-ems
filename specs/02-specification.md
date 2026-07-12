@@ -1,6 +1,6 @@
 # 02 — Spezifikation (Stufe 1: EVCC-Ersatz)
 
-**Status:** Entwurf, Verhaltens-Festlegungen von Leo bestätigt (§11). **Stand:** 2026-07-12
+**Status:** ✅ Abgenommen für Stufe 1 (Leo, 2026-07-12) — Review-Änderungen §4.3/§7 eingearbeitet. **Stand:** 2026-07-12
 **Scope:** Alle Must-Requirements aus [01-requirements.md](01-requirements.md) (Stufe 1). Wärmepumpe (Stufe 2) und dynamischer Tarif (Stufe 3) sind hier nur als Erweiterungspunkte berücksichtigt.
 **Referenzwerte** stammen aus der [EVCC-Baseline](../docs/evcc-baseline.md) — wo das EMS vom EVCC-Ist abweicht, ist es markiert (⚡ *neu*).
 
