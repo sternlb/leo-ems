@@ -13,8 +13,13 @@
 - Lesen: PV-Leistung, Netz-Bezug/-Einspeisung, Batterie-SoC/-Leistung, Hausverbrauch — Messfundament für die Überschussberechnung.
 - Schreiben (RSCP, zu verifizieren): Ladeleistungs-Limits, Entladesperre, manuelles Laden/Netzladen.
 
+## Status-Update (2026-07-12)
+
+**RSCP-Anbindung läuft bereits produktiv über EVCC** — E3DC ist dort als Meter eingebunden und funktioniert. Damit ist der Steuer-/Messweg praktisch validiert. Zusätzlich: 70 %-Einspeisebegrenzung ist für die Bestandsanlage in der E3DC-Steuerung hinterlegt.
+
 ## Offene Fragen
 
-- [ ] Schreibzugriffe der HACS-Integration in der Praxis getestet? Welche Set-Entities existieren?
+- [x] ~~RSCP getestet?~~ **Ja — funktioniert über EVCC** (2026-07-12).
+- [ ] Welche Steuerbefehle nutzt das Setup konkret (nur Messen, oder auch Entladesperre/Netzladen)? Braucht das EMS zusätzlich die HACS-Integration schreibend, oder läuft alles über EVCC?
 - [ ] Verhält sich die E3DC-Regelung sauber, wenn extern übersteuert wird (Rückfall nach Timeout)?
 - [ ] Sieht die E3DC die AC-gekoppelte Sungrow-Erzeugung am Hausanschlusspunkt korrekt als „negative Last"?
