@@ -99,4 +99,4 @@ leo-ems/
 
 - [x] **API-Absicherung:** statischer Bearer-Token (Leo folgt der Empfehlung). Ausführliches Konzept inkl. Bedrohungsmodell und verworfener Alternativen: [docs/api-token-auth.md](../docs/api-token-auth.md). Implementiert in `config.get_or_create_token()` + `api.require_token()`.
 - [x] **Add-on-Basis:** HA-Base-Image Python 3.12/Alpine, **Port 8099** (Leo bestätigt) — siehe [addon/config.yaml](../addon/config.yaml).
-- [x] **RSCP-Spike vorbereitet:** [backend/spikes/e3dc_spike.py](../backend/spikes/e3dc_spike.py) — Leo führt ihn mit seinen Zugangsdaten aus (`.env.e3dc`, gitignored); der Abbruch-Test dort kalibriert das Lease-TTL.
+- [x] **RSCP-Spike ausgeführt** (2026-07-12): Lesen + Schreiben (Entladesperre setzen/lösen) **funktionieren**, eigener RSCP-Zugriff unabhängig von EVCC bestätigt. Details und offene Restpunkte (Sichtbarkeit bei echtem Entladen, Abbruch-Test fürs Lease-TTL) in [docs/systems/e3dc.md](../docs/systems/e3dc.md#spike-ergebnis-2026-07-12-backendspikese3dc_spikepy-eigener-rscp-client-via-pye3dc).
