@@ -26,7 +26,7 @@ Erst die Spezifikation, dann der Code. Jede Phase erzeugt ein prüfbares Artefak
 | 1. Requirements | [specs/01-requirements.md](specs/01-requirements.md) | ✅ abgeschlossen (2026-07-12) |
 | 2. Spezifikation | [specs/02-specification.md](specs/02-specification.md) | ✅ abgenommen für Stufe 1 (2026-07-12) |
 | 3. Architektur/Design | [specs/03-architecture.md](specs/03-architecture.md) | 🔵 laufend (ADR-001–003 entschieden) |
-| 4. Implementierung | [backend/](backend/) + addon/ + app/ | 🔵 laufend (Gerüst + Kernlogik mit Tests) |
+| 4. Implementierung | [backend/](backend/) + addon/ + app/ | 🔵 laufend (Ladesteuerung + go-e/E3DC-Adapter + Regelschleife, 25 Tests grün) |
 | 5. Test/Validierung | Testprotokolle | ⚪ offen |
 
 Die Vision und die Ziele stehen in [specs/00-vision.md](specs/00-vision.md). Geräteprofile mit Integrationsdetails und offenen Fragen liegen unter [docs/systems/](docs/systems/).

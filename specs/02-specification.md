@@ -170,16 +170,16 @@ Pflicht-Inhalte: **Hausverbrauch**, **Wallbox** (Leistung, Modus, Fahrzeug-SoC, 
 
 ## 10. Abnahme Stufe 1 (Auszug — je REQ mind. ein Test)
 
-| Test | Prüft | Kriterium |
-|---|---|---|
-| T1 Überschussfolge | REQ-001/002 | Bei simuliertem Einspeise-Sprung 0→3 kW startet Ladung nach 60 s mit ~12 A 1p; bei Wegfall stoppt sie nach 180 s |
-| T2 Phasenwechsel | REQ-002/064 | Überschuss 5 kW ⇒ 3p nach 60 s; zurück auf 1p erst nach 180 s UND ≥ 10 min Abstand |
-| T3 Garantieladung | REQ-003/004 | Szenario aus §4.3 erreicht 50 % vor 07:30, auch bei Prognose = 0. Mehrere Regeln: Freitagabend mit Mo–Fr- und Sa-Regel ⇒ Planung auf Sa 09:00/30 % |
-| T4 Entladesperre | REQ-020/024 | Beim Ladestart wird Sperre gesetzt; nach Kill des EMS-Prozesses ist sie ≤ 15 min später ausgelaufen (Watchdog-Test) |
-| T5 Fail-Safe | REQ-060 | Jede Zeile der Matrix §7 einzeln provoziert; kein Gerät bleibt gesperrt |
-| T6 Regel-CRUD | REQ-070/073 | Regel in App anlegen/ändern/löschen ⇒ wirkt ohne Neustart, übersteht EMS-Neustart |
-| T7 Log | REQ-062 | Für jeden Befehl in T1–T4 existiert ein vollständiger Log-Eintrag |
-| T8 Baseline-Vergleich | REQ-052-Vorbereitung | Solaranteil-Statistik wird ab Tag 1 erfasst und ist mit der EVCC-Baseline (99,4 % 30d Sommer) vergleichbar |
+| Test | Prüft | Kriterium | Status (Stufe-1-Implementierung) |
+|---|---|---|---|
+| T1 Überschussfolge | REQ-001/002 | Bei simuliertem Einspeise-Sprung 0→3 kW startet Ladung nach 60 s mit ~12 A 1p; bei Wegfall stoppt sie nach 180 s | ✅ `test_charge_control.test_t1_ueberschussfolge` |
+| T2 Phasenwechsel | REQ-002/064 | Überschuss 5 kW ⇒ 3p nach 60 s; zurück auf 1p erst nach 180 s UND ≥ 10 min Abstand | ✅ `test_charge_control.test_t2_phasenwechsel` |
+| T3 Garantieladung | REQ-003/004 | Szenario aus §4.3 erreicht 50 % vor 07:30, auch bei Prognose = 0. Mehrere Regeln: Freitagabend mit Mo–Fr- und Sa-Regel ⇒ Planung auf Sa 09:00/30 % | ✅ `test_rules` (mehrere) |
+| T4 Entladesperre | REQ-020/024 | Beim Ladestart wird Sperre gesetzt; nach Kill des EMS-Prozesses ist sie ≤ 15 min später ausgelaufen (Watchdog-Test) | ✅ `test_loop` (Sim) + `test_safety`; HW-Watchdog offen (E3DC-Spike-Abbruchtest) |
+| T5 Fail-Safe | REQ-060 | Jede Zeile der Matrix §7 einzeln provoziert; kein Gerät bleibt gesperrt | 🟡 E1 ✅ (`test_loop`); E2–E5 folgen mit realer Adapter-Verdrahtung |
+| T6 Regel-CRUD | REQ-070/073 | Regel in App anlegen/ändern/löschen ⇒ wirkt ohne Neustart, übersteht EMS-Neustart | 🟡 API steht (`/api/v1/rules`), End-to-End-Test folgt mit App |
+| T7 Log | REQ-062 | Für jeden Befehl in T1–T4 existiert ein vollständiger Log-Eintrag | 🟡 `store.log_decision` verdrahtet, Prüfung folgt |
+| T8 Baseline-Vergleich | REQ-052-Vorbereitung | Solaranteil-Statistik wird ab Tag 1 erfasst und ist mit der EVCC-Baseline (99,4 % 30d Sommer) vergleichbar | ⚪ offen |
 
 ## 11. Festlegungen (⚙) — Stand der Durchsicht
 
