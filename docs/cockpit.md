@@ -1,6 +1,13 @@
-# EMS-Cockpit — Auswertung des Beobachtungsmodus
+# EMS-Cockpit & Dokumentation — die zwei Seiten
 
-**URL (fest, v1 seit 12.07.2026):** https://claude.ai/code/artifact/d711d336-f2bc-48c2-acbe-6c301b3ad352
+| Seite | Feste URL | Inhalt |
+|---|---|---|
+| **📘 Dokumentation (Haupt-Cockpit)** | https://claude.ai/code/artifact/fa6d0bf5-9209-4d09-90ca-8cfe2766f6f5 | Alle Features im Detail, Konfigurations-Referenz, Installation, Roadmap |
+| **⚡ Live-Cockpit** | https://claude.ai/code/artifact/d711d336-f2bc-48c2-acbe-6c301b3ad352 | Stand der Abarbeitung + Vergleich Leo-EMS ↔ EVCC (Beobachtung) |
+
+Beide sind gegenseitig verlinkt und im **AI Command Center** als Kachel „Leo-EMS" eingehängt (`dashboard/ai-command-center/tools.toml`, zeigt auf die Doku).
+
+**Quelltexte versioniert:** `docs/artifacts/leo-ems-doku.html` + `leo-ems-cockpit.html` in diesem Repo — jede Claude-Session kann sie bearbeiten und über die feste URL neu veröffentlichen (Artifact-`url`-Parameter). Update-Kommandos: **„aktualisiere mein EMS-Cockpit"** (holt frische Daten von der API) bzw. **„aktualisiere die EMS-Doku"** (bei Feature-Änderungen).
 
 Das Cockpit ist eine von Claude gepflegte **Artifact-Webseite mit fester URL** (Basel-AI-Branding). Es zeigt die Auswertung des Beobachtungsmodus: Was hätte das EMS getan vs. was hat EVCC real gemacht — die Entscheidungsgrundlage für die Umschaltung (REQ-008/052).
 

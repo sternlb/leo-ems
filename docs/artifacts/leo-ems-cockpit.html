@@ -1,0 +1,154 @@
+<title>Leo-EMS Cockpit</title>
+<style>
+  :root{
+    --forest:#0C1F15; --panel:#123023; --wald:#14532D; --lime:#A3E635;
+    --gelb:#FDE047; --paper:#FAFAF5; --dim:rgba(250,250,245,.55);
+    --line:rgba(163,230,53,.18); --r:2px;
+    --disp:"Space Grotesk","Archivo",system-ui,-apple-system,sans-serif;
+    --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"Space Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  }
+  html{background:var(--forest)}
+  body{background:var(--forest);color:var(--paper);font-family:var(--body);
+       margin:0;padding:0;line-height:1.55;font-size:16px}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 64px}
+
+  /* Header */
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;margin-bottom:8px}
+  .brand{font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.02em}
+  .brand .pill{background:var(--lime);color:var(--wald);border-radius:var(--r);padding:1px 7px;margin-left:4px;font-size:12px}
+  h1{font-family:var(--disp);font-weight:700;font-size:clamp(30px,5vw,44px);margin:18px 0 0;letter-spacing:-.01em;text-wrap:balance}
+  .strich{width:120px;height:4px;background:var(--lime);margin:14px 0 6px;transform:skewX(-18deg)}
+  .meta{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
+  .chip{display:inline-block;font-family:var(--mono);font-size:12px;border:1px solid var(--lime);
+        color:var(--lime);border-radius:var(--r);padding:3px 10px;letter-spacing:.06em}
+  .chip.warte{border-color:var(--gelb);color:var(--gelb)}
+
+  /* Sections */
+  section{margin-top:44px}
+  .label{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+         color:var(--dim);margin-bottom:14px}
+  .label b{color:var(--lime);font-weight:400}
+
+  /* KPI grid */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 18px 16px}
+  .kpi .k{font-family:var(--body);font-size:13px;color:var(--dim)}
+  .kpi .v{font-family:var(--mono);font-size:34px;font-weight:700;margin-top:6px;
+          font-variant-numeric:tabular-nums;color:var(--paper)}
+  .kpi .v.leer{color:var(--dim)}
+  .kpi .sub{font-size:12px;color:var(--dim);margin-top:4px}
+  .kpi.acc .v{color:var(--lime)}
+
+  /* Empty-state banner */
+  .banner{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--gelb);
+          border-radius:var(--r);padding:16px 20px;margin-top:14px}
+  .banner p{margin:0;font-size:14.5px;max-width:72ch}
+  .banner b{color:var(--gelb);font-weight:600}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  .scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+     text-align:left;padding:12px 16px;border-bottom:1px solid var(--line)}
+  td{padding:11px 16px;border-bottom:1px solid rgba(250,250,245,.06);font-variant-numeric:tabular-nums}
+  td.num{font-family:var(--mono)}
+  tr:last-child td{border-bottom:none}
+  .lime{color:var(--lime)}
+  .gelbtx{color:var(--gelb)}
+
+  /* Phase list */
+  .phasen{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+  .phase .n{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.1em}
+  .phase .t{font-family:var(--disp);font-weight:700;font-size:15px;margin-top:4px}
+  .phase .s{font-family:var(--mono);font-size:12px;margin-top:8px}
+  .s.done{color:var(--lime)} .s.run{color:var(--gelb)} .s.open{color:var(--dim)}
+
+  /* Checklist */
+  ul.todo{list-style:none;padding:0;margin:0;max-width:72ch}
+  ul.todo li{padding:10px 0 10px 30px;position:relative;border-bottom:1px solid rgba(250,250,245,.07);font-size:14.5px}
+  ul.todo li::before{content:"";position:absolute;left:2px;top:15px;width:12px;height:12px;
+      border:1.5px solid var(--dim);border-radius:var(--r)}
+  ul.todo li.done{color:var(--dim);text-decoration:line-through}
+  ul.todo li.done::before{background:var(--lime);border-color:var(--lime)}
+  ul.todo li .who{font-family:var(--mono);font-size:11px;color:var(--gelb);margin-left:8px;text-decoration:none;display:inline-block}
+
+  footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;
+         font-size:13px;color:var(--dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  footer code{font-family:var(--mono);color:var(--lime);font-size:12px}
+  a{color:var(--lime)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <span class="brand">basel<span class="pill">AI</span></span>
+      <h1>Leo-EMS Cockpit</h1>
+      <div class="strich"></div>
+      <div class="meta">Energy-Management-System · E3DC + go-e + Enyaq + Vaillant · Raspberry Pi 5</div>
+    </div>
+    <div style="text-align:right">
+      <span class="chip">BEOBACHTUNG LÄUFT · SEIT 13.07.2026</span>
+      <div class="meta" style="margin-top:10px">Stand 13.07.2026 · Cockpit v1.1</div>
+      <div class="meta" style="margin-top:8px"><a href="https://claude.ai/code/artifact/fa6d0bf5-9209-4d09-90ca-8cfe2766f6f5" style="color:var(--lime);text-decoration:none">📘 Zur Dokumentation (Haupt-Seite) →</a></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="label">Beobachtung — <b>EMS-Entscheidung vs. EVCC real</b></div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Beobachtete Ticks</div><div class="v leer">—</div><div class="sub">10-s-Messbilder</div></div>
+      <div class="kpi acc"><div class="k">EMS hätte geladen</div><div class="v leer">—</div><div class="sub">kWh laut Regelschleife</div></div>
+      <div class="kpi"><div class="k">Wallbox real (EVCC)</div><div class="v leer">—</div><div class="sub">kWh gemessen</div></div>
+      <div class="kpi"><div class="k">Ø Überschuss</div><div class="v leer">—</div><div class="sub">W im Zeitraum</div></div>
+    </div>
+    <div class="banner">
+      <p><b>Beobachtung läuft seit 13.07.2026 abends</b> — das Add-on (v0.1.2) protokolliert auf dem Pi alle
+      10 Sekunden ein Messbild. Erste Verifikation: Batterie 89 %, Netz ausgeglichen, kein Fahrzeug verbunden.
+      Bei der nächsten Aktualisierung („aktualisiere mein EMS-Cockpit") erscheinen hier die Kennzahlen,
+      der Tagesvergleich EMS ↔ EVCC und das Überschuss-Profil.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Referenz — <b>EVCC-Baseline</b> (Messlatte für die Umschaltung)</div>
+    <div class="scroll">
+      <table>
+        <tr><th>Zeitraum</th><th>Geladen</th><th>Solaranteil</th><th>Ø Preis</th></tr>
+        <tr><td>Letzte 30 Tage (Sommer)</td><td class="num">197,7 kWh</td><td class="num lime">99,4 %</td><td class="num">0,082 €/kWh</td></tr>
+        <tr><td>Dieses Jahr</td><td class="num">979,6 kWh</td><td class="num">50,4 %</td><td class="num">0,239 €/kWh</td></tr>
+        <tr><td>Letzte 365 Tage</td><td class="num">1 514,6 kWh</td><td class="num">37,9 %</td><td class="num">0,267 €/kWh</td></tr>
+      </table>
+    </div>
+    <div class="meta" style="margin-top:8px">Quelle: EVCC-REST-API, ausgelesen 12.07.2026 — das EMS muss den Sommerwert halten und den Jahreswert heben.</div>
+  </section>
+
+  <section>
+    <div class="label">Projektstand — <b>Spec-Driven Development</b></div>
+    <div class="phasen">
+      <div class="phase"><div class="n">PHASE 1</div><div class="t">Requirements</div><div class="s done">✓ 39 REQs, MoSCoW</div></div>
+      <div class="phase"><div class="n">PHASE 2</div><div class="t">Spezifikation</div><div class="s done">✓ abgenommen</div></div>
+      <div class="phase"><div class="n">PHASE 3</div><div class="t">Architektur</div><div class="s done">✓ 5 ADRs</div></div>
+      <div class="phase"><div class="n">PHASE 4</div><div class="t">Implementierung</div><div class="s run">● läuft · 36/36 Tests</div></div>
+      <div class="phase"><div class="n">PHASE 5</div><div class="t">Test / Migration</div><div class="s open">○ offen</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Nächste Schritte — <b>Weg zur Umschaltung</b></div>
+    <ul class="todo">
+      <li class="done">RSCP-Schreibzugriff verifiziert (E3DC-Spike, lesen + schreiben)</li>
+      <li class="done">Beobachtungsmodus implementiert — read_only per Default, null Gerätebefehle</li>
+      <li class="done">Add-on auf dem Pi installiert und im Beobachtungsmodus gestartet (13.07.2026, v0.1.2)</li>
+      <li>E3DC-Abbruchtest: Sperre setzen, Skript killen, Rückkehrzeit stoppen → kalibriert Lease-TTL<span class="who">LEO</span></li>
+      <li>≈ 2 Wochen beobachten — Cockpit zeigt EMS-hätte vs. EVCC-real im Tagesvergleich</li>
+      <li>Bei plausibler Deckung: <code>read_only=false</code>, EVCC deaktivieren (REQ-008)</li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>Aktualisieren: einfach <code>„aktualisiere mein EMS-Cockpit"</code> sagen — Claude holt die Daten vom Add-on (docs/cockpit.md).</div>
+    <div>github.com/sternlb/leo-ems</div>
+  </footer>
+</div>

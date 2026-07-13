@@ -1,0 +1,341 @@
+<title>Leo-EMS Dokumentation</title>
+<style>
+  :root{
+    --forest:#0C1F15; --panel:#123023; --wald:#14532D; --lime:#A3E635;
+    --gelb:#FDE047; --paper:#FAFAF5; --dim:rgba(250,250,245,.55);
+    --line:rgba(163,230,53,.18); --r:2px;
+    --disp:"Space Grotesk","Archivo",system-ui,-apple-system,sans-serif;
+    --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"Space Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  }
+  html{background:var(--forest);scroll-behavior:smooth}
+  body{background:var(--forest);color:var(--paper);font-family:var(--body);
+       margin:0;padding:0;line-height:1.6;font-size:16px}
+  .wrap{max-width:980px;margin:0 auto;padding:36px 24px 72px}
+
+  /* Header + Nav */
+  .brand{font-family:var(--disp);font-weight:700;font-size:14px}
+  .brand .pill{background:var(--lime);color:var(--wald);border-radius:var(--r);padding:1px 7px;margin-left:4px;font-size:12px}
+  h1{font-family:var(--disp);font-weight:700;font-size:clamp(30px,5vw,44px);margin:16px 0 0;letter-spacing:-.01em;text-wrap:balance}
+  .strich{width:120px;height:4px;background:var(--lime);margin:14px 0 8px;transform:skewX(-18deg)}
+  .meta{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
+  nav{position:sticky;top:0;background:rgba(12,31,21,.94);backdrop-filter:blur(6px);
+      z-index:9;display:flex;gap:8px;flex-wrap:wrap;padding:12px 0;margin-top:22px;
+      border-bottom:1px solid var(--line)}
+  nav a{font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:var(--paper);
+        text-decoration:none;border:1px solid var(--line);border-radius:var(--r);padding:5px 11px}
+  nav a:hover,nav a:focus-visible{border-color:var(--lime);color:var(--lime);outline:none}
+
+  /* Quick links */
+  .quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:26px}
+  .quick a{display:block;background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--lime);
+           border-radius:var(--r);padding:16px 18px;text-decoration:none;color:var(--paper)}
+  .quick a:hover{border-color:var(--lime)}
+  .quick .t{font-family:var(--disp);font-weight:700;font-size:16px}
+  .quick .d{font-size:13px;color:var(--dim);margin-top:4px}
+  .quick .u{font-family:var(--mono);font-size:11px;color:var(--lime);margin-top:8px;word-break:break-all}
+
+  /* Typo */
+  section{margin-top:56px}
+  h2{font-family:var(--disp);font-weight:700;font-size:26px;margin:0 0 4px;scroll-margin-top:70px}
+  h2 .nr{color:var(--lime);font-family:var(--mono);font-size:15px;margin-right:10px}
+  h3{font-family:var(--disp);font-weight:700;font-size:18px;margin:34px 0 8px;scroll-margin-top:70px}
+  h3::before{content:"— ";color:var(--lime)}
+  p{max-width:74ch;margin:10px 0}
+  .lead{color:var(--dim);max-width:74ch;margin-top:4px}
+  b{color:var(--paper)}
+  a{color:var(--lime)}
+  ul{max-width:74ch}
+  li{margin:5px 0}
+
+  /* Panels */
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 20px;margin:16px 0;max-width:78ch}
+  .box.warn{border-left:4px solid var(--gelb)}
+  .box.acc{border-left:4px solid var(--lime)}
+  .formel{font-family:var(--mono);font-size:13.5px;background:rgba(0,0,0,.25);border:1px solid var(--line);
+          border-radius:var(--r);padding:14px 18px;margin:14px 0;overflow-x:auto;white-space:pre;line-height:1.7}
+  code{font-family:var(--mono);font-size:.9em;background:rgba(163,230,53,.1);padding:1px 5px;border-radius:var(--r)}
+  .formel .c{color:var(--dim)}
+  .beispiel{border-left:3px solid var(--lime);padding:2px 0 2px 16px;margin:14px 0;max-width:74ch}
+  .beispiel .bt{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--lime);text-transform:uppercase}
+
+  /* Tables */
+  .scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin:16px 0}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+     text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px 14px;border-bottom:1px solid rgba(250,250,245,.06);vertical-align:top}
+  td:first-child{white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td.mono,.mono{font-family:var(--mono);font-size:12.5px}
+  .limetx{color:var(--lime)} .gelbtx{color:var(--gelb)}
+
+  /* Flow diagram */
+  .flow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:18px 0;font-size:13px}
+  .fnode{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;min-width:120px}
+  .fnode .fh{font-family:var(--disp);font-weight:700;font-size:13.5px}
+  .fnode .fs{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:3px}
+  .farrow{align-self:center;color:var(--lime);font-family:var(--mono);font-size:16px}
+
+  footer{margin-top:70px;border-top:1px solid var(--line);padding-top:18px;
+         font-size:13px;color:var(--dim)}
+  footer code{color:var(--lime)}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="brand">basel<span class="pill">AI</span></span>
+    <h1>Leo-EMS — Dokumentation</h1>
+    <div class="strich"></div>
+    <div class="meta">Energy-Management-System für Haushalt Basel Latour · HA-Add-on auf Raspberry Pi 5 · Stand 13.07.2026 · v0.1.2</div>
+  </header>
+
+  <nav>
+    <a href="#warum">Warum</a>
+    <a href="#system">System &amp; Datenfluss</a>
+    <a href="#features">Features</a>
+    <a href="#config">Konfiguration</a>
+    <a href="#install">Installation</a>
+    <a href="#roadmap">Roadmap</a>
+  </nav>
+
+  <div class="quick">
+    <a href="https://claude.ai/code/artifact/d711d336-f2bc-48c2-acbe-6c301b3ad352">
+      <div class="t">⚡ Live-Cockpit</div>
+      <div class="d">Aktueller Stand der Abarbeitung + Vergleich Leo-EMS ↔ EVCC (Beobachtungsmodus)</div>
+      <div class="u">claude.ai/code/artifact/d711d336…</div>
+    </a>
+    <a href="https://github.com/sternlb/leo-ems">
+      <div class="t">📦 Repository</div>
+      <div class="d">Specs (SDD-Phasen 1–3), Backend, Add-on, App-Gerüst — privat</div>
+      <div class="u">github.com/sternlb/leo-ems</div>
+    </a>
+  </div>
+
+  <!-- ============================================================ -->
+  <section id="warum">
+    <h2><span class="nr">01</span>Warum Leo-EMS?</h2>
+    <p class="lead">Die Kurzfassung: Nicht mehr Module, sondern Koordination.</p>
+    <p>Der Haushalt hat starke Erzeugung (9,23 kWp E3DC, ab Ende 2026 +5,64 kWp Garagendach) und einen 12-kWh-Speicher — aber die Komponenten arbeiten unkoordiniert. Die Analyse der realen Messdaten 2025 zeigt: <b>~50 % Autarkie, 54 % der Erzeugung wurden eingespeist.</b> Die Simulation der neuen Anlage ergab, dass ~90 % ihres Mehrertrags ebenfalls in die Einspeisung wandern würden — der Engpass ist nicht die Erzeugung, sondern <b>Speicher + zeitgleicher Verbrauch</b>.</p>
+    <p>Die echten Hebel sind Lastverschiebung: das E-Auto in den Mittagsüberschuss legen (größter Hebel), Warmwasser mittags statt abends bereiten, die Batterie intelligent führen. Genau das koordiniert Leo-EMS. Es <b>ersetzt das bisherige EVCC</b> vollständig und ergänzt drei Dinge, die dort heute nicht aktiv sind: <b>Zielladung</b> (Auto ist zur Abfahrt garantiert geladen), <b>Batterie-Entladesperre</b> beim EV-Laden und <b>PV-Prognose</b> in der Planung.</p>
+    <div class="box acc">
+      <b>Messlatte (EVCC-Baseline, 12.07.2026):</b> 99,4 % Solaranteil am EV-Laden in den letzten 30 Sommertagen, 50,4 % übers Jahr, 1.514 kWh in 365 Tagen. Das EMS muss den Sommerwert halten und den Jahreswert heben.
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="system">
+    <h2><span class="nr">02</span>System &amp; Datenfluss</h2>
+    <p class="lead">Ein Regel-Tick alle 10 Sekunden — von der Messung bis zum protokollierten Befehl.</p>
+
+    <div class="flow">
+      <div class="fnode"><div class="fh">devices/</div><div class="fs">E3DC · go-e · Škoda · Forecast · Sungrow</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="fh">core/</div><div class="fs">Messbild + Frische-Prüfung (Fail-Safe)</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="fh">planner/</div><div class="fs">Überschuss · Zustandsmaschine · Zielladung</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="fh">safety/</div><div class="fs">Grenzen-Validierung + Leases (TTL)</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="fh">devices/</div><div class="fs">Befehle (entfallen im Beobachtungsmodus)</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="fh">store/</div><div class="fs">Entscheidungs-Log + Snapshot (SQLite)</div></div>
+    </div>
+
+    <div class="scroll"><table>
+      <tr><th>Gerät</th><th>Anbindung</th><th>Liefert</th><th>Steuerbar</th></tr>
+      <tr><td><b>E3DC S10E</b></td><td class="mono">RSCP lokal (pye3dc)</td><td>PV-, Netz-, Batterie-Leistung, Batterie-SoC — das Messfundament</td><td>Entladesperre (mit TTL)</td></tr>
+      <tr><td><b>go-e Gemini 11 kW</b></td><td class="mono">HTTP-API v2 lokal</td><td>Steckerstatus, Ladeleistung, Phasen, Session-Energie</td><td>Strom 6–16 A, Phasen 1↔3, Freigabe</td></tr>
+      <tr><td><b>Škoda Enyaq iV80</b></td><td class="mono">Škoda-Cloud (myskoda)</td><td>Fahrzeug-SoC, Ladelimit (77 kWh, Limit aktuell 80 %)</td><td>— (Stellglied ist die Wallbox)</td></tr>
+      <tr><td><b>Forecast.Solar</b></td><td class="mono">HTTPS, 1×/h</td><td>PV-Prognose 24–48 h für alle 3 Flächen</td><td>—</td></tr>
+      <tr><td><b>Sungrow SG 6.0RT</b></td><td class="mono">Modbus TCP <span class="gelbtx">(ab Ende 2026)</span></td><td>AC-Leistung Garagendach — bis dahin Stub mit 0 W</td><td>—</td></tr>
+    </table></div>
+
+    <p><b>Bewusste Architekturentscheidung:</b> Das EMS spricht die Geräte <b>direkt</b> an, nicht über Home-Assistant-Entities — das 10-s-Regelintervall braucht frische Werte, und das EMS bleibt von HA-Core-Neustarts unabhängig. Es läuft trotzdem als HA-Add-on und nutzt Supervisor-Komfort: Watchdog, Backups, Update-Verwaltung.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="features">
+    <h2><span class="nr">03</span>Die Features im Detail</h2>
+    <p class="lead">Jedes Feature mit seiner Logik, den Stellschrauben und einem Rechenbeispiel — als Grundlage für Verbesserungsvorschläge.</p>
+
+    <h3 id="f-ueberschuss">Überschussberechnung — das Herz der Regelung</h3>
+    <p>Jeden Tick berechnet das EMS, wie viel Leistung fürs Auto „übrig" ist. Vorzeichenkonvention: Netz &gt; 0 = Bezug, Batterie &gt; 0 = lädt.</p>
+    <div class="formel">P_überschuss = P_lade_ist − P_netz − P_residual
+
+<span class="c"># P_lade_ist    aktuelle Wallbox-Leistung — zählt zum Budget, sonst würde
+#               eine laufende Ladung sich selbst den Überschuss "wegnehmen"
+# P_residual    Ziel-Netzbezug, Default 100 W (leicht positiv = Batterie-Schonung)</span></div>
+    <p><b>Die Batterie-Weiche (prioritySoc = 25 %):</b> Liegt der Hausbatterie-SoC <i>unter</i> 25 %, hat die Batterie Vorrang — ihre Ladeleistung zählt als Verbrauch, das Auto bekommt nur echten Rest. Liegt er <i>darüber</i>, darf das Auto der Batterie die Ladeleistung „wegnehmen" (sie wird dem Überschuss zugerechnet). So füllt sich morgens erst der Speicher-Sockel, mittags bekommt das Auto den Vorrang.</p>
+    <p>Gegen Wolken-Flackern wird über die letzten <b>3 Messungen gemittelt</b> (gleitender Mittelwert, ~30 s Trägheit).</p>
+    <div class="beispiel"><div class="bt">Rechenbeispiel</div>
+      Einspeisung 3.000 W (P_netz = −3000), Auto lädt nicht, Batterie-SoC 61 % ⇒ P_überschuss = 0 − (−3000) − 100 = <b>2.900 W</b> → reicht für 12 A einphasig.
+    </div>
+
+    <h3 id="f-laden">Ladesteuerung — Zustandsmaschine mit Hysterese</h3>
+    <p>Die Wallbox wird nicht nervös nachgeführt, sondern über eine Zustandsmaschine geführt: <code>FREI → VERBUNDEN → LADEN_1P/LADEN_3P → PAUSIERT → BEENDET</code>.</p>
+    <ul>
+      <li><b>Einschalten:</b> Überschuss ≥ ~1,4 kW (6 A × 230 V) muss <b>60 s ununterbrochen</b> anliegen (enableDelay). Eine einzelne Wolkenlücke startet keine Ladung.</li>
+      <li><b>Ausschalten:</b> erst wenn der Überschuss <b>180 s</b> unter dem Minimum liegt (disableDelay) — kurze Wolken überbrückt die Ladung.</li>
+      <li><b>Stromnachführung:</b> je Tick <code>I = ⌊P_überschuss / (230 V × Phasen)⌋</code>, begrenzt auf 6–16 A.</li>
+      <li><b>Fahrzeug-Limit:</b> Erreicht der Enyaq sein eigenes Ladelimit (aktuell 80 %), endet die Ladung (Zustand BEENDET).</li>
+    </ul>
+
+    <h3 id="f-phasen">Phasenumschaltung 1↔3 — der Trick für kleinen Überschuss</h3>
+    <p>Einphasig kann die Wallbox 1,4–3,7 kW, dreiphasig 4,1–11 kW. Ohne Umschaltung wäre der Bereich dazwischen tot. Das EMS schaltet:</p>
+    <ul>
+      <li><b>1p → 3p</b> bei Überschuss ≥ <b>4,2 kW</b> für 60 s</li>
+      <li><b>3p → 1p</b> bei Überschuss &lt; <b>4,0 kW</b> für 180 s</li>
+      <li><b>Mindestabstand 10 Minuten</b> zwischen Umschaltungen — schont Schütz und Fahrzeug-Ladeelektronik (jede Umschaltung unterbricht kurz die Ladung).</li>
+    </ul>
+    <p>Die 200-W-Lücke zwischen den Schwellen ist bewusste Hysterese gegen Pendeln. Beide Werte sind konfigurierbar und im Realbetrieb zu kalibrieren.</p>
+
+    <h3 id="f-modi">Lademodi</h3>
+    <div class="scroll"><table>
+      <tr><th>Modus</th><th>Verhalten</th></tr>
+      <tr><td><b>Nur-PV</b> <span class="limetx">(Default)</span></td><td>Laden ausschließlich aus Überschuss. Kein Überschuss ⇒ kein Laden.</td></tr>
+      <tr><td><b>PV+Min</b></td><td>Wie Nur-PV, aber nie unter 6 A einphasig (≈1,4 kW) — die Differenz kommt notfalls aus dem Netz (nicht aus der Batterie, siehe Entladesperre).</td></tr>
+      <tr><td><b>Schnell</b></td><td>Sofort 16 A dreiphasig (≈11 kW), Herkunft egal. Hausbatterie hilft <b>nicht</b> mit (Entladesperre bleibt aktiv — Batterie→Auto→später wieder Netz fürs Haus wäre doppelter Wandlungsverlust).</td></tr>
+      <tr><td><b>Aus</b></td><td>Wallbox gesperrt — mit einer Ausnahme: eine fällige <b>Garantieladung übersteuert „Aus"</b> und begründet das sichtbar. Das Auto ist zur Abfahrt immer fahrbereit.</td></tr>
+    </table></div>
+
+    <h3 id="f-ziel">Zielladung &amp; Laderegeln — die Garantie</h3>
+    <p>Das größte Plus gegenüber dem alten Setup. Du definierst beliebig viele <b>Regeln</b> (per App, ohne YAML):</p>
+    <div class="formel">Regel = { Wochentage ⊆ {Mo…So}, Abfahrtszeit, Mindest-SoC, aktiv }
+
+<span class="c"># Default-Regel: Mo–Fr · 07:30 · 50 %
+# Beispiel:      Mo–Fr 07:30 → 50 %   +   Sa 09:00 → 30 %   (So: keine Regel)</span></div>
+    <p><b>Auswertung:</b> Das EMS bestimmt aus allen aktiven Regeln die <b>nächste zukünftige Abfahrt</b> und plant auf deren Mindest-SoC. Treffen mehrere Regeln denselben Zeitpunkt, gilt der höchste SoC. Freitagabend gewinnt also die Samstags-Regel (Sa 09:00/30 %), nicht die Werktagsregel.</p>
+    <div class="formel">E_fehlt = max(0, SoC_min − SoC_ist) × 77 kWh ÷ η        <span class="c"># η = 0,90 Ladeverluste</span>
+T_dauer = E_fehlt ÷ 11 kW
+T_start = Abfahrt − T_dauer − 15 min Puffer</div>
+    <p>Bis <code>T_start</code> versucht das EMS, das Ziel <b>mit PV-Überschuss</b> zu erreichen (unter Nutzung der Forecast.Solar-Prognose). Ab <code>T_start</code> beginnt die <b>Garantieladung</b>: maximale Leistung, netzunabhängig, bis der Mindest-SoC steht — egal welcher Modus aktiv ist. Oberhalb des Mindest-SoC wird nur noch Überschuss geladen, bis zum Fahrzeug-Limit.</p>
+    <div class="beispiel"><div class="bt">Rechenbeispiel</div>
+      Mittwochabend, SoC 30 %, Regel Mo–Fr 07:30/50 % ⇒ E_fehlt = 17,1 kWh, T_dauer ≈ 1:33 h ⇒ Garantieladung startet spätestens <b>05:41</b>, um 07:30 stehen 50 %.
+    </div>
+    <p>Der Fahrzeug-SoC kommt aus der Škoda-Cloud; ist er während einer Ladung älter als 30 min, schätzt das EMS über den Wallbox-Zähler weiter (<code>SoC + E_geladen × η / 77 kWh</code>) und kennzeichnet den Wert als Schätzung.</p>
+
+    <h3 id="f-batterie">Batterie-Koordination — Entladesperre &amp; Reserve</h3>
+    <p><b>Problem:</b> Ohne Koordination entlädt sich die Hausbatterie ins ladende Auto — Strom wird zweimal gewandelt und fehlt abends dem Haus. <b>Lösung:</b></p>
+    <ul>
+      <li>Lädt das Auto und die Batterie entlädt mehr als 200 W Richtung Hausnetz, setzt das EMS die <b>E3DC-Entladesperre</b> (Entladeleistung auf 0 begrenzt, per RSCP — auf der echten Anlage verifiziert).</li>
+      <li>Die Sperre gilt in <b>allen</b> Lademodi inkl. „Schnell" und fällt ≤ 60 s nach Ladeende.</li>
+      <li>Die <b>SoC-Reserve</b> (Default 0 %, App-einstellbar) ist eine Untergrenze: kein EMS-Befehl entlädt die Batterie aktiv darunter.</li>
+    </ul>
+
+    <h3 id="f-failsafe">Fail-Safe — Leases statt Zustände</h3>
+    <p>Das zentrale Sicherheitsprinzip: <b>Jede Übersteuerung existiert nur als „Lease" mit 15 Minuten Ablaufzeit</b>, die die Regelschleife zyklisch erneuert. Es gibt im Code keinen Pfad, der ein Gerät dauerhaft festnagelt. Stürzt das EMS ab, laufen alle Leases aus und E3DC + Wallbox regeln autonom weiter — zusätzlich startet der Supervisor-Watchdog das Add-on neu (Health-Check auf <code>/api/v1/health</code>).</p>
+    <div class="scroll"><table>
+      <tr><th>Ausfall</th><th>Erkennung</th><th>Verhalten</th></tr>
+      <tr><td>E1 · E3DC weg</td><td class="mono">keine Daten &gt; 60 s</td><td><b>Abschalten:</b> Ladung stoppen, Steuerung einstellen, bis Daten zurück sind. Sperren laufen per TTL aus.</td></tr>
+      <tr><td>E2 · go-e weg</td><td class="mono">Timeout &gt; 60 s</td><td>Keine Befehle mehr; Wallbox behält ihr autonomes Verhalten. Alarm.</td></tr>
+      <tr><td>E3 · Škoda-Cloud weg</td><td class="mono">Daten &gt; 30 min alt</td><td><b>Betrieb unverändert</b> — SoC per Schätzung über den Wallbox-Zähler.</td></tr>
+      <tr><td>E4 · Forecast weg</td><td class="mono">HTTP-Fehler</td><td><b>Betrieb unverändert</b> — letzte gespeicherte Prognose wird weiterverwendet.</td></tr>
+      <tr><td>E5 · Sungrow weg</td><td class="mono">Modbus-Timeout</td><td>Werte = 0 setzen, weiterarbeiten (Überschuss am Netzpunkt bleibt korrekt).</td></tr>
+      <tr><td>E6 · EMS stirbt</td><td class="mono">—</td><td>Alle Leases laufen ≤ 15 min aus → Geräte autonom; Supervisor-Watchdog startet neu.</td></tr>
+    </table></div>
+    <p>Dazu: <b>manuelle Overrides</b> (App/Taster) gelten bis zum Abstecken bzw. max. 24 h und werden nie „zurückgedreht"; <b>jede Entscheidung</b> wird mit Zeitstempel, Regel, Messwerten und Befehl geloggt; ein zentraler Validator prüft jeden Befehl gegen die Grenzen (6–16 A, Reserve, harte Grenzen).</p>
+
+    <h3 id="f-beobachtung">Beobachtungsmodus — gefahrlos parallel zu EVCC</h3>
+    <p>Der Schalter <code>read_only</code> steht <b>ab Werk auf an</b>: Das EMS trifft jede Entscheidung ganz normal (sichtbar mit Präfix <code>[Beobachtung]</code>), sendet aber <b>keinen einzigen Gerätebefehl</b> — auch nicht im Fail-Safe-Fall, damit die laufende EVCC-Ladung nie gestört wird. Gleichzeitig schreibt es <b>alle 10 s einen Snapshot</b>: Überschuss, Netz, Batterie, SoCs, reale Wallbox-Leistung (= EVCC) und die eigene „hätte"-Entscheidung.</p>
+    <p>Die Auswertung (<code>/api/v1/observation/summary</code>) stellt dann gegenüber: <b>„EMS hätte geladen" vs. „Wallbox real"</b> in kWh, mit Tagesvergleich. Das ist die Entscheidungsgrundlage der Migration: ~2 Wochen beobachten → decken sich die Kurven plausibel → <code>read_only=false</code> → EVCC deaktivieren. Das <a href="https://claude.ai/code/artifact/d711d336-f2bc-48c2-acbe-6c301b3ad352">Live-Cockpit</a> visualisiert genau diese Daten.</p>
+
+    <h3 id="f-api">API &amp; Sicherheit</h3>
+    <p>Lokale REST-API auf Port <b>8099</b> (LAN-only, kein Cloud-Pfad) — sie ist auch der Vertrag für die geplante Android-App:</p>
+    <div class="scroll"><table>
+      <tr><th>Endpunkt</th><th>Zweck</th></tr>
+      <tr><td class="mono">GET /api/v1/health</td><td>Lebenszeichen (einziger Endpunkt ohne Token — für den Supervisor-Watchdog)</td></tr>
+      <tr><td class="mono">GET /api/v1/status</td><td>Live-Zustand inkl. Klartext-Begründung („warum lädt/lädt nicht")</td></tr>
+      <tr><td class="mono">GET/PUT /api/v1/mode</td><td>Lademodus lesen/setzen</td></tr>
+      <tr><td class="mono">CRUD /api/v1/rules</td><td>Laderegeln — wirken sofort, ohne Neustart, überstehen Neustarts</td></tr>
+      <tr><td class="mono">GET/PUT /api/v1/config</td><td>Alle Regelparameter (Tabelle unten) — inkl. <code>read_only</code>-Scharfschaltung</td></tr>
+      <tr><td class="mono">GET /api/v1/history</td><td>Entscheidungs-Log</td></tr>
+      <tr><td class="mono">GET /api/v1/observation/…</td><td>Beobachtungs-Auswertung: summary + snapshots</td></tr>
+    </table></div>
+    <p>Alle Endpunkte außer <code>/health</code> verlangen einen <b>Bearer-Token</b> (256 Bit, beim ersten Start erzeugt, in <code>/data/api_token</code> persistiert, beim Start im Add-on-Log). Warum Auth im eigenen LAN? Die API steuert Wallbox <i>und</i> Hausbatterie — und im Heimnetz hängen dutzende Fremdgeräte (IoT, Gäste). Der Vergleich läuft konstantzeitig (<code>hmac.compare_digest</code>, verhindert Timing-Angriffe). Ausführliches Bedrohungsmodell: <code>docs/api-token-auth.md</code> im Repo.</p>
+
+    <h3 id="f-app">Android-App (in Arbeit)</h3>
+    <p>Native App (Kotlin + Jetpack Compose) im Basel-AI-Branding, LAN-only, Verteilung per APK. Vier Screens: <b>Dashboard</b> (Energiefluss + Begründung), <b>Laderegeln</b> (CRUD), <b>Einstellungen</b> (Modus, Reserve, Grenzen, Backend-Adresse + Token), <b>Protokoll</b>. Das Gerüst inkl. Theme und API-Vertrag liegt im Repo (<code>app/</code>); gebaut wird in Android Studio.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="config">
+    <h2><span class="nr">04</span>Konfigurations-Referenz</h2>
+    <p class="lead">Alle Stellschrauben der Regelung (<code>PUT /api/v1/config</code>, später App-Einstellungen). Änderungen wirken sofort und bleiben persistent. Genau hier setzen Verbesserungsvorschläge am einfachsten an.</p>
+    <div class="scroll"><table>
+      <tr><th>Parameter</th><th>Default</th><th>Bedeutung</th></tr>
+      <tr><td class="mono">read_only</td><td class="mono gelbtx">true</td><td>Beobachtungsmodus: entscheiden + loggen, aber nichts steuern. Scharfschalten = bewusster Akt.</td></tr>
+      <tr><td class="mono">residual_power_w</td><td class="mono">100</td><td>Ziel-Netzbezug der Regelung (leicht positiv schont die Batterie vor Mikro-Zyklen)</td></tr>
+      <tr><td class="mono">priority_soc_pct</td><td class="mono">25</td><td>Unterhalb: Hausbatterie hat Lade-Vorrang vor dem Auto</td></tr>
+      <tr><td class="mono">soc_reserve_pct</td><td class="mono">0</td><td>Batterie-Reserve — EMS entlädt nie aktiv darunter</td></tr>
+      <tr><td class="mono">interval_s</td><td class="mono">10</td><td>Regelintervall (Sekunden)</td></tr>
+      <tr><td class="mono">enable_delay_s</td><td class="mono">60</td><td>Einschalt-Hysterese: so lange muss Überschuss anliegen, bevor die Ladung startet</td></tr>
+      <tr><td class="mono">disable_delay_s</td><td class="mono">180</td><td>Ausschalt-Hysterese: so lange darf Überschuss fehlen, bevor pausiert wird</td></tr>
+      <tr><td class="mono">min/max_current_a</td><td class="mono">6 / 16</td><td>Stromgrenzen der Wallbox — jeder Befehl wird dagegen validiert</td></tr>
+      <tr><td class="mono">phase_up_w / phase_down_w</td><td class="mono">4200 / 4000</td><td>Schwellen der 1p↔3p-Umschaltung (Lücke = Hysterese)</td></tr>
+      <tr><td class="mono">phase_min_gap_s</td><td class="mono">600</td><td>Mindestabstand zwischen Phasenumschaltungen (Geräteschonung)</td></tr>
+      <tr><td class="mono">charge_efficiency</td><td class="mono">0.90</td><td>Ladewirkungsgrad η in der Zielladungsrechnung</td></tr>
+      <tr><td class="mono">plan_buffer_min</td><td class="mono">15</td><td>Sicherheitspuffer vor der Abfahrtszeit</td></tr>
+      <tr><td class="mono">lease_ttl_s</td><td class="mono">900</td><td>Ablaufzeit aller Übersteuerungen (15 min) — wird der Abbruchtest an der E3DC ggf. korrigieren</td></tr>
+      <tr><td class="mono">battery_capacity_kwh</td><td class="mono">77.0</td><td>Akku-Kapazität des Enyaq iV80</td></tr>
+      <tr><td class="mono">hard_limit_*</td><td class="mono">null</td><td>Harte Grenzen (EV-Mindest-SoC, WW-Mindesttemperatur, …) — ab Werk <b>inaktiv</b>, ohne Codeänderung nachrüstbar</td></tr>
+    </table></div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="install">
+    <h2><span class="nr">05</span>Installation &amp; Betrieb</h2>
+    <p class="lead">Als lokales Home-Assistant-Add-on auf dem Raspberry Pi 5 (aarch64) — am 13.07.2026 real durchgespielt.</p>
+
+    <h3>Installieren</h3>
+    <ul>
+      <li><b>1 · Repo auf den Pi:</b> Web-Terminal (Advanced SSH &amp; Web Terminal, Seitenleiste — läuft über HA-Login, kein Extra-Passwort) →
+        <div class="formel">git clone https://sternlb:GITHUB_PAT@github.com/sternlb/leo-ems /addons/leo-ems</div>
+        Das Repo ist privat → es braucht einen <b>Fine-grained Personal Access Token</b> (GitHub → Settings → Developer settings; nur Repo <code>leo-ems</code>, nur <i>Contents: Read-only</i>). Der Token bleibt in der Remote-URL gespeichert — künftige Updates gehen ohne erneute Anmeldung.</li>
+      <li><b>2 · Add-on-Store:</b> Einstellungen → Add-ons → Store → ⋮ → <i>Nach Updates suchen</i> → „Leo-EMS" erscheint unter <b>Lokale Add-ons</b> → Installieren (erster Build dauert einige Minuten).</li>
+      <li><b>3 · Konfiguration:</b> Zugangsdaten im Konfigurations-Tab eintragen: <code>e3dc_host/user/password/rscp_key</code> (RSCP-Key ≠ Portal-Passwort — steht in der E3DC unter <i>Personalisierung → Benutzerprofil</i>), <code>goe_host</code> (IP aus der Fritz!Box), <code>skoda_user/password</code>, <code>lat/lon</code> (vorausgefüllt). <code>sungrow_host</code> bleibt leer bis zur Installation. Zugangsdaten liegen nur beim Supervisor, nie im Repo.</li>
+      <li><b>4 · Starten:</b> Im Protokoll erscheinen API-Token und die Zeile <code>verbundene Geräte: […]</code> — dort sollten alle fünf Adapter stehen.</li>
+      <li><b>5 · Cockpit anbinden:</b> Auf dem PC <code>cockpit.env.example</code> → <code>cockpit.env</code> kopieren und den Token eintragen. Ab dann genügt „<b>aktualisiere mein EMS-Cockpit</b>" in einer Claude-Session.</li>
+    </ul>
+
+    <h3>Aktualisieren</h3>
+    <div class="formel">cd /addons/leo-ems && git pull
+<span class="c"># dann: Add-on-Store → Nach Updates suchen → Update installieren
+# (neue Version in config.yaml sorgt für sauberen Rebuild)</span></div>
+
+    <h3>Troubleshooting — die drei echten Fälle vom Go-live</h3>
+    <div class="scroll"><table>
+      <tr><th>Symptom</th><th>Ursache</th><th>Lösung</th></tr>
+      <tr><td>„Invalid username or token" beim Clone</td><td>Repo ist privat; GitHub akzeptiert keine Passwörter für Git</td><td>Fine-grained PAT in der Clone-URL (s. o.)</td></tr>
+      <tr><td>Build-Fehler: „No matching distribution found for myskoda&gt;=2.0"</td><td>myskoda 2.x verlangt Python ≥ 3.13</td><td>Behoben in v0.1.1 — Basis-Image auf 3.13-alpine3.21</td></tr>
+      <tr><td>Kein API-Token im Protokoll, nur Uvicorn-Zeilen</td><td>Docker puffert Python-stdout ohne TTY</td><td>Behoben in v0.1.2 — <code>PYTHONUNBUFFERED=1</code> + <code>flush=True</code></td></tr>
+      <tr><td>App/Cockpit bekommt 401</td><td>Token falsch/rotiert</td><td>Token prüfen; Rotation: <code>/data/api_token</code> löschen + Add-on-Neustart → neuer Token</td></tr>
+    </table></div>
+
+    <div class="box warn"><b>Scharfschalten (nach der Beobachtungsphase):</b> <code>PUT /api/v1/config {"read_only": false}</code> — vorher EVCC deaktivieren bzw. dessen Ladesteuerung stoppen, sonst regeln zwei Systeme dieselbe Wallbox.</div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="roadmap">
+    <h2><span class="nr">06</span>Roadmap &amp; offene Punkte</h2>
+    <div class="scroll"><table>
+      <tr><th>Stufe</th><th>Inhalt</th><th>Status / Voraussetzung</th></tr>
+      <tr><td><b>1 · EVCC-Ersatz</b></td><td>EV-Überschussladen, Zielladung, Batterie-Koordination, Prognose, API, Cockpit</td><td class="limetx">Backend fertig (36/36 Tests) · Beobachtung läuft seit 13.07.2026</td></tr>
+      <tr><td><b>2 · Wärmepumpe</b></td><td>Warmwasser mittags vorziehen, Heizkreis-Anhebung (MyVaillant-Cloud)</td><td>nach MyVaillant-Praxistest</td></tr>
+      <tr><td><b>3 · Dynamischer Tarif</b></td><td>Preis-Adapter (Tibber, Octopus, Rabot, Ostrom, aWATTar), Lastverschiebung in Billigstunden, Batterie-Netzladen</td><td>nach Tarifwechsel</td></tr>
+    </table></div>
+    <ul>
+      <li>⏳ <b>~2 Wochen Beobachtung</b>, dann Cockpit-Vergleich und Entscheidung zur Umschaltung</li>
+      <li>🔲 E3DC-<b>Abbruchtest</b> (kalibriert das Lease-TTL von 15 min)</li>
+      <li>🔲 <b>EVCC-Zugangsdaten sichern</b> (evcc.yaml) vor der Ablösung</li>
+      <li>🔲 <b>Android-App</b> fertigbauen (Gerüst steht, Build in Android Studio)</li>
+      <li>🔲 <b>Sungrow</b> anbinden (Modbus TCP, LAN liegt) — Installation bis Ende 2026</li>
+    </ul>
+    <p>Verbesserungsvorschläge am besten als Issue im Repo oder direkt in einer Claude-Session — die Spec-Dateien (<code>specs/01–03</code>) sind die verbindliche Quelle, jede Änderung läuft über sie.</p>
+  </section>
+
+  <footer>
+    <p><b>Seiten dieser Familie:</b> Diese Doku (Haupt-Cockpit) · <a href="https://claude.ai/code/artifact/d711d336-f2bc-48c2-acbe-6c301b3ad352">Live-Cockpit</a> (Stand &amp; EMS-vs-EVCC). Beide aktualisiert Claude auf Zuruf: <code>„aktualisiere mein EMS-Cockpit"</code> bzw. <code>„aktualisiere die EMS-Doku"</code>.</p>
+    <p>Quelle: github.com/sternlb/leo-ems · Spec-Driven Development · Basel-AI Consulting Branding</p>
+  </footer>
+</div>
