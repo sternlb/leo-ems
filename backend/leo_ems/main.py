@@ -9,7 +9,7 @@ import uvicorn
 from .api import create_app
 from .config import DATA_DIR, get_or_create_token, load_config
 from .core.loop import ControlLoop
-from .devices.factory import build_adapters, device_connections_from_env
+from .devices.factory import build_adapters, load_device_connections
 from .safety import SafetyGuard
 from .store import Store
 
@@ -22,7 +22,7 @@ async def run() -> None:
     store = Store(DATA_DIR / "leo_ems.db")
     guard = SafetyGuard(cfg)
 
-    adapters = build_adapters(device_connections_from_env())
+    adapters = build_adapters(load_device_connections())
     loop = ControlLoop(cfg, guard, store, adapters)
 
     # Token einmalig ins Add-on-Log — von dort in die Android-App übertragen

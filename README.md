@@ -38,8 +38,10 @@ specs/          Spezifikationen (eine Datei pro SDD-Phase)
 docs/           Geräteprofile, EVCC-Baseline, API-Token-Konzept
 backend/        Python-Paket (core, planner, devices, safety, store, api) + tests/ + spikes/
 addon/          HA-Add-on-Definition (Dockerfile, config.yaml, Port 8099)
-app/            Android-App (Kotlin/Compose) — folgt
+app/            Android-App (Kotlin/Compose) — Gerüst: Basel-AI-Theme, API-Vertrag, Dashboard
 ```
+
+Add-on-Installation und Geräte-Zugangsdaten: siehe [addon/config.yaml](addon/config.yaml) (Optionen) und [docs/api-token-auth.md](docs/api-token-auth.md). App-Design/Branding: [docs/app-design.md](docs/app-design.md).
 
 ## Status
 

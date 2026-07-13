@@ -8,24 +8,40 @@ als Stub (0 W).
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
+
+OPTIONS_FILE = Path("/data/options.json")  # vom HA-Supervisor aus den Add-on-Optionen geschrieben
+
+_KEYS = (
+    "e3dc_host", "e3dc_user", "e3dc_password", "e3dc_rscp_key",
+    "goe_host", "skoda_user", "skoda_password", "sungrow_host", "lat", "lon",
+)
 
 
-def device_connections_from_env() -> dict:
-    """Liest optionale Verbindungsdaten aus der Umgebung."""
-    g = os.environ.get
-    return {
-        "e3dc_host": g("LEO_EMS_E3DC_HOST"),
-        "e3dc_user": g("LEO_EMS_E3DC_USER"),
-        "e3dc_password": g("LEO_EMS_E3DC_PASSWORD"),
-        "e3dc_rscp_key": g("LEO_EMS_E3DC_RSCP_KEY"),
-        "goe_host": g("LEO_EMS_GOE_HOST"),
-        "skoda_user": g("LEO_EMS_SKODA_USER"),
-        "skoda_password": g("LEO_EMS_SKODA_PASSWORD"),
-        "sungrow_host": g("LEO_EMS_SUNGROW_HOST"),  # leer bis Installation Ende 2026
-        "lat": g("LEO_EMS_LAT"),
-        "lon": g("LEO_EMS_LON"),
-    }
+def load_device_connections() -> dict:
+    """Verbindungsdaten aus den Add-on-Optionen (/data/options.json), Fallback Umgebung.
+
+    Zugangsdaten kommen aus den Add-on-Optionen (addon/config.yaml) und liegen nie
+    im Code/Repo. Für lokale Entwicklung greift der Fallback auf LEO_EMS_<KEY>.
+    """
+    opts: dict = {}
+    if OPTIONS_FILE.exists():
+        opts = json.loads(OPTIONS_FILE.read_text(encoding="utf-8"))
+
+    def val(key: str):
+        v = opts.get(key)
+        if v in (None, ""):
+            v = os.environ.get(f"LEO_EMS_{key.upper()}")
+        return v or None
+
+    return {k: val(k) for k in _KEYS}
+
+
+# Rückwärtskompatibler Alias
+def device_connections_from_env() -> dict:  # pragma: no cover
+    return load_device_connections()
 
 
 def build_adapters(conn: dict) -> dict:

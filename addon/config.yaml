@@ -16,6 +16,27 @@ ports:
 ports_description:
   8099/tcp: Leo-EMS API + App-Endpunkt (Token-geschützt, docs/api-token-auth.md)
 watchdog: http://[HOST]:8099/api/v1/health
-map: []
-options: {}
-schema: {}
+map:
+  - addon_config:rw
+options:
+  e3dc_host: ""
+  e3dc_user: ""
+  e3dc_password: ""
+  e3dc_rscp_key: ""
+  goe_host: ""
+  skoda_user: ""
+  skoda_password: ""
+  sungrow_host: ""
+  lat: "49.48"
+  lon: "11.25"
+schema:
+  e3dc_host: str?
+  e3dc_user: str?
+  e3dc_password: password?
+  e3dc_rscp_key: password?
+  goe_host: str?
+  skoda_user: str?
+  skoda_password: password?
+  sungrow_host: str?
+  lat: str?
+  lon: str?
