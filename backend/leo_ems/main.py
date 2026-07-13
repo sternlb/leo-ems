@@ -9,6 +9,7 @@ import uvicorn
 from .api import create_app
 from .config import DATA_DIR, get_or_create_token, load_config
 from .core.loop import ControlLoop
+from .devices.factory import build_adapters, device_connections_from_env
 from .safety import SafetyGuard
 from .store import Store
 
@@ -20,12 +21,15 @@ async def run() -> None:
     token = get_or_create_token()
     store = Store(DATA_DIR / "leo_ems.db")
     guard = SafetyGuard(cfg)
-    loop = ControlLoop(cfg, guard, store, adapters={})
+
+    adapters = build_adapters(device_connections_from_env())
+    loop = ControlLoop(cfg, guard, store, adapters)
 
     # Token einmalig ins Add-on-Log — von dort in die Android-App übertragen
     # (docs/api-token-auth.md, Abschnitt "Token in die App bringen")
     print(f"[leo-ems] API-Token: {token}")
     print(f"[leo-ems] API: http://0.0.0.0:{PORT}/api/v1  (Docs: /docs)")
+    print(f"[leo-ems] verbundene Geräte: {sorted(adapters)}")
 
     app = create_app(store, cfg, token, status_provider=loop.status)
     server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info"))
