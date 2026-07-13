@@ -9,5 +9,6 @@ COPY backend/ /app/
 RUN pip install --no-cache-dir .[devices]
 
 ENV LEO_EMS_DATA_DIR=/data
+ENV PYTHONUNBUFFERED=1
 
 CMD ["python", "-m", "leo_ems.main"]

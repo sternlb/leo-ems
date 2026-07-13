@@ -26,10 +26,10 @@ async def run() -> None:
     loop = ControlLoop(cfg, guard, store, adapters)
 
     # Token einmalig ins Add-on-Log — von dort in die Android-App übertragen
-    # (docs/api-token-auth.md, Abschnitt "Token in die App bringen")
-    print(f"[leo-ems] API-Token: {token}")
-    print(f"[leo-ems] API: http://0.0.0.0:{PORT}/api/v1  (Docs: /docs)")
-    print(f"[leo-ems] verbundene Geräte: {sorted(adapters)}")
+    # (docs/api-token-auth.md). flush=True: Docker puffert stdout sonst weg.
+    print(f"[leo-ems] API-Token: {token}", flush=True)
+    print(f"[leo-ems] API: http://0.0.0.0:{PORT}/api/v1  (Docs: /docs)", flush=True)
+    print(f"[leo-ems] verbundene Geräte: {sorted(adapters)}", flush=True)
 
     app = create_app(store, cfg, token, status_provider=loop.status)
     server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info"))
