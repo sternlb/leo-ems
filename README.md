@@ -26,7 +26,7 @@ Erst die Spezifikation, dann der Code. Jede Phase erzeugt ein prüfbares Artefak
 | 1. Requirements | [specs/01-requirements.md](specs/01-requirements.md) | ✅ abgeschlossen (2026-07-12) |
 | 2. Spezifikation | [specs/02-specification.md](specs/02-specification.md) | ✅ abgenommen für Stufe 1 (2026-07-12) |
 | 3. Architektur/Design | [specs/03-architecture.md](specs/03-architecture.md) | 🔵 laufend (ADR-001–003 entschieden) |
-| 4. Implementierung | [backend/](backend/) + addon/ + app/ | 🔵 laufend (Ladesteuerung + go-e/E3DC-Adapter + Regelschleife, 25 Tests grün) |
+| 4. Implementierung | [backend/](backend/) + Add-on (Wurzel) + app/ | 🔵 laufend (Regelschleife, Adapter, HA-Add-on-Paket für aarch64) |
 | 5. Test/Validierung | Testprotokolle | ⚪ offen |
 
 Die Vision und die Ziele stehen in [specs/00-vision.md](specs/00-vision.md). Geräteprofile mit Integrationsdetails und offenen Fragen liegen unter [docs/systems/](docs/systems/).
@@ -34,14 +34,16 @@ Die Vision und die Ziele stehen in [specs/00-vision.md](specs/00-vision.md). Ger
 ## Repo-Struktur
 
 ```
+config.yaml     HA-Add-on-Manifest (Optionen/Schema, Port 8099) — an der Wurzel,
+build.yaml      Basis-Images je Architektur (aarch64 für den Pi 5),
+Dockerfile      damit der Build-Kontext backend/ erreicht
 specs/          Spezifikationen (eine Datei pro SDD-Phase)
-docs/           Geräteprofile, EVCC-Baseline, API-Token-Konzept
+docs/           Geräteprofile, EVCC-Baseline, API-Token, Add-on-Installation, App-Design
 backend/        Python-Paket (core, planner, devices, safety, store, api) + tests/ + spikes/
-addon/          HA-Add-on-Definition (Dockerfile, config.yaml, Port 8099)
 app/            Android-App (Kotlin/Compose) — Gerüst: Basel-AI-Theme, API-Vertrag, Dashboard
 ```
 
-Add-on-Installation und Geräte-Zugangsdaten: siehe [addon/config.yaml](addon/config.yaml) (Optionen) und [docs/api-token-auth.md](docs/api-token-auth.md). App-Design/Branding: [docs/app-design.md](docs/app-design.md).
+Läuft als **lokales HA-Add-on** (ADR-001) auf Leos Raspberry Pi 5 (aarch64). Installation: [docs/addon-install.md](docs/addon-install.md). Geräte-Zugangsdaten über die Add-on-Optionen ([config.yaml](config.yaml)). API-Token: [docs/api-token-auth.md](docs/api-token-auth.md). App-Design/Branding: [docs/app-design.md](docs/app-design.md).
 
 ## Status
 

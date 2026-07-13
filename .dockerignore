@@ -1,0 +1,10 @@
+# Nur backend/ wird ins Image kopiert — Rest aus dem Build-Kontext ausschließen.
+.git/
+app/
+specs/
+docs/
+backend/tests/
+backend/spikes/
+**/__pycache__/
+**/*.pyc
+data/

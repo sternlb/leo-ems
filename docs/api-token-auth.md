@@ -28,7 +28,7 @@ Android-App                            Leo-EMS-Backend (Port 8099)
 2. **Übertragung an die App:** Der Token wird beim Start **einmal ins Add-on-Log geschrieben**. Du kopierst ihn von dort in den Einstellungs-Screen der Android-App (einmalig pro Gerät). Später denkbar: QR-Code-Anzeige.
 3. **Jede Anfrage** der App trägt den Header `Authorization: Bearer <token>`. Der WebSocket (`/api/v1/live`) authentifiziert sich beim Verbindungsaufbau genauso.
 4. **Prüfung:** Das Backend vergleicht mit `hmac.compare_digest()` — einem **konstantzeitigen Vergleich**. Ein normaler String-Vergleich bricht beim ersten falschen Zeichen ab; aus den Antwortzeiten könnte man den Token Zeichen für Zeichen erraten (Timing-Angriff). `compare_digest` braucht immer gleich lang.
-5. **Ausnahme:** `GET /api/v1/health` ist tokenfrei — der HA-Supervisor-Watchdog (addon/config.yaml) muss ohne Geheimnis prüfen können, ob der Dienst lebt. Der Endpunkt verrät nichts außer „läuft" + Version.
+5. **Ausnahme:** `GET /api/v1/health` ist tokenfrei — der HA-Supervisor-Watchdog (config.yaml) muss ohne Geheimnis prüfen können, ob der Dienst lebt. Der Endpunkt verrät nichts außer „läuft" + Version.
 
 ## 3. Was der Token bewusst NICHT leistet
 

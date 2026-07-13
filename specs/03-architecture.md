@@ -85,7 +85,7 @@ leo-ems/
 ├── specs/            (bestehend)
 ├── docs/             (bestehend)
 ├── backend/          Python-Paket: core, planner, devices, safety, store, api + tests/
-├── addon/            HA-Add-on: Dockerfile, config.yaml, run.sh
+├── config.yaml       HA-Add-on-Manifest (Wurzel), build.yaml, Dockerfile
 └── app/              Android-Studio-Projekt (Kotlin, Compose)
 ```
 
@@ -98,5 +98,5 @@ leo-ems/
 ## Offene Punkte Phase 3 — alle geschlossen (2026-07-12)
 
 - [x] **API-Absicherung:** statischer Bearer-Token (Leo folgt der Empfehlung). Ausführliches Konzept inkl. Bedrohungsmodell und verworfener Alternativen: [docs/api-token-auth.md](../docs/api-token-auth.md). Implementiert in `config.get_or_create_token()` + `api.require_token()`.
-- [x] **Add-on-Basis:** HA-Base-Image Python 3.12/Alpine, **Port 8099** (Leo bestätigt) — siehe [addon/config.yaml](../addon/config.yaml).
+- [x] **Add-on-Basis:** HA-Base-Image Python 3.12/Alpine, **aarch64** (Pi 5), **Port 8099** — Manifest an der Repo-Wurzel ([config.yaml](../config.yaml), [build.yaml](../build.yaml), [Dockerfile](../Dockerfile)); Installation in [docs/addon-install.md](../docs/addon-install.md).
 - [x] **RSCP-Spike ausgeführt** (2026-07-12): Lesen + Schreiben (Entladesperre setzen/lösen) **funktionieren**, eigener RSCP-Zugriff unabhängig von EVCC bestätigt. Details und offene Restpunkte (Sichtbarkeit bei echtem Entladen, Abbruch-Test fürs Lease-TTL) in [docs/systems/e3dc.md](../docs/systems/e3dc.md#spike-ergebnis-2026-07-12-backendspikese3dc_spikepy-eigener-rscp-client-via-pye3dc).
