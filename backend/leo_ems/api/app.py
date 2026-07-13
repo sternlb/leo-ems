@@ -110,4 +110,15 @@ def create_app(store: Store, cfg: RegelConfig, token: str, status_provider=None)
     async def history(limit: int = 200):
         return store.recent_decisions(limit)
 
+    # --- Beobachtungs-Auswertung (Cockpit, docs/cockpit.md) -----------------------
+    @app.get("/api/v1/observation/summary", dependencies=[auth])
+    async def observation_summary():
+        """Aggregierte Kennzahlen: EMS-Entscheidung vs. real gemessene Wallbox."""
+        return store.observation_summary(cfg.interval_s)
+
+    @app.get("/api/v1/observation/snapshots", dependencies=[auth])
+    async def observation_snapshots(limit: int = 1000):
+        """Rohdaten (je Tick ein Messbild), chronologisch — für Verlaufscharts."""
+        return store.snapshots_recent(limit)
+
     return app

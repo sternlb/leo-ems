@@ -22,6 +22,11 @@ CONFIG_FILE = DATA_DIR / "config.json"
 class RegelConfig:
     """Regelparameter (Spec §2–§5). Alle Werte über die API/App änderbar (REQ-071/072/073)."""
 
+    # Beobachtungsmodus: True = KEINE Steuerbefehle an Geräte, nur messen/loggen.
+    # Default True — die erste Installation auf dem Pi läuft gefahrlos parallel
+    # zu EVCC (Migrationsstrategie specs/03-architecture.md). Scharfschalten ist
+    # ein bewusster Akt über die API/App (PUT /api/v1/config {"read_only": false}).
+    read_only: bool = True
     residual_power_w: int = 100        # Ziel-Netzbezug (Spec §2)
     priority_soc_pct: int = 25         # Batterie-Vorrang unterhalb (Spec §2)
     soc_reserve_pct: int = 0           # Batterie-Reserve, Default 0 % (REQ-021)

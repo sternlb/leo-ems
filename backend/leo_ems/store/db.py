@@ -29,6 +29,16 @@ CREATE TABLE IF NOT EXISTS decision_log (
     ergebnis TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_log_ts ON decision_log(ts);
+CREATE TABLE IF NOT EXISTS snapshots (       -- je Regel-Tick ein Messbild (Cockpit/REQ-052)
+    ts TEXT NOT NULL,
+    ueberschuss_w REAL, p_netz_w REAL, p_batterie_w REAL,
+    soc_batt REAL, soc_v REAL,
+    p_wallbox_w REAL,                        -- real gemessene Wallbox-Leistung (= EVCC im Beobachtungsmodus)
+    p_sungrow_w REAL,
+    wuerde_laden INTEGER, strom_a INTEGER, phasen INTEGER,  -- EMS-Entscheidung (im read_only: "hätte")
+    garantie INTEGER, read_only INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_snap_ts ON snapshots(ts);
 """
 
 
@@ -80,6 +90,62 @@ class Store:
             (ts.isoformat(), regel, json.dumps(inputs, ensure_ascii=False), befehl, ergebnis),
         )
         self._db.commit()
+
+    # --- Snapshots / Beobachtungs-Auswertung (Cockpit) -------------------------
+    def log_snapshot(self, ts: datetime, **felder) -> None:
+        spalten = ("ueberschuss_w", "p_netz_w", "p_batterie_w", "soc_batt", "soc_v",
+                   "p_wallbox_w", "p_sungrow_w", "wuerde_laden", "strom_a", "phasen",
+                   "garantie", "read_only")
+        werte = [ts.isoformat()] + [
+            int(felder.get(s) or 0) if s in ("wuerde_laden", "garantie", "read_only", "strom_a", "phasen")
+            else felder.get(s)
+            for s in spalten
+        ]
+        self._db.execute(
+            f"INSERT INTO snapshots (ts, {', '.join(spalten)}) VALUES ({', '.join('?' * 13)})", werte
+        )
+        self._db.commit()
+
+    def snapshots_recent(self, limit: int = 1000) -> list[dict]:
+        cur = self._db.execute("SELECT * FROM snapshots ORDER BY ts DESC LIMIT ?", (limit,))
+        cols = [c[0] for c in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()][::-1]  # chronologisch
+
+    def observation_summary(self, interval_s: int = 10) -> dict:
+        """Aggregierte Auswertung für das Cockpit (EMS-Entscheidung vs. real gemessen)."""
+        basis = self._db.execute(
+            "SELECT COUNT(*), MIN(ts), MAX(ts), AVG(ueberschuss_w), MAX(ueberschuss_w) FROM snapshots"
+        ).fetchone()
+        if not basis[0]:
+            return {"snapshots": 0, "hinweis": "Noch keine Beobachtungsdaten"}
+        energie = self._db.execute(
+            "SELECT SUM(wuerde_laden),"
+            " SUM(CASE WHEN wuerde_laden=1 THEN strom_a*phasen*230.0 ELSE 0 END),"
+            " SUM(p_wallbox_w), SUM(garantie) FROM snapshots"
+        ).fetchone()
+        faktor_wh = interval_s / 3600.0
+        taeglich = self._db.execute(
+            "SELECT substr(ts,1,10) AS tag, COUNT(*),"
+            " ROUND(SUM(CASE WHEN wuerde_laden=1 THEN strom_a*phasen*230.0 ELSE 0 END)*?, 1),"
+            " ROUND(SUM(p_wallbox_w)*?, 1), ROUND(MAX(ueberschuss_w)),"
+            " ROUND(AVG(soc_batt), 1)"
+            " FROM snapshots GROUP BY tag ORDER BY tag", (faktor_wh, faktor_wh)
+        ).fetchall()
+        return {
+            "snapshots": basis[0],
+            "von": basis[1], "bis": basis[2],
+            "ueberschuss_avg_w": round(basis[3] or 0),
+            "ueberschuss_max_w": round(basis[4] or 0),
+            "ems_haette_geladen_wh": round((energie[1] or 0) * faktor_wh, 1),
+            "real_wallbox_wh": round((energie[2] or 0) * faktor_wh, 1),
+            "ticks_laden": energie[0] or 0,
+            "ticks_garantie": energie[3] or 0,
+            "taeglich": [
+                {"tag": t[0], "ticks": t[1], "ems_wh": t[2], "real_wh": t[3],
+                 "max_ueberschuss_w": t[4], "soc_batt_avg": t[5]}
+                for t in taeglich
+            ],
+        }
 
     def recent_decisions(self, limit: int = 200) -> list[dict]:
         rows = self._db.execute(

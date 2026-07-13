@@ -14,7 +14,9 @@ T0 = datetime(2026, 7, 15, 12, 0, 0)
 
 
 def build(tmp_path):
-    cfg = RegelConfig()
+    # Diese Tests prüfen den AKTIV-Betrieb; der Beobachtungsmodus (read_only,
+    # Default True) hat eigene Tests in test_observation.py.
+    cfg = RegelConfig(read_only=False)
     store = Store(tmp_path / "test.db")
     guard = SafetyGuard(cfg)
     # 2900 W Überschuss (Netz -3000, residual 100), Batterie entlädt 300 W (<-200 → Sperre)

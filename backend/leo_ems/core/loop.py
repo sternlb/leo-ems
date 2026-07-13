@@ -110,8 +110,9 @@ class ControlLoop:
         # 8) Batterie-Entladesperre als Lease abgleichen (Spec §5.1)
         await self._abgleich_entladesperre(now, e3dc, cmd.charging, e_data["p_batterie_w"])
 
-        # 9) Befehle an die Wallbox — durch die Grenzen-Validierung (Spec §8.3)
-        if goe is not None:
+        # 9) Befehle an die Wallbox — durch die Grenzen-Validierung (Spec §8.3).
+        #    Beobachtungsmodus (read_only): Entscheidung nur protokollieren, NICHTS senden.
+        if goe is not None and not self.cfg.read_only:
             if cmd.charging:
                 amp = self.guard.validate_current(cmd.current_a)
                 if amp is not None:
@@ -121,9 +122,11 @@ class ControlLoop:
             else:
                 await self._safe_cmd(goe.set_charging, False)
 
-        # 10) Status + Entscheidungs-Log (REQ-050/062)
+        # 10) Status + Entscheidungs-Log (REQ-050/062) + Snapshot (Cockpit)
+        grund = ("[Beobachtung] " if self.cfg.read_only else "") + cmd.reason
         self._last_status = {
-            "modus": self.mode, "state": cmd.state.value, "grund": cmd.reason,
+            "modus": self.mode, "state": cmd.state.value, "grund": grund,
+            "read_only": self.cfg.read_only,
             "laedt": cmd.charging, "strom_a": cmd.current_a, "phasen": cmd.phases,
             "ueberschuss_w": round(surplus), "soc_fahrzeug": soc_v,
             "soc_batterie": e_data["soc_batterie_pct"], "p_netz_w": e_data["p_netz_w"],
@@ -131,16 +134,28 @@ class ControlLoop:
             "entladesperre": self.guard.active("e3dc_entladesperre", now),
         }
         self.store.log_decision(
-            now, cmd.reason,
+            now, grund,
             {"ueberschuss_w": round(surplus), "soc_v": soc_v, "soc_batt": e_data["soc_batterie_pct"]},
             f"{cmd.current_a} A {cmd.phases}p charging={cmd.charging}", cmd.state.value,
+        )
+        self.store.log_snapshot(
+            now,
+            ueberschuss_w=round(surplus), p_netz_w=e_data["p_netz_w"],
+            p_batterie_w=e_data["p_batterie_w"], soc_batt=e_data["soc_batterie_pct"],
+            soc_v=soc_v, p_wallbox_w=p_lade, p_sungrow_w=p_sungrow,
+            wuerde_laden=cmd.charging, strom_a=cmd.current_a, phasen=cmd.phases,
+            garantie=garantie, read_only=self.cfg.read_only,
         )
 
     # --- Fail-Safe / Helfer ------------------------------------------------
     async def _failsafe_e1(self, now: datetime) -> None:
-        """E3DC weg → laufende Ladung stoppen, Steuerung einstellen (Spec §7/E1)."""
+        """E3DC weg → laufende Ladung stoppen, Steuerung einstellen (Spec §7/E1).
+
+        Im Beobachtungsmodus wird auch hier NICHTS gesendet — sonst würde die
+        Beobachtung das parallel laufende EVCC-Laden abwürgen.
+        """
         goe = self.adapters.get("goe")
-        if goe is not None:
+        if goe is not None and not self.cfg.read_only:
             await self._safe_cmd(goe.set_charging, False)
         # Entladesperre nicht erneuern → läuft per TTL aus (ADR-005)
         self._last_status = {
@@ -153,7 +168,8 @@ class ControlLoop:
         soll = charging and (self.guard.active("e3dc_entladesperre", now) or p_batterie_w < BATT_ENTLADE_SCHWELLE_W)
         if soll:
             self.guard.acquire("e3dc_entladesperre", now, "EV lädt — Batterie-Entladesperre")  # = TTL-Renew
-            if not self._sperre_hw_gesetzt and e3dc is not None:
+            # read_only: Lease dient nur der Anzeige ("würde sperren"), HW bleibt unberührt
+            if not self._sperre_hw_gesetzt and e3dc is not None and not self.cfg.read_only:
                 await self._safe_cmd(e3dc.set_entladesperre, True)
                 self._sperre_hw_gesetzt = True
         else:
