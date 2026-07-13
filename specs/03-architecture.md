@@ -95,8 +95,8 @@ leo-ems/
 - **Watchdog-Test (T4):** Integrationstest — Container kill, prüfen dass die E3DC-Sperre binnen TTL ausläuft (gegen den E3DC-Simulator; einmalig real vor der EVCC-Ablösung).
 - **Migrationstest (REQ-008):** EMS zwei Wochen parallel zu EVCC im Beobachtungsmodus (nur messen/loggen, nicht steuern), Solaranteil vergleichen; erst dann EVCC deaktivieren.
 
-## Offene Punkte Phase 3
+## Offene Punkte Phase 3 — alle geschlossen (2026-07-12)
 
-- [ ] **API-Absicherung im LAN:** einfacher statischer Token (App-Einstellung) vs. offen im LAN — Vorschlag: Token, da die API Steuerbefehle annimmt.
-- [ ] **Add-on-Basis:** offizielles HA-Add-on-Base-Image (Alpine/Python) wählen, Port festlegen (Vorschlag: 8099).
-- [ ] **RSCP-Schreibbefehle verifizieren:** pye3dc-Spike gegen die echte E3DC (Entladesperre setzen/lösen mit TTL) — erster Implementierungsschritt in Phase 4.
+- [x] **API-Absicherung:** statischer Bearer-Token (Leo folgt der Empfehlung). Ausführliches Konzept inkl. Bedrohungsmodell und verworfener Alternativen: [docs/api-token-auth.md](../docs/api-token-auth.md). Implementiert in `config.get_or_create_token()` + `api.require_token()`.
+- [x] **Add-on-Basis:** HA-Base-Image Python 3.12/Alpine, **Port 8099** (Leo bestätigt) — siehe [addon/config.yaml](../addon/config.yaml).
+- [x] **RSCP-Spike vorbereitet:** [backend/spikes/e3dc_spike.py](../backend/spikes/e3dc_spike.py) — Leo führt ihn mit seinen Zugangsdaten aus (`.env.e3dc`, gitignored); der Abbruch-Test dort kalibriert das Lease-TTL.

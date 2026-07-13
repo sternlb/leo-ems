@@ -26,7 +26,7 @@ Erst die Spezifikation, dann der Code. Jede Phase erzeugt ein prüfbares Artefak
 | 1. Requirements | [specs/01-requirements.md](specs/01-requirements.md) | ✅ abgeschlossen (2026-07-12) |
 | 2. Spezifikation | [specs/02-specification.md](specs/02-specification.md) | ✅ abgenommen für Stufe 1 (2026-07-12) |
 | 3. Architektur/Design | [specs/03-architecture.md](specs/03-architecture.md) | 🔵 laufend (ADR-001–003 entschieden) |
-| 4. Implementierung | src/ | ⚪ offen |
+| 4. Implementierung | [backend/](backend/) + addon/ + app/ | 🔵 laufend (Gerüst + Kernlogik mit Tests) |
 | 5. Test/Validierung | Testprotokolle | ⚪ offen |
 
 Die Vision und die Ziele stehen in [specs/00-vision.md](specs/00-vision.md). Geräteprofile mit Integrationsdetails und offenen Fragen liegen unter [docs/systems/](docs/systems/).
@@ -35,8 +35,10 @@ Die Vision und die Ziele stehen in [specs/00-vision.md](specs/00-vision.md). Ger
 
 ```
 specs/          Spezifikationen (eine Datei pro SDD-Phase)
-docs/systems/   Geräteprofile: Fähigkeiten, Schnittstellen, offene Fragen
-src/            Implementierung (ab Phase 4)
+docs/           Geräteprofile, EVCC-Baseline, API-Token-Konzept
+backend/        Python-Paket (core, planner, devices, safety, store, api) + tests/ + spikes/
+addon/          HA-Add-on-Definition (Dockerfile, config.yaml, Port 8099)
+app/            Android-App (Kotlin/Compose) — folgt
 ```
 
 ## Status

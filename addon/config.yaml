@@ -1,0 +1,21 @@
+name: Leo-EMS
+version: "0.1.0"
+slug: leo_ems
+description: Energy Management System — koordiniert E3DC, go-e Wallbox, Enyaq und (Stufe 2) Vaillant WP
+url: https://github.com/sternlb/leo-ems
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+init: false
+# Host-Netzwerk wie EVCC: RSCP (E3DC), go-e HTTP, Modbus (Sungrow), mDNS für die App
+host_network: true
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Leo-EMS API + App-Endpunkt (Token-geschützt, docs/api-token-auth.md)
+watchdog: http://[HOST]:8099/api/v1/health
+map: []
+options: {}
+schema: {}

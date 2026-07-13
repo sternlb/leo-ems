@@ -1,0 +1,8 @@
+# Zugangsdaten für Spikes — NIEMALS committen
+spikes/.env.e3dc
+
+# Python
+__pycache__/
+*.egg-info/
+.pytest_cache/
+data/

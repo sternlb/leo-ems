@@ -1,0 +1,32 @@
+[project]
+name = "leo-ems"
+version = "0.1.0"
+description = "Energy Management System für Haushalt Basel Latour — läuft als Home-Assistant-Add-on"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "aiohttp>=3.10",
+]
+
+[project.optional-dependencies]
+# Geräte-Bibliotheken — werden erst gebraucht, wenn der jeweilige Adapter real angebunden wird
+devices = [
+    "pye3dc>=0.9",      # E3DC RSCP
+    "myskoda>=2.0",     # Škoda Enyaq
+    "pymodbus>=3.7",    # Sungrow (ab Installation Ende 2026)
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["leo_ems*"]
