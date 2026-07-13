@@ -1,5 +1,7 @@
 # Basis-Images je Architektur — der HA-Supervisor wählt anhand der Hardware.
 # Leos HA: Raspberry Pi 5 → aarch64. amd64 zusätzlich für Test/andere Hosts.
+# Python 3.13 nötig: myskoda>=2.0 verlangt Requires-Python >=3.13
+# (Build-Fehler 2026-07-13 auf dem Pi mit 3.12).
 build_from:
-  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.20
-  amd64: ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20
+  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.13-alpine3.21
+  amd64: ghcr.io/home-assistant/amd64-base-python:3.13-alpine3.21

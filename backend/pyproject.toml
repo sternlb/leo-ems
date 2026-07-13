@@ -2,7 +2,7 @@
 name = "leo-ems"
 version = "0.1.0"
 description = "Energy Management System für Haushalt Basel Latour — läuft als Home-Assistant-Add-on"
-requires-python = ">=3.12"
+requires-python = ">=3.13"  # myskoda>=2.0 verlangt 3.13; Add-on-Image = Python 3.13
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
