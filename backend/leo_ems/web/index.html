@@ -79,6 +79,34 @@
   .hist b { color: var(--off); font-weight: 500; }
   .offline { text-align: center; padding: 2rem; color: var(--dim); font-family: var(--mono); }
   .hidden { display: none; }
+
+  /* --- 3D-Lastverteilungs-Szene (isometrisch, nach Bauplan) ------------------- */
+  .scene-card { padding: .5rem .5rem .2rem; }
+  #scene { width: 100%; height: auto; display: block; }
+  #scene text { font-family: var(--mono); font-size: 11.5px; fill: var(--dim); }
+  #scene text.val { fill: var(--off); font-size: 12.5px; }
+  #scene .flow { fill: none; stroke-width: 2.6; stroke-linecap: round;
+                 stroke-dasharray: .1 9; opacity: 0; transition: opacity .4s; }
+  #scene .flow.on { opacity: 1; animation: dash .8s linear infinite; }
+  #scene .flow.rev { animation-direction: reverse; }
+  @keyframes dash { to { stroke-dashoffset: -36.4; } }
+  #scene .sun { opacity: .1; transition: opacity .8s; }
+  #scene.pv-on .sun { opacity: 1; }
+  #scene .sparkle { opacity: 0; transform-box: fill-box; transform-origin: center; fill: var(--gelb); }
+  #scene.pv-on .sparkle { animation: glint 2.8s ease-in-out infinite; }
+  @keyframes glint {
+    0%, 100% { opacity: 0; transform: scale(.2) rotate(0deg); }
+    10%      { opacity: 1; transform: scale(1) rotate(20deg); }
+    22%      { opacity: 0; transform: scale(.2) rotate(40deg); }
+  }
+  #scene.pv-on .pvpanel { stroke: rgba(163,230,53,.55); }
+  #scene .wb-led { fill: #4A5A50; }
+  #scene.charging .wb-led { fill: var(--lime); }
+  #scene .cable { fill: none; stroke: #46564B; stroke-width: 2.6; stroke-linecap: round; }
+  #scene.charging .cable { stroke: var(--lime); stroke-dasharray: 4 7; animation: dash 1s linear infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    #scene .flow.on, #scene.pv-on .sparkle, #scene.charging .cable { animation: none; }
+  }
   footer { margin-top: 2.5rem; font-family: var(--mono); font-size: .68rem; color: var(--dim); display: flex; justify-content: space-between; }
 </style>
 </head>
@@ -95,10 +123,13 @@
 
   <div id="offline" class="offline hidden">Keine Verbindung zum EMS – nächster Versuch läuft …</div>
 
-  <!-- Energieverteilung -->
+  <!-- Lastverteilung -->
   <section>
-    <h2>Energieverteilung</h2>
-    <div class="grid tiles">
+    <h2>Lastverteilung</h2>
+    <div class="card scene-card">
+      <svg id="scene" viewBox="0 0 980 640" role="img" aria-label="Lastverteilung: Haus, PV, Batterie, Netz, Wallbox, Wärmepumpe"></svg>
+    </div>
+    <div class="grid tiles" style="margin-top:.75rem">
       <div class="card"><h3>PV gesamt</h3><div class="kw lime" id="t-pv">–</div>
         <div class="sub">E3DC <b id="t-pv-e3dc">–</b> · Garage <b id="t-pv-sg">–</b></div></div>
       <div class="card"><h3>Haus</h3><div class="kw" id="t-haus">–</div>
@@ -109,13 +140,6 @@
         <div class="sub" id="t-netz-richtung">–</div></div>
       <div class="card"><h3>Wallbox</h3><div class="kw" id="t-wb">–</div>
         <div class="sub"><b id="t-wb-detail">–</b><br>Fahrzeug-SoC <b id="t-soc-v">–</b></div></div>
-    </div>
-    <div class="card" style="margin-top:.75rem">
-      <h3>Woher / Wohin</h3>
-      <div class="bar" id="bar-quelle"></div>
-      <div class="legend" id="leg-quelle"></div>
-      <div class="bar" id="bar-senke" style="margin-top:.6rem"></div>
-      <div class="legend" id="leg-senke"></div>
     </div>
   </section>
 
@@ -237,20 +261,182 @@ const w = v => v == null ? "–" : (Math.abs(v) >= 1000 ? (v/1000).toFixed(1) + 
 const pct = v => v == null ? "–" : Math.round(v) + " %";
 const mmss = s => Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0");
 
-function stapel(barEl, legEl, teile) {
-  const sum = teile.reduce((a,t) => a + Math.max(0, t.w), 0);
-  barEl.innerHTML = ""; legEl.innerHTML = "";
-  for (const t of teile) {
-    const v = Math.max(0, t.w);
-    if (sum > 0 && v > 0) {
-      const d = document.createElement("div");
-      d.style.width = (100 * v / sum) + "%"; d.style.background = t.farbe;
-      barEl.appendChild(d);
-    }
-    legEl.insertAdjacentHTML("beforeend",
-      `<span><span class="dot" style="background:${t.farbe}"></span>${t.name} ${w(v)}</span>`);
+// ---------- 3D-Lastverteilungs-Szene ----------------------------------------
+// Isometrische Hausansicht nach den Bauplan-Ansichten (Juli 2026):
+// Satteldach, Giebel nach Süd/Nord, First läuft N-S → PV auf der OST-Dachfläche.
+// Blick aus Südost: sichtbar sind Südgiebel, Ostwand und das Ostdach mit PV.
+const SVGNS = "http://www.w3.org/2000/svg";
+const ISO_S = 26, ISO_OX = 470, ISO_OY = 310;
+// (u = Ost, w = Süd, z = Höhe) → Bildschirm
+const iso = (u, w, z) => [ISO_OX + 0.866 * (u - w) * ISO_S, ISO_OY + 0.5 * (u + w) * ISO_S - z * ISO_S];
+const P = a => a.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+// Punkt auf der Ost-Dachfläche: a = 0 (First) … 1 (Traufe), b = 0 (Nord) … 1 (Süd)
+const roofP = (a, b) => iso(4 + 4.4 * a, -0.45 + 10.9 * b, 8.4 - 2.85 * a);
+const SREF = {};
+
+function sEl(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  parent.appendChild(e);
+  return e;
+}
+
+function buildScene() {
+  const sv = $("scene");
+
+  // Grundstück + Einfahrt
+  sEl("polygon", { points: P([iso(-3.5,-1,0), iso(11.5,-1,0), iso(11.5,14.5,0), iso(-3.5,14.5,0)]), fill: "#0E2517" }, sv);
+  sEl("polygon", { points: P([iso(1.2,10,0), iso(6.9,10,0), iso(6.9,14.3,0), iso(1.2,14.3,0)]), fill: "#16261C" }, sv);
+
+  // Sonne (sichtbar wenn PV liefert)
+  const sun = sEl("g", { class: "sun" }, sv);
+  sEl("circle", { cx: 800, cy: 118, r: 22, fill: "var(--gelb)" }, sun);
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    sEl("line", { x1: 800 + Math.cos(a) * 30, y1: 118 + Math.sin(a) * 30,
+                  x2: 800 + Math.cos(a) * 40, y2: 118 + Math.sin(a) * 40,
+                  stroke: "var(--gelb)", "stroke-width": 3, "stroke-linecap": "round" }, sun);
   }
-  if (sum === 0) barEl.innerHTML = `<div style="width:100%;background:var(--deep)"></div>`;
+
+  // Netz-Mast (links)
+  const mast = sEl("g", {}, sv);
+  sEl("line", { x1: 110, y1: 453, x2: 110, y2: 335, stroke: "#6B7280", "stroke-width": 4 }, mast);
+  sEl("line", { x1: 94, y1: 348, x2: 126, y2: 348, stroke: "#6B7280", "stroke-width": 3 }, mast);
+  sEl("line", { x1: 97, y1: 363, x2: 123, y2: 363, stroke: "#6B7280", "stroke-width": 3 }, mast);
+
+  // Haus: Ostwand, Südgiebel, Sockel
+  sEl("polygon", { points: P([iso(8,10,0), iso(8,0,0), iso(8,0,5.8), iso(8,10,5.8)]), fill: "#CBC9BE" }, sv);
+  sEl("polygon", { points: P([iso(0,10,0), iso(8,10,0), iso(8,10,5.8), iso(4,10,8.4), iso(0,10,5.8)]), fill: "#E3E1D6" }, sv);
+  sEl("polygon", { points: P([iso(0,10,0), iso(8,10,0), iso(8,10,0.28), iso(0,10,0.28)]), fill: "#8D8B82" }, sv);
+  sEl("polygon", { points: P([iso(8,10,0), iso(8,0,0), iso(8,0,0.28), iso(8,10,0.28)]), fill: "#7E7C74" }, sv);
+
+  // Fenster Südgiebel (nach Südansicht) — Wandebene w = 10
+  const winS = (u1, u2, z1, z2) =>
+    sEl("polygon", { points: P([iso(u1,10,z1), iso(u2,10,z1), iso(u2,10,z2), iso(u1,10,z2)]),
+                     fill: "#7E97A6", stroke: "#3A3F42", "stroke-width": 1 }, sv);
+  winS(1.4, 2.6, 3.5, 4.7); winS(5.4, 6.6, 3.5, 4.7);
+  winS(1.1, 3.9, 0.35, 2.5); winS(4.9, 6.0, 0.35, 2.5);
+
+  // Ostwand: Tür + Fenster (nach Ostansicht) — Wandebene u = 8
+  const winO = (w1, w2, z1, z2, fill) =>
+    sEl("polygon", { points: P([iso(8,w1,z1), iso(8,w2,z1), iso(8,w2,z2), iso(8,w1,z2)]),
+                     fill: fill || "#7E97A6", stroke: "#3A3F42", "stroke-width": 1 }, sv);
+  winO(4.6, 5.7, 0, 2.15, "#DEDCD2");          // Haustür
+  winO(6.4, 7.0, 0.5, 2.0);                     // schmales EG-Fenster
+  winO(2.4, 3.4, 3.7, 4.7); winO(5.2, 5.8, 3.3, 4.9);
+
+  // Ostdach (mit Überstand) + Ortgang
+  sEl("polygon", { points: P([roofP(1,1), roofP(1,0), roofP(0,0), roofP(0,1)]), fill: "#33342F" }, sv);
+  sEl("polyline", { points: P([roofP(1,1), roofP(0,1), iso(-0.4,10.45,5.55)]),
+                    fill: "none", stroke: "#262723", "stroke-width": 5, "stroke-linecap": "round" }, sv);
+
+  // PV-Module (Ostdach): 2 Reihen × 5 Spalten
+  const rows = [[0.14, 0.5], [0.56, 0.92]];
+  for (const [a1, a2] of rows)
+    for (let i = 0; i < 5; i++) {
+      const b1 = 0.06 + i * 0.18, b2 = b1 + 0.155;
+      sEl("polygon", { class: "pvpanel",
+        points: P([roofP(a1,b1), roofP(a1,b2), roofP(a2,b2), roofP(a2,b1)]),
+        fill: "#12202C", stroke: "rgba(255,255,255,.18)", "stroke-width": 1 }, sv);
+    }
+  const star = "M0,-7 L1.8,-1.8 L7,0 L1.8,1.8 L0,7 L-1.8,1.8 L-7,0 L-1.8,-1.8 Z";
+  [[0.32,0.2,"0s"], [0.75,0.5,".9s"], [0.45,0.78,"1.7s"]].forEach(([a,b,d]) => {
+    const [x,y] = roofP(a,b);
+    sEl("path", { class: "sparkle", d: star, transform: `translate(${x},${y})`, style: `animation-delay:${d}` }, sv);
+  });
+
+  // Wärmepumpe (Ostseite) — Außeneinheit mit Lüfterring
+  sEl("polygon", { points: P([iso(8.5,4.6,0), iso(9.7,4.6,0), iso(9.7,4.6,1.45), iso(8.5,4.6,1.45)]), fill: "#C9C7BD" }, sv);
+  sEl("polygon", { points: P([iso(9.7,4.6,0), iso(9.7,2.6,0), iso(9.7,2.6,1.45), iso(9.7,4.6,1.45)]), fill: "#B0AEA4" }, sv);
+  sEl("polygon", { points: P([iso(8.5,4.6,1.45), iso(9.7,4.6,1.45), iso(9.7,2.6,1.45), iso(8.5,2.6,1.45)]), fill: "#DDDBD1" }, sv);
+  const [fx, fy] = iso(9.7, 3.6, 0.78);
+  sEl("ellipse", { cx: fx, cy: fy, rx: 11, ry: 8.5, fill: "#3B3B36", stroke: "#83817A", "stroke-width": 2 }, sv);
+
+  // Batteriespeicher E3DC (vor der Südwand) mit SoC-Füllstand
+  sEl("polygon", { points: P([iso(2.1,10.7,0), iso(2.1,10,0), iso(2.1,10,1.7), iso(2.1,10.7,1.7)]), fill: "#0E2818" }, sv);
+  sEl("polygon", { points: P([iso(0.9,10.7,0), iso(2.1,10.7,0), iso(2.1,10.7,1.7), iso(0.9,10.7,1.7)]),
+                   fill: "#17321F", stroke: "#1E3A29", "stroke-width": 1 }, sv);
+  sEl("polygon", { points: P([iso(0.9,10.7,1.7), iso(2.1,10.7,1.7), iso(2.1,10,1.7), iso(0.9,10,1.7)]), fill: "#1C3D26" }, sv);
+  SREF.battFill = sEl("polygon", { fill: "var(--lime)", opacity: 0.85 }, sv);
+
+  // Wallbox (go-e, Südwand) mit LED
+  sEl("polygon", { points: P([iso(7.0,10,1.05), iso(7.55,10,1.05), iso(7.55,10,1.75), iso(7.0,10,1.75)]),
+                   fill: "#E8E7E0", stroke: "#9B998F", "stroke-width": 1 }, sv);
+  const [wx, wy] = iso(7.27, 10, 1.4);
+  sEl("circle", { class: "wb-led", cx: wx, cy: wy, r: 4.2 }, sv);
+
+  // Enyaq iV80 (weiß) — Flanke liegt in der Süd-Ebene: matrix bildet lokale
+  // x-Achse auf die Süd-Richtung ab (Auto steht in der Einfahrt, Front zur Straße)
+  const car = sEl("g", { id: "sc-car", class: "hidden" }, sv);
+  const carBody = sEl("g", { transform: "translate(292,500) matrix(-0.866,0.5,0,1,0,0)" }, car);
+  sEl("ellipse", { cx: 80, cy: 1, rx: 82, ry: 7, fill: "rgba(0,0,0,.35)" }, carBody);
+  sEl("path", { d: "M8,-18 C8,-32 13,-38 26,-42 L62,-46 C74,-47 85,-44 97,-36 L124,-29 " +
+                   "C140,-26 150,-21 152,-13 L152,-4 C152,-1 150,0 147,0 L13,0 C9,0 8,-2 8,-6 Z",
+                fill: "#F7F7F3", stroke: "#C6C6BE", "stroke-width": 1.5 }, carBody);
+  sEl("path", { d: "M30,-41 L61,-44 C71,-45 80,-42 91,-35 L64,-32 L34,-34 Z", fill: "#31404A" }, carBody);
+  for (const cx of [38, 124]) {
+    sEl("circle", { cx, cy: -1, r: 12.5, fill: "#161B18" }, carBody);
+    sEl("circle", { cx, cy: -1, r: 4.5, fill: "#5A5A55" }, carBody);
+  }
+  SREF.cable = sEl("path", { class: "cable", d: "M408,498 C392,526 330,506 286,466" }, car);
+
+  // Energieflüsse (werden je Tick geschaltet)
+  SREF.fPV   = sEl("path", { class: "flow", stroke: "var(--lime)", d: "M514,274 C575,345 520,485 430,545" }, sv);
+  SREF.fNetz = sEl("path", { class: "flow", stroke: "#F87171",     d: "M118,442 C220,485 330,540 413,551" }, sv);
+  SREF.fBatt = sEl("path", { class: "flow", stroke: "var(--gelb)", d: "M268,452 C320,492 360,522 418,547" }, sv);
+  SREF.fAuto = sEl("path", { class: "flow", stroke: "var(--lime)", d: "M408,498 C392,526 330,506 286,466" }, sv);
+
+  // Hausanschluss-Knoten
+  sEl("circle", { cx: 425, cy: 548, r: 5.5, fill: "var(--deep)", stroke: "var(--lime)", "stroke-width": 2 }, sv);
+
+  // Beschriftungen
+  const txt = (id, x, y, anchor, cls) =>
+    (SREF[id] = sEl("text", { x, y, "text-anchor": anchor || "middle", class: cls || "" }, sv));
+  txt("lPV",   560, 126, "middle", "val");
+  sEl("text", { x: 560, y: 111, "text-anchor": "middle" }, sv).textContent = "PV (Ostdach)";
+  txt("lNetz", 110, 320, "middle", "val");
+  sEl("text", { x: 110, y: 305, "text-anchor": "middle" }, sv).textContent = "Netz";
+  txt("lBatt", 236, 424, "end", "val");
+  sEl("text", { x: 236, y: 409, "text-anchor": "end" }, sv).textContent = "E3DC-Batterie";
+  txt("lHaus", 452, 570, "start", "val");
+  txt("lAuto", 195, 610, "middle", "val");
+  sEl("text", { x: 634, y: 452, "text-anchor": "start" }, sv).textContent = "Wärmepumpe";
+  sEl("text", { x: 634, y: 467, "text-anchor": "start" }, sv).textContent = "(Stufe 2)";
+}
+
+function setFlow(el, on, rev) {
+  el.classList.toggle("on", !!on);
+  el.classList.toggle("rev", !!rev);
+}
+
+function updateScene(st) {
+  const sv = $("scene");
+  if (!sv || !sv.firstChild) return;
+  const pv = st.p_pv_w || 0, pn = st.p_netz_w || 0, pb = st.p_batterie_w || 0;
+
+  sv.classList.toggle("pv-on", pv > 50);
+  sv.classList.toggle("charging", !!st.laedt);
+  const carDa = ["verbunden","laden_1p","laden_3p","pausiert","beendet"].includes(st.state);
+  $("sc-car").classList.toggle("hidden", !carDa);
+
+  setFlow(SREF.fPV, pv > 50, false);
+  setFlow(SREF.fNetz, Math.abs(pn) > 50, pn < 0);          // Bezug: Mast→Haus, Einspeisung: rückwärts
+  SREF.fNetz.setAttribute("stroke", pn < 0 ? "#6B7280" : "#F87171");
+  setFlow(SREF.fBatt, Math.abs(pb) > 50, pb > 0);          // Entladung: Batterie→Haus, Laden: rückwärts
+  setFlow(SREF.fAuto, !!st.laedt, false);
+
+  // SoC-Füllstand im Speicher (Frontfläche, w = 10.7)
+  const soc = Math.max(0, Math.min(100, st.soc_batterie ?? 0));
+  const zTop = 0.08 + 1.5 * soc / 100;
+  SREF.battFill.setAttribute("points",
+    P([iso(1.0,10.7,0.08), iso(2.0,10.7,0.08), iso(2.0,10.7,zTop), iso(1.0,10.7,zTop)]));
+
+  SREF.lPV.textContent = w(pv);
+  SREF.lNetz.textContent = (pn < -50 ? "▲ " : pn > 50 ? "▼ " : "") + w(Math.abs(pn));
+  SREF.lBatt.textContent = `${pct(st.soc_batterie)} · ${w(Math.abs(pb))}`;
+  SREF.lHaus.textContent = "Haus " + w(st.p_haus_w);
+  SREF.lAuto.textContent = !carDa ? "" :
+    `Enyaq iV80 · ${pct(st.soc_fahrzeug)}` + (st.laedt ? ` · ${st.strom_a} A ${st.phasen}p` : "");
 }
 
 function render(st) {
@@ -276,18 +462,7 @@ function render(st) {
   $("t-wb-detail").textContent = st.laedt ? `${st.strom_a} A · ${st.phasen}-phasig` : "lädt nicht";
   $("t-soc-v").textContent = st.soc_fahrzeug == null ? "–" : pct(st.soc_fahrzeug) + " / " + pct(st.fahrzeug_limit_soc);
 
-  const battLade = Math.max(0, pb), battEntlade = Math.max(0, -pb);
-  stapel($("bar-quelle"), $("leg-quelle"), [
-    { name: "PV", w: st.p_pv_w || 0, farbe: "var(--lime)" },
-    { name: "Batterie", w: battEntlade, farbe: "var(--gelb)" },
-    { name: "Netzbezug", w: Math.max(0, pn), farbe: "#F87171" },
-  ]);
-  stapel($("bar-senke"), $("leg-senke"), [
-    { name: "Haus", w: st.p_haus_w || 0, farbe: "#5EEAD4" },
-    { name: "Wallbox", w: st.p_wallbox_w || 0, farbe: "var(--lime)" },
-    { name: "Batterie lädt", w: battLade, farbe: "var(--gelb)" },
-    { name: "Einspeisung", w: Math.max(0, -pn), farbe: "#6B7280" },
-  ]);
+  updateScene(st);
 
   $("s-state").textContent = st.state || "–";
   $("s-garantie").classList.toggle("hidden", !st.garantieladung);
@@ -437,6 +612,7 @@ async function poll() {
 $("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = false; if (tokenAbfragen()) poll(); } };
 
 (async () => {
+  buildScene();
   try { const h = await api("api/v1/health"); $("f-ver").textContent = "Leo-EMS v" + h.version; } catch {}
   await poll();
   try { await ladeConfig(); if (lastStatus) $("c-limit").value = lastStatus.fahrzeug_limit_soc ?? 80; } catch {}
