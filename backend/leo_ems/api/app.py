@@ -16,6 +16,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .. import __version__
@@ -84,6 +85,10 @@ def create_app(
         """Statische Seite ohne Auth — enthält keine Geheimnisse; alle Daten
         holt sie über die (Token-/Ingress-geschützte) API."""
         return HTMLResponse((WEB_DIR / "index.html").read_text(encoding="utf-8"))
+
+    # Produktfotos fürs Dashboard (Leo hat sie 2026-07-14 aus den vorgeschlagenen
+    # Kandidaten ausgewählt: E3DC S10E, Enyaq iV80, Vaillant aroTHERM plus).
+    app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
 
     @app.get("/api/v1/health")
     async def health():

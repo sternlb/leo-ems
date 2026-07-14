@@ -25,10 +25,22 @@ enthalten keine Geheimnisse.
 
 ## Was das Dashboard zeigt
 
-1. **Energieverteilung:** PV gesamt (E3DC + Sungrow), Haus, Batterie (Leistung,
-   SoC, Entladesperre), Netz (Bezug/Einspeisung), Wallbox — plus Woher/Wohin-Balken.
-   Grundlage sind die neuen Statusfelder `p_pv_w`, `p_pv_e3dc_w`, `p_haus_w`,
+1. **Lastverteilung (v0.2.2, 2D-Grafik):** flache Ostansicht des Hauses nach
+   dem Bauplan (Juli 2026) mit PV-Modulen auf dem Dach — funkelt bei Erzeugung
+   (Sparkles + Sonne, dimmt sonst), Netzanschluss links, Hausverbrauch mittig.
+   Darunter drei Gerätekarten mit echten Produktfotos: **E3DC-Batterie** (SoC-
+   Balken, Lade/Entlade-Leistung, Entladesperre), **Enyaq iV80 / Wallbox**
+   (Fahrzeug-SoC, Ladeleistung, „nicht verbunden" wenn kein Auto da ist) und
+   **Wärmepumpe** (Platzhalter „Stufe 2 · geplant", noch nicht angebunden).
+   Aktive Karten bekommen einen Lime-Rahmen; animierte Linien verbinden Haus
+   und Karten passend zum Energiefluss. Bilder liegen unter
+   `backend/leo_ems/web/assets/` (per `Leo`-Auswahl aus mehreren Vorschlägen
+   ausgesucht, 2026-07-14; Quellen: biber-solarkonzept.de, skodaforum.eu,
+   idealo.de — zugeschnitten auf freigestellten Ausschnitt) und werden von
+   FastAPI unter `/assets/...` ausgeliefert.
+   Grundlage sind die Statusfelder `p_pv_w`, `p_pv_e3dc_w`, `p_haus_w`,
    `p_batterie_w`, `p_wallbox_w` (Bilanz: Haus = PV + Netz − Batterieladung − Wallbox).
+   Darunter weiterhin die Kacheln PV gesamt / Haus / Batterie / Netz / Wallbox.
 2. **Ladestatus:** Zustand + Klartext-Grund (REQ-050), Garantieladungs-Badge.
 3. **Phasen & Entprellung** — beantwortet „Überschuss ist da, warum lädt er nur 1p?":
    `status.phasen_info` (aus `ChargeController.phase_diagnose`) liefert

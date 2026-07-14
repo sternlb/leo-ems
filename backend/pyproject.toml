@@ -1,6 +1,6 @@
 [project]
 name = "leo-ems"
-version = "0.2.1"
+version = "0.2.2"
 description = "Energy Management System für Haushalt Basel Latour — läuft als Home-Assistant-Add-on"
 requires-python = ">=3.13"  # myskoda>=2.0 verlangt 3.13; Add-on-Image = Python 3.13
 dependencies = [
@@ -33,4 +33,4 @@ build-backend = "setuptools.build_meta"
 include = ["leo_ems*"]
 
 [tool.setuptools.package-data]
-leo_ems = ["web/*.html"]
+leo_ems = ["web/*.html", "web/assets/*.png", "web/assets/*.jpg"]
