@@ -55,6 +55,24 @@ def test_failsafe_e1_schaltet_ab(tmp_path):
     assert loop.status()["state"] == "abgeschaltet"
 
 
+def test_status_enthaelt_energieverteilung_und_phaseninfo(tmp_path):
+    """Dashboard-Daten (REQ-051): Leistungsbilanz + Entprellungs-Transparenz im Status."""
+    cfg = RegelConfig(read_only=False)
+    store = Store(tmp_path / "test.db")
+    e3dc = E3dcSimulator(p_netz_w=-3000, p_batterie_w=-300, soc_pct=60, p_pv_w=5000)
+    goe = GoeSimulator(connected=True, power_w=0)
+    loop = ControlLoop(cfg, SafetyGuard(cfg), store, {"e3dc": e3dc, "goe": goe})
+    asyncio.run(loop.tick(T0))
+
+    st = loop.status()
+    assert st["p_pv_w"] == 5000
+    # Haus = PV + Netz − Batterieladung − Wallbox = 5000 − 3000 + 300 − 0
+    assert st["p_haus_w"] == 2300
+    pi = st["phasen_info"]
+    assert pi["phasen"] == 1 and "grund" in pi
+    assert {"entprellung_aktiv", "umschaltsperre_aktiv", "umschaltsperre_rest_s"} <= pi.keys()
+
+
 def test_lease_laeuft_ohne_erneuerung_aus(tmp_path):
     """ADR-005: Wird nach gesetzter Sperre nicht mehr getickt, läuft sie per TTL aus (T4-Kern)."""
     loop, e3dc, goe, guard = build(tmp_path)

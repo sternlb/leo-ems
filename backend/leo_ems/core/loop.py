@@ -124,14 +124,24 @@ class ControlLoop:
 
         # 10) Status + Entscheidungs-Log (REQ-050/062) + Snapshot (Cockpit)
         grund = ("[Beobachtung] " if self.cfg.read_only else "") + cmd.reason
+        p_pv_e3dc = e_data.get("p_pv_e3dc_w", 0.0)
+        p_pv = p_pv_e3dc + p_sungrow
+        # Hausverbrauch aus der Bilanz: PV + Netzbezug − Batterieladung − Wallbox
+        p_haus = p_pv + e_data["p_netz_w"] - e_data["p_batterie_w"] - p_lade
         self._last_status = {
             "modus": self.mode, "state": cmd.state.value, "grund": grund,
             "read_only": self.cfg.read_only,
             "laedt": cmd.charging, "strom_a": cmd.current_a, "phasen": cmd.phases,
             "ueberschuss_w": round(surplus), "soc_fahrzeug": soc_v,
+            "fahrzeug_limit_soc": self.vehicle_limit_soc,
             "soc_batterie": e_data["soc_batterie_pct"], "p_netz_w": e_data["p_netz_w"],
-            "p_sungrow_w": p_sungrow, "garantieladung": garantie,
+            "p_batterie_w": e_data["p_batterie_w"], "p_wallbox_w": p_lade,
+            "p_pv_w": round(p_pv), "p_pv_e3dc_w": p_pv_e3dc, "p_sungrow_w": p_sungrow,
+            "p_haus_w": round(max(0.0, p_haus)),
+            "garantieladung": garantie,
             "entladesperre": self.guard.active("e3dc_entladesperre", now),
+            # Entprellungs-/Sperr-Transparenz der 1p/3p-Umschaltung (Spec §4.2)
+            "phasen_info": self.controller.phase_diagnose(now, surplus),
         }
         self.store.log_decision(
             now, grund,

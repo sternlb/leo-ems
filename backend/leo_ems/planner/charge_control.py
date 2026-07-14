@@ -17,6 +17,10 @@ from ..config import RegelConfig
 VOLT = 230
 
 
+def _mmss(sekunden: int) -> str:
+    return f"{sekunden // 60}:{sekunden % 60:02d} min"
+
+
 class ChargeState(str, Enum):
     FREI = "frei"            # kein Fahrzeug
     VERBUNDEN = "verbunden"  # verbunden, wartet auf Freigabe
@@ -77,6 +81,59 @@ class ChargeController:
             self.phases = 1
             self._last_phase_switch = now
         return self.phases
+
+    def phase_diagnose(self, now: datetime, surplus_w: float) -> dict:
+        """Transparenz-Sicht auf die Phasenumschaltung (REQ-050): Warum (noch) 1p/3p?
+
+        Beantwortet Leos Kernfrage "Überschuss ist da, warum lädt er nur 1p?":
+        Entprellung (Bedingung muss 60/180 s stabil anliegen) und die
+        10-min-Umschaltsperre werden mit Restzeiten ausgewiesen.
+        Reine Lesesicht auf die Timer aus _decide_phases — verändert nichts.
+        """
+        gap_rest_s = 0
+        if self._last_phase_switch is not None:
+            gap_rest_s = max(0, int(self.cfg.phase_min_gap_s
+                                    - (now - self._last_phase_switch).total_seconds()))
+        if self.phases == 1:
+            ziel, key, noetig_s = 3, "phase_up", self.cfg.enable_delay_s
+            bedingung = surplus_w >= self.cfg.phase_up_w
+            lage = (f"Überschuss {surplus_w / 1000:.1f} kW "
+                    f"{'≥' if bedingung else '<'} 3p-Schwelle {self.cfg.phase_up_w / 1000:.1f} kW")
+        else:
+            ziel, key, noetig_s = 1, "phase_down", self.cfg.disable_delay_s
+            bedingung = surplus_w < self.cfg.phase_down_w
+            lage = (f"Überschuss {surplus_w / 1000:.1f} kW "
+                    f"{'<' if bedingung else '≥'} 1p-Schwelle {self.cfg.phase_down_w / 1000:.1f} kW")
+
+        seit_s = 0
+        if bedingung and key in self._since:
+            seit_s = int((now - self._since[key]).total_seconds())
+        entprellung = bedingung and seit_s < noetig_s
+        sperre_blockt = bedingung and gap_rest_s > 0
+
+        if not bedingung:
+            grund = f"bleibt {self.phases}p: {lage}"
+        elif entprellung and sperre_blockt:
+            grund = (f"{lage} — Entprellung läuft ({seit_s}/{noetig_s} s), "
+                     f"zusätzlich Umschaltsperre (noch {_mmss(gap_rest_s)})")
+        elif entprellung:
+            grund = f"{lage} — Entprellung läuft ({seit_s}/{noetig_s} s bis {ziel}p)"
+        elif sperre_blockt:
+            grund = f"{lage} — {ziel}p wartet auf Umschaltsperre (noch {_mmss(gap_rest_s)})"
+        else:
+            grund = f"{lage} — Umschaltung auf {ziel}p steht an"
+
+        return {
+            "phasen": self.phases,
+            "wechsel_ziel": ziel if bedingung else None,
+            "bedingung_erfuellt": bedingung,
+            "entprellung_aktiv": entprellung,
+            "entprellung_seit_s": seit_s,
+            "entprellung_noetig_s": noetig_s,
+            "umschaltsperre_aktiv": gap_rest_s > 0,
+            "umschaltsperre_rest_s": gap_rest_s,
+            "grund": grund,
+        }
 
     def _charge(self, current_a: int, phases: int, reason: str) -> ChargeCommand:
         self.state = ChargeState.LADEN_3P if phases == 3 else ChargeState.LADEN_1P

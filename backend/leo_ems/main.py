@@ -31,7 +31,7 @@ async def run() -> None:
     print(f"[leo-ems] API: http://0.0.0.0:{PORT}/api/v1  (Docs: /docs)", flush=True)
     print(f"[leo-ems] verbundene Geräte: {sorted(adapters)}", flush=True)
 
-    app = create_app(store, cfg, token, status_provider=loop.status)
+    app = create_app(store, cfg, token, status_provider=loop.status, control=loop)
     server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info"))
     await asyncio.gather(server.serve(), loop.run())
 

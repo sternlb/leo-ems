@@ -78,6 +78,37 @@ def test_fahrzeug_limit_beendet():
     assert not cmd.charging and cmd.state == ChargeState.BEENDET
 
 
+def test_phase_diagnose_entprellung():
+    """REQ-050: Während der 60-s-Entprellung 1p→3p ist der Grund samt Fortschritt sichtbar."""
+    ctrl = ChargeController(CFG)
+    upd(ctrl, 0, 5000)                       # Einschalt-Hysterese läuft
+    upd(ctrl, 60, 5000)                      # Ladung startet 1p, phase_up-Timer beginnt
+    d = ctrl.phase_diagnose(s(90), 5000)     # 30 s von 60 s gehalten
+    assert d["phasen"] == 1 and d["wechsel_ziel"] == 3
+    assert d["entprellung_aktiv"] is True
+    assert d["entprellung_seit_s"] == 30 and d["entprellung_noetig_s"] == 60
+    assert "Entprellung" in d["grund"]
+
+
+def test_phase_diagnose_umschaltsperre():
+    """Nach dem Wechsel auf 3p blockiert die 10-min-Sperre den Rückweg — mit Restzeit."""
+    ctrl = ChargeController(CFG)
+    upd(ctrl, 0, 5000)
+    upd(ctrl, 60, 5000)
+    upd(ctrl, 120, 5000)                     # → 3p, Umschaltsperre startet
+    d = ctrl.phase_diagnose(s(180), 3000)    # Überschuss unter 4 kW, aber Sperre aktiv
+    assert d["phasen"] == 3 and d["wechsel_ziel"] == 1
+    assert d["umschaltsperre_aktiv"] is True
+    assert d["umschaltsperre_rest_s"] == 540  # 600 s − 60 s
+    assert "Umschaltsperre" in d["grund"]
+
+
+def test_phase_diagnose_stabil():
+    ctrl = ChargeController(CFG)
+    d = ctrl.phase_diagnose(T0, 2000)        # 1p, Überschuss unter 3p-Schwelle
+    assert d["wechsel_ziel"] is None and d["grund"].startswith("bleibt 1p")
+
+
 def test_kein_fahrzeug_frei():
     ctrl = ChargeController(CFG)
     cmd = upd(ctrl, 0, 5000, connected=False)

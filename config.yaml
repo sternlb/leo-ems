@@ -1,5 +1,5 @@
 name: Leo-EMS
-version: "0.1.2"
+version: "0.2.0"
 slug: leo_ems
 description: Energy Management System — koordiniert E3DC, go-e Wallbox, Enyaq und (Stufe 2) Vaillant WP
 url: https://github.com/sternlb/leo-ems
@@ -16,6 +16,12 @@ ports:
 ports_description:
   8099/tcp: Leo-EMS API + App-Endpunkt (Token-geschützt, docs/api-token-auth.md)
 watchdog: http://[HOST]:8099/api/v1/health
+# Web-Dashboard in der HA-Seitenleiste (wie EVCC): Supervisor proxied auf Port 8099,
+# Auth übernimmt die HA-Anmeldung (Quelle ist immer der Ingress-Proxy 172.30.32.2)
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:ev-station
+panel_title: Leo-EMS
 map:
   - addon_config:rw
 options:

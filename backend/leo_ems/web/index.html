@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leo-EMS</title>
+<style>
+  /* Basel-AI Consulting Branding (00 Kontext/Branding.md): flat, scharfe Kanten, kein Verlauf */
+  :root {
+    --forest: #14532D; --deep: #0C1F15; --lime: #A3E635; --gelb: #FDE047;
+    --off: #FAFAF5; --dim: #9CA89F; --panel: #10291B; --line: #1E3A29;
+    --rot: #F87171; --r: 2px;
+    --mono: "Space Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --disp: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--deep); color: var(--off); font-family: var(--body); font-size: 15px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+
+  header { display: flex; align-items: center; gap: .75rem; padding: .75rem 0 1rem; flex-wrap: wrap; }
+  .mark { font-family: var(--disp); font-weight: 700; font-size: 1.5rem; letter-spacing: -.02em; }
+  .mark .pill { background: var(--lime); color: var(--forest); padding: .05em .35em; border-radius: var(--r); margin-left: .15em; }
+  .badges { display: flex; gap: .5rem; margin-left: auto; flex-wrap: wrap; }
+  .badge { font-family: var(--mono); font-size: .72rem; padding: .25em .6em; border: 1px solid var(--line); border-radius: var(--r); color: var(--dim); }
+  .badge.on { border-color: var(--lime); color: var(--lime); }
+  .badge.warn { border-color: var(--gelb); color: var(--gelb); }
+  .badge.err { border-color: var(--rot); color: var(--rot); }
+
+  .grid { display: grid; gap: .75rem; }
+  .tiles { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: .9rem 1rem; }
+  .card h3 { font-family: var(--mono); font-size: .7rem; font-weight: 400; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin-bottom: .5rem; }
+  .kw { font-family: var(--mono); font-size: 1.55rem; }
+  .kw small { font-size: .8rem; color: var(--dim); }
+  .sub { font-size: .8rem; color: var(--dim); margin-top: .35rem; }
+  .sub b { color: var(--off); font-weight: 500; }
+  .lime { color: var(--lime); } .gelbc { color: var(--gelb); } .rotc { color: var(--rot); }
+
+  section { margin-top: 1.4rem; }
+  section > h2 { font-family: var(--disp); font-size: 1.05rem; margin-bottom: .6rem; border-left: 3px solid var(--lime); padding-left: .5rem; }
+
+  .grund { font-size: 1.05rem; line-height: 1.5; }
+  .state-badge { display: inline-block; font-family: var(--mono); font-size: .75rem; padding: .3em .7em; border-radius: var(--r); background: var(--forest); color: var(--off); margin-bottom: .5rem; }
+
+  .bar { height: 22px; display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin: .35rem 0 .2rem; }
+  .bar div { height: 100%; }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .75rem; color: var(--dim); font-family: var(--mono); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 1px; margin-right: .35em; }
+
+  .phasen-big { font-family: var(--mono); font-size: 2.2rem; color: var(--lime); }
+  .prog { height: 10px; background: var(--deep); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: .3rem; }
+  .prog div { height: 100%; background: var(--lime); transition: width .5s linear; }
+  .prog.sperre div { background: var(--gelb); }
+  .prog-label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .72rem; color: var(--dim); margin-top: .55rem; }
+
+  .modes { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .modes button { font-family: var(--mono); font-size: .8rem; padding: .5em 1em; background: var(--deep); color: var(--off); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; }
+  .modes button.active { background: var(--lime); color: var(--forest); border-color: var(--lime); font-weight: 700; }
+
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .7rem 1rem; margin-top: .8rem; }
+  label.f { display: block; font-size: .75rem; color: var(--dim); }
+  label.f span { display: block; margin-bottom: .25rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: .65rem; }
+  input[type=number], input[type=time] { width: 100%; background: var(--deep); border: 1px solid var(--line); border-radius: var(--r); color: var(--off); font-family: var(--mono); padding: .45em .6em; font-size: .9rem; }
+  .btn { font-family: var(--disp); font-weight: 700; background: var(--lime); color: var(--forest); border: 0; border-radius: var(--r); padding: .55em 1.3em; cursor: pointer; font-size: .9rem; }
+  .btn.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); font-weight: 400; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .savemsg { font-family: var(--mono); font-size: .75rem; margin-left: .8rem; color: var(--lime); }
+
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th { font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); text-align: left; padding: .4em .5em; border-bottom: 1px solid var(--line); font-weight: 400; }
+  td { padding: .45em .5em; border-bottom: 1px solid var(--line); }
+  td.mono, .mono { font-family: var(--mono); }
+  .del { color: var(--rot); background: none; border: 0; cursor: pointer; font-size: 1rem; }
+  .switch { cursor: pointer; }
+  .wtag { display: inline-block; font-family: var(--mono); font-size: .68rem; border: 1px solid var(--line); border-radius: var(--r); padding: .1em .35em; margin-right: .15em; color: var(--dim); }
+  .wtag.on { border-color: var(--lime); color: var(--lime); }
+  .hist { font-family: var(--mono); font-size: .75rem; color: var(--dim); line-height: 1.9; overflow-x: auto; white-space: nowrap; }
+  .hist b { color: var(--off); font-weight: 500; }
+  .offline { text-align: center; padding: 2rem; color: var(--dim); font-family: var(--mono); }
+  .hidden { display: none; }
+  footer { margin-top: 2.5rem; font-family: var(--mono); font-size: .68rem; color: var(--dim); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">leo<span class="pill">EMS</span></div>
+    <div class="badges">
+      <span class="badge" id="b-modus">–</span>
+      <span class="badge warn hidden" id="b-beob">BEOBACHTUNG</span>
+      <span class="badge" id="b-conn">verbinde …</span>
+    </div>
+  </header>
+
+  <div id="offline" class="offline hidden">Keine Verbindung zum EMS – nächster Versuch läuft …</div>
+
+  <!-- Energieverteilung -->
+  <section>
+    <h2>Energieverteilung</h2>
+    <div class="grid tiles">
+      <div class="card"><h3>PV gesamt</h3><div class="kw lime" id="t-pv">–</div>
+        <div class="sub">E3DC <b id="t-pv-e3dc">–</b> · Garage <b id="t-pv-sg">–</b></div></div>
+      <div class="card"><h3>Haus</h3><div class="kw" id="t-haus">–</div>
+        <div class="sub">Überschuss <b id="t-ueb">–</b></div></div>
+      <div class="card"><h3>Batterie</h3><div class="kw" id="t-batt">–</div>
+        <div class="sub">SoC <b id="t-batt-soc">–</b> <span id="t-sperre"></span></div></div>
+      <div class="card"><h3>Netz</h3><div class="kw" id="t-netz">–</div>
+        <div class="sub" id="t-netz-richtung">–</div></div>
+      <div class="card"><h3>Wallbox</h3><div class="kw" id="t-wb">–</div>
+        <div class="sub"><b id="t-wb-detail">–</b><br>Fahrzeug-SoC <b id="t-soc-v">–</b></div></div>
+    </div>
+    <div class="card" style="margin-top:.75rem">
+      <h3>Woher / Wohin</h3>
+      <div class="bar" id="bar-quelle"></div>
+      <div class="legend" id="leg-quelle"></div>
+      <div class="bar" id="bar-senke" style="margin-top:.6rem"></div>
+      <div class="legend" id="leg-senke"></div>
+    </div>
+  </section>
+
+  <!-- Status + Phasen -->
+  <section>
+    <h2>Ladestatus</h2>
+    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+      <div class="card">
+        <h3>Entscheidung</h3>
+        <span class="state-badge" id="s-state">–</span>
+        <span class="badge warn hidden" id="s-garantie">GARANTIELADUNG</span>
+        <div class="grund" id="s-grund">–</div>
+      </div>
+      <div class="card">
+        <h3>Phasen &amp; Entprellung</h3>
+        <div class="phasen-big" id="p-phasen">–</div>
+        <div class="grund" style="font-size:.9rem; margin-top:.3rem" id="p-grund">–</div>
+        <div id="p-entprell" class="hidden">
+          <div class="prog-label"><span>Entprellung</span><span id="p-entprell-txt">–</span></div>
+          <div class="prog"><div id="p-entprell-bar" style="width:0%"></div></div>
+        </div>
+        <div id="p-sperre" class="hidden">
+          <div class="prog-label"><span>Umschaltsperre</span><span id="p-sperre-txt">–</span></div>
+          <div class="prog sperre"><div id="p-sperre-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Einstellungen -->
+  <section>
+    <h2>Einstellungen</h2>
+    <div class="card">
+      <h3>Lademodus</h3>
+      <div class="modes" id="modes">
+        <button data-m="Nur-PV">Nur-PV</button>
+        <button data-m="PV+Min">PV+Min</button>
+        <button data-m="Schnell">Schnell</button>
+        <button data-m="Aus">Aus</button>
+      </div>
+      <div class="form-grid">
+        <label class="f"><span>Fahrzeug-Ladelimit (% SoC)</span><input type="number" id="c-limit" min="0" max="100"></label>
+        <label class="f"><span>Min. Ladestrom (A)</span><input type="number" id="c-min_current_a" min="6" max="16"></label>
+        <label class="f"><span>Max. Ladestrom (A)</span><input type="number" id="c-max_current_a" min="6" max="32"></label>
+        <label class="f"><span>Batterie-Reserve (% SoC)</span><input type="number" id="c-soc_reserve_pct" min="0" max="100"></label>
+        <label class="f"><span>Batterie-Vorrang bis (% SoC)</span><input type="number" id="c-priority_soc_pct" min="0" max="100"></label>
+        <label class="f"><span>Ziel-Netzbezug (W)</span><input type="number" id="c-residual_power_w" min="-500" max="1000"></label>
+        <label class="f"><span>1p→3p ab (W)</span><input type="number" id="c-phase_up_w" min="1400" max="11000"></label>
+        <label class="f"><span>3p→1p unter (W)</span><input type="number" id="c-phase_down_w" min="1400" max="11000"></label>
+        <label class="f"><span>Umschaltsperre (s)</span><input type="number" id="c-phase_min_gap_s" min="0" max="3600"></label>
+      </div>
+      <div style="margin-top:1rem">
+        <button class="btn" id="save">Speichern</button>
+        <button class="btn ghost" id="toggle-ro">–</button>
+        <span class="savemsg" id="savemsg"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Laderegeln -->
+  <section>
+    <h2>Laderegeln (Garantieladung)</h2>
+    <div class="card">
+      <table id="rules">
+        <thead><tr><th>Tage</th><th>Abfahrt</th><th>Mindest-SoC</th><th>Aktiv</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="form-grid" style="align-items:end; margin-top:1rem">
+        <label class="f"><span>Wochentage</span><span id="new-days" style="text-transform:none; letter-spacing:0"></span></label>
+        <label class="f"><span>Abfahrt</span><input type="time" id="new-time" value="07:30"></label>
+        <label class="f"><span>Mindest-SoC (%)</span><input type="number" id="new-soc" value="50" min="0" max="100"></label>
+        <div><button class="btn" id="add-rule">Regel anlegen</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Protokoll -->
+  <section>
+    <h2>Protokoll</h2>
+    <div class="card"><div class="hist" id="hist">–</div></div>
+  </section>
+
+  <footer><span id="f-ver">Leo-EMS</span><span>basel<span style="color:var(--lime)">AI</span> · lokal, kein Cloud-Zwang</span></footer>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const TAGE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+let token = localStorage.getItem("leoems_token") || "";
+let lastStatus = null, statusAlter = 0, tokenAbgelehnt = false;
+
+function tokenAbfragen() {
+  // Direktzugriff im LAN: Token abfragen (steht im Add-on-Log); via Ingress nie nötig
+  const t = prompt("API-Token (steht im Leo-EMS Add-on-Log):");
+  if (!t) { tokenAbgelehnt = true; return false; }
+  token = t.trim(); localStorage.setItem("leoems_token", token);
+  tokenAbgelehnt = false;
+  return true;
+}
+
+// Relative Pfade: funktionieren hinter dem HA-Ingress-Prefix UND direkt im LAN.
+async function api(pfad, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers);
+  if (token) opts.headers["Authorization"] = "Bearer " + token;
+  if (opts.body) opts.headers["Content-Type"] = "application/json";
+  let res = await fetch(pfad, opts);
+  if (res.status === 401) {
+    // nur einmal fragen — bei Abbruch zeigt das Verbindungs-Badge "Token fehlt"
+    if (tokenAbgelehnt || !tokenAbfragen()) throw new Error("Token fehlt");
+    opts.headers["Authorization"] = "Bearer " + token;
+    res = await fetch(pfad, opts);
+  }
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+const w = v => v == null ? "–" : (Math.abs(v) >= 1000 ? (v/1000).toFixed(1) + " kW" : Math.round(v) + " W");
+const pct = v => v == null ? "–" : Math.round(v) + " %";
+const mmss = s => Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0");
+
+function stapel(barEl, legEl, teile) {
+  const sum = teile.reduce((a,t) => a + Math.max(0, t.w), 0);
+  barEl.innerHTML = ""; legEl.innerHTML = "";
+  for (const t of teile) {
+    const v = Math.max(0, t.w);
+    if (sum > 0 && v > 0) {
+      const d = document.createElement("div");
+      d.style.width = (100 * v / sum) + "%"; d.style.background = t.farbe;
+      barEl.appendChild(d);
+    }
+    legEl.insertAdjacentHTML("beforeend",
+      `<span><span class="dot" style="background:${t.farbe}"></span>${t.name} ${w(v)}</span>`);
+  }
+  if (sum === 0) barEl.innerHTML = `<div style="width:100%;background:var(--deep)"></div>`;
+}
+
+function render(st) {
+  $("b-modus").textContent = "Modus: " + (st.modus || "–");
+  $("b-beob").classList.toggle("hidden", !st.read_only);
+  $("toggle-ro").textContent = st.read_only ? "Scharf schalten" : "In Beobachtung wechseln";
+
+  $("t-pv").textContent = w(st.p_pv_w);
+  $("t-pv-e3dc").textContent = w(st.p_pv_e3dc_w);
+  $("t-pv-sg").textContent = w(st.p_sungrow_w);
+  $("t-haus").textContent = w(st.p_haus_w);
+  $("t-ueb").textContent = w(st.ueberschuss_w);
+  const pb = st.p_batterie_w || 0;
+  $("t-batt").textContent = w(Math.abs(pb));
+  $("t-batt").className = "kw " + (pb > 50 ? "lime" : pb < -50 ? "gelbc" : "");
+  $("t-batt-soc").textContent = pct(st.soc_batterie);
+  $("t-sperre").innerHTML = st.entladesperre ? ' · <span class="gelbc">Entladesperre</span>' : "";
+  const pn = st.p_netz_w || 0;
+  $("t-netz").textContent = w(Math.abs(pn));
+  $("t-netz").className = "kw " + (pn < -50 ? "lime" : pn > 50 ? "rotc" : "");
+  $("t-netz-richtung").textContent = pn < -50 ? "Einspeisung" : pn > 50 ? "Bezug" : "ausgeglichen";
+  $("t-wb").textContent = w(st.p_wallbox_w);
+  $("t-wb-detail").textContent = st.laedt ? `${st.strom_a} A · ${st.phasen}-phasig` : "lädt nicht";
+  $("t-soc-v").textContent = st.soc_fahrzeug == null ? "–" : pct(st.soc_fahrzeug) + " / " + pct(st.fahrzeug_limit_soc);
+
+  const battLade = Math.max(0, pb), battEntlade = Math.max(0, -pb);
+  stapel($("bar-quelle"), $("leg-quelle"), [
+    { name: "PV", w: st.p_pv_w || 0, farbe: "var(--lime)" },
+    { name: "Batterie", w: battEntlade, farbe: "var(--gelb)" },
+    { name: "Netzbezug", w: Math.max(0, pn), farbe: "#F87171" },
+  ]);
+  stapel($("bar-senke"), $("leg-senke"), [
+    { name: "Haus", w: st.p_haus_w || 0, farbe: "#5EEAD4" },
+    { name: "Wallbox", w: st.p_wallbox_w || 0, farbe: "var(--lime)" },
+    { name: "Batterie lädt", w: battLade, farbe: "var(--gelb)" },
+    { name: "Einspeisung", w: Math.max(0, -pn), farbe: "#6B7280" },
+  ]);
+
+  $("s-state").textContent = st.state || "–";
+  $("s-garantie").classList.toggle("hidden", !st.garantieladung);
+  $("s-grund").textContent = st.grund || "–";
+
+  for (const b of $("modes").children) b.classList.toggle("active", b.dataset.m === st.modus);
+  renderPhasen();
+}
+
+function renderPhasen() {
+  const pi = lastStatus && lastStatus.phasen_info;
+  if (!pi) { $("p-phasen").textContent = "–"; return; }
+  const dt = (Date.now() - statusAlter) / 1000;   // lokal weiterzählen zwischen Polls
+  $("p-phasen").textContent = pi.phasen + "-phasig";
+  $("p-grund").textContent = pi.grund;
+
+  const zeigE = pi.entprellung_aktiv;
+  $("p-entprell").classList.toggle("hidden", !zeigE);
+  if (zeigE) {
+    const seit = Math.min(pi.entprellung_noetig_s, pi.entprellung_seit_s + dt);
+    $("p-entprell-txt").textContent = `${Math.floor(seit)} / ${pi.entprellung_noetig_s} s → ${pi.wechsel_ziel}p`;
+    $("p-entprell-bar").style.width = (100 * seit / pi.entprellung_noetig_s) + "%";
+  }
+  const zeigS = pi.umschaltsperre_aktiv;
+  $("p-sperre").classList.toggle("hidden", !zeigS);
+  if (zeigS) {
+    const rest = Math.max(0, pi.umschaltsperre_rest_s - dt);
+    const gesamt = (cfgCache && cfgCache.phase_min_gap_s) || 600;
+    $("p-sperre-txt").textContent = "noch " + mmss(rest);
+    $("p-sperre-bar").style.width = (100 * (1 - rest / gesamt)) + "%";
+  }
+}
+
+// --- Einstellungen ----------------------------------------------------------
+const CFG_FELDER = ["min_current_a","max_current_a","soc_reserve_pct","priority_soc_pct",
+                    "residual_power_w","phase_up_w","phase_down_w","phase_min_gap_s"];
+let cfgCache = null;
+
+async function ladeConfig() {
+  cfgCache = await api("api/v1/config");
+  for (const f of CFG_FELDER) $("c-" + f).value = cfgCache[f];
+  $("toggle-ro").textContent = cfgCache.read_only ? "Scharf schalten" : "In Beobachtung wechseln";
+}
+
+$("save").onclick = async () => {
+  const upd = {};
+  for (const f of CFG_FELDER) upd[f] = Number($("c-" + f).value);
+  await api("api/v1/config", { method: "PUT", body: JSON.stringify(upd) });
+  const lim = Number($("c-limit").value);
+  const modus = lastStatus ? lastStatus.modus : "Nur-PV";
+  await api("api/v1/mode", { method: "PUT", body: JSON.stringify({ modus, fahrzeug_limit_soc: lim }) });
+  $("savemsg").textContent = "gespeichert ✓"; setTimeout(() => $("savemsg").textContent = "", 3000);
+  ladeConfig();
+};
+
+$("toggle-ro").onclick = async () => {
+  if (!cfgCache) return;
+  const ziel = !cfgCache.read_only;
+  const frage = ziel
+    ? "Wirklich in den BEOBACHTUNGSMODUS wechseln? Das EMS sendet dann keine Befehle mehr."
+    : "Wirklich SCHARF schalten? Das EMS steuert dann Wallbox und E3DC aktiv.\nEVCC vorher deaktivieren!";
+  if (!confirm(frage)) return;
+  await api("api/v1/config", { method: "PUT", body: JSON.stringify({ read_only: ziel }) });
+  ladeConfig();
+};
+
+for (const b of $("modes").children) b.onclick = async () => {
+  await api("api/v1/mode", { method: "PUT", body: JSON.stringify({ modus: b.dataset.m }) });
+  poll();
+};
+
+// --- Laderegeln ---------------------------------------------------------------
+function tagTags(container, aktive, klickbar) {
+  container.innerHTML = "";
+  TAGE.forEach((t, i) => {
+    const s = document.createElement("span");
+    s.className = "wtag" + (aktive.has(i) ? " on" : "");
+    s.textContent = t;
+    if (klickbar) { s.classList.add("switch"); s.onclick = () => { aktive.has(i) ? aktive.delete(i) : aktive.add(i); tagTags(container, aktive, true); }; }
+    container.appendChild(s);
+  });
+}
+const neueTage = new Set([0,1,2,3,4]);
+tagTags($("new-days"), neueTage, true);
+
+async function ladeRegeln() {
+  const regeln = await api("api/v1/rules");
+  const tb = $("rules").querySelector("tbody");
+  tb.innerHTML = "";
+  for (const r of regeln) {
+    const tr = document.createElement("tr");
+    const tagesspan = document.createElement("td");
+    tagTags(tagesspan, new Set(r.wochentage), false);
+    tr.appendChild(tagesspan);
+    tr.insertAdjacentHTML("beforeend", `<td class="mono">${r.abfahrtszeit}</td><td class="mono">${r.soc_min} %</td>`);
+    const aktivTd = document.createElement("td");
+    aktivTd.innerHTML = `<span class="badge switch ${r.aktiv ? "on" : ""}">${r.aktiv ? "AN" : "AUS"}</span>`;
+    aktivTd.firstChild.onclick = async () => {
+      await api("api/v1/rules/" + r.id, { method: "PUT", body: JSON.stringify({
+        wochentage: r.wochentage, abfahrtszeit: r.abfahrtszeit, soc_min: r.soc_min, aktiv: !r.aktiv }) });
+      ladeRegeln();
+    };
+    tr.appendChild(aktivTd);
+    const delTd = document.createElement("td");
+    delTd.innerHTML = `<button class="del" title="löschen">✕</button>`;
+    delTd.firstChild.onclick = async () => {
+      if (confirm("Regel löschen?")) { await api("api/v1/rules/" + r.id, { method: "DELETE" }); ladeRegeln(); }
+    };
+    tr.appendChild(delTd);
+    tb.appendChild(tr);
+  }
+}
+
+$("add-rule").onclick = async () => {
+  if (!neueTage.size) return alert("Mindestens einen Wochentag wählen.");
+  await api("api/v1/rules", { method: "POST", body: JSON.stringify({
+    wochentage: [...neueTage].sort(), abfahrtszeit: $("new-time").value,
+    soc_min: Number($("new-soc").value), aktiv: true }) });
+  ladeRegeln();
+};
+
+// --- Protokoll + Polling --------------------------------------------------------
+async function ladeHistorie() {
+  const h = await api("api/v1/history?limit=15");
+  $("hist").innerHTML = h.map(e =>
+    `<b>${e.ts.slice(11,19)}</b> ${e.regel} <span style="opacity:.6">→ ${e.befehl}</span>`).join("<br>") || "–";
+}
+
+async function poll() {
+  try {
+    const st = await api("api/v1/status");
+    lastStatus = st; statusAlter = Date.now();
+    render(st);
+    $("b-conn").textContent = "online"; $("b-conn").className = "badge on";
+    $("offline").classList.add("hidden");
+  } catch (e) {
+    const tokenProblem = String(e).includes("Token fehlt");
+    $("b-conn").textContent = tokenProblem ? "Token fehlt — hier klicken" : "offline";
+    $("b-conn").className = "badge err switch";
+    $("offline").classList.remove("hidden");
+    $("offline").textContent = tokenProblem
+      ? "Kein API-Token hinterlegt — oben rechts klicken und Token aus dem Add-on-Log eintragen."
+      : "Keine Verbindung zum EMS – nächster Versuch läuft …";
+  }
+}
+
+$("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = false; if (tokenAbfragen()) poll(); } };
+
+(async () => {
+  try { const h = await api("api/v1/health"); $("f-ver").textContent = "Leo-EMS v" + h.version; } catch {}
+  await poll();
+  try { await ladeConfig(); if (lastStatus) $("c-limit").value = lastStatus.fahrzeug_limit_soc ?? 80; } catch {}
+  try { await ladeRegeln(); } catch {}
+  try { await ladeHistorie(); } catch {}
+  setInterval(poll, 5000);
+  setInterval(ladeHistorie, 30000);
+  setInterval(renderPhasen, 1000);   // Countdown zwischen den Polls lokal weiterzählen
+})();
+</script>
+</body>
+</html>

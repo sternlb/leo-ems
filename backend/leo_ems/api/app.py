@@ -1,7 +1,9 @@
-"""Lokale API v1 (Spec §9.1, REQ-050/070–074).
+"""Lokale API v1 (Spec §9.1, REQ-050/070–074) + Web-Dashboard (HA-Ingress).
 
 Auth: statischer Bearer-Token für alle Endpunkte außer /health —
-Konzept und Begründung in docs/api-token-auth.md.
+Konzept und Begründung in docs/api-token-auth.md. Requests über das
+HA-Ingress kommen immer vom Supervisor-Proxy (172.30.32.2) und sind
+bereits durch die Home-Assistant-Anmeldung geschützt → kein Token nötig.
 """
 
 from __future__ import annotations
@@ -9,14 +11,21 @@ from __future__ import annotations
 import hmac
 from dataclasses import asdict
 from datetime import datetime, time
+from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..config import RegelConfig, save_config
 from ..planner.rules import ChargingRule
 from ..store import Store
+
+# Feste Quell-IP des HA-Ingress-Proxys (Supervisor-Doku, „Ingress“)
+INGRESS_PROXY_HOST = "172.30.32.2"
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 class RuleIn(BaseModel):
@@ -36,17 +45,45 @@ class RuleIn(BaseModel):
         )
 
 
-def create_app(store: Store, cfg: RegelConfig, token: str, status_provider=None) -> FastAPI:
+class ModeIn(BaseModel):
+    """Lademodus-Wechsel (Spec §3); Fahrzeug-Limit optional gleich mit."""
+
+    modus: Literal["Nur-PV", "PV+Min", "Schnell", "Aus"]
+    fahrzeug_limit_soc: int | None = Field(None, ge=0, le=100)
+
+
+def create_app(
+    store: Store,
+    cfg: RegelConfig,
+    token: str,
+    status_provider=None,
+    control=None,
+    ingress_host: str = INGRESS_PROXY_HOST,
+) -> FastAPI:
     app = FastAPI(title="Leo-EMS API", version=__version__)
 
     async def require_token(request: Request) -> None:
-        """Bearer-Token-Prüfung mit konstantzeitigem Vergleich (docs/api-token-auth.md)."""
+        """Bearer-Token-Prüfung mit konstantzeitigem Vergleich (docs/api-token-auth.md).
+
+        Ausnahme: HA-Ingress. Der Supervisor-Proxy ist die einzige Quelle mit
+        dieser IP, und Home Assistant hat den Nutzer dort bereits angemeldet.
+        """
+        client = request.client
+        if client is not None and client.host == ingress_host:
+            return
         header = request.headers.get("authorization", "")
         expected = f"Bearer {token}"
         if not hmac.compare_digest(header.encode(), expected.encode()):
             raise HTTPException(status_code=401, detail="Ungültiger oder fehlender API-Token")
 
     auth = Depends(require_token)
+
+    # --- Web-Dashboard (HA-Sidebar via Ingress; auch direkt im LAN aufrufbar) ----
+    @app.get("/", include_in_schema=False)
+    async def index() -> HTMLResponse:
+        """Statische Seite ohne Auth — enthält keine Geheimnisse; alle Daten
+        holt sie über die (Token-/Ingress-geschützte) API."""
+        return HTMLResponse((WEB_DIR / "index.html").read_text(encoding="utf-8"))
 
     @app.get("/api/v1/health")
     async def health():
@@ -59,6 +96,17 @@ def create_app(store: Store, cfg: RegelConfig, token: str, status_provider=None)
         if status_provider is not None:
             return status_provider()
         return {"hinweis": "Regelschleife noch nicht aktiv (Phase 4 in Arbeit)", "version": __version__}
+
+    # --- Lademodus + Fahrzeug-Limit (REQ-071) -----------------------------------
+    @app.put("/api/v1/mode", dependencies=[auth])
+    async def mode_put(update: ModeIn):
+        """Setzt den Lademodus (und optional das Fahrzeug-Ladelimit) live in der Regelschleife."""
+        if control is None:
+            raise HTTPException(status_code=503, detail="Regelschleife nicht aktiv")
+        control.mode = update.modus
+        if update.fahrzeug_limit_soc is not None:
+            control.vehicle_limit_soc = update.fahrzeug_limit_soc
+        return {"modus": control.mode, "fahrzeug_limit_soc": control.vehicle_limit_soc}
 
     # --- Regeln (REQ-070/073) -------------------------------------------------
     @app.get("/api/v1/rules", dependencies=[auth])
