@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leo-EMS — Energy-Flow-Mockup (Funktions-Ebene, Spec 04)</title>
+<style>
+  /* Basel-AI Branding — identisch zu web/index.html */
+  :root {
+    --forest: #14532D; --deep: #0C1F15; --lime: #A3E635; --gelb: #FDE047;
+    --off: #FAFAF5; --dim: #9CA89F; --panel: #10291B; --line: #1E3A29;
+    --rot: #F87171; --grau: #9CA89F; --r: 2px;
+    --mono: "Space Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --disp: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--deep); color: var(--off); font-family: var(--body); font-size: 15px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+  header { display: flex; align-items: baseline; gap: .75rem; padding: .75rem 0 1rem; flex-wrap: wrap; }
+  .mark { font-family: var(--disp); font-weight: 700; font-size: 1.3rem; letter-spacing: -.02em; }
+  .mark .pill { background: var(--lime); color: var(--forest); padding: .05em .35em; border-radius: var(--r); margin-left: .15em; }
+  .hint { font-family: var(--mono); font-size: .72rem; color: var(--dim); }
+
+  /* Szenario-Schalter (nur Mockup) */
+  .scen { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .8rem; }
+  .scen button { font-family: var(--mono); font-size: .72rem; padding: .35em .7em; background: var(--panel);
+    border: 1px solid var(--line); border-radius: var(--r); color: var(--dim); cursor: pointer; }
+  .scen button.on { border-color: var(--lime); color: var(--lime); }
+
+  /* ---- Szene: Hintergrund-Ebene + SVG-Overlay (Spec §1) -------------------- */
+  .scene { position: relative; border: 1px solid var(--line); border-radius: var(--r);
+    aspect-ratio: 16/9; overflow: hidden; background: var(--panel); }
+  .scene .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scene svg.overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .bg-note { position: absolute; right: .6rem; bottom: .4rem; font-family: var(--mono);
+    font-size: .62rem; color: var(--dim); opacity: .8; }
+  .kopf { position: absolute; left: .6rem; top: .5rem; font-family: var(--mono); font-size: .72rem;
+    color: var(--lime); background: rgba(12,31,21,.75); border: 1px solid var(--line);
+    border-radius: var(--r); padding: .3em .6em; max-width: 70%; }
+
+  /* Flusslinien (Spec §5): 3 Geschwindigkeitsstufen */
+  .flow { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1 9; opacity: 0; }
+  .flow.on { opacity: 1; animation: dash 1.2s linear infinite; }
+  .flow.on.mid { animation-duration: .8s; } .flow.on.fast { animation-duration: .5s; }
+  @keyframes dash { to { stroke-dashoffset: -10; } }
+  .flow-val { font-family: var(--mono); font-size: 11px; fill: var(--off); paint-order: stroke; stroke: var(--deep); stroke-width: 3px; }
+  .arrow { opacity: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .flow.on { animation: none; stroke-dasharray: none; opacity: .9; }
+    .flow-glow, .sparkle { display: none; }
+    .arrow.on { opacity: 1; }
+  }
+
+  /* Knoten-Chips */
+  .chip { cursor: pointer; }
+  .chip rect.box { fill: rgba(12,31,21,.88); stroke: var(--line); stroke-width: 1; rx: 2; }
+  .chip.aktiv rect.box { stroke: var(--lime); }
+  .chip.dimmed { opacity: .55; }
+  .chip text { font-family: var(--mono); fill: var(--off); }
+  .chip .t { font-size: 10px; letter-spacing: .08em; fill: var(--dim); text-transform: uppercase; }
+  .chip .v { font-size: 13px; }
+  .chip .b { font-size: 9px; fill: var(--gelb); }
+  .socbar { fill: var(--deep); stroke: var(--line); stroke-width: 1; }
+  .socfill { fill: var(--gelb); }
+
+  /* Detail-Panel (Spec §4) */
+  .panel-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 40; }
+  .panel { position: fixed; z-index: 41; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: min(440px, calc(100vw - 2rem)); background: var(--panel); border: 2px solid var(--lime);
+    border-radius: var(--r); padding: 1rem 1.1rem; display: none; }
+  .panel.open, .panel-back.open { display: block; }
+  .panel h3 { font-family: var(--disp); font-size: 1rem; margin-bottom: .6rem; }
+  .panel .x { position: absolute; top: .5rem; right: .7rem; background: none; border: 0; color: var(--dim);
+    font-size: 1.1rem; cursor: pointer; }
+  .panel dl { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; font-size: .85rem; }
+  .panel dt { color: var(--dim); font-family: var(--mono); font-size: .75rem; }
+  .panel .prog { height: 8px; background: var(--deep); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: .2rem; }
+  .panel .prog i { display: block; height: 100%; background: var(--lime); }
+  .panel .note { font-size: .78rem; color: var(--dim); margin-top: .6rem; line-height: 1.45; }
+
+  /* Schema-Modus Handy (Spec §1 Responsive) */
+  .schema { display: none; }
+  @media (max-width: 767px) {
+    .scene { aspect-ratio: auto; height: 130px; }
+    .scene svg.overlay, .bg-note { display: none; }
+    .schema { display: block; margin-top: .6rem; }
+    .schema .row { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem;
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: .4rem; cursor: pointer; }
+    .schema .row.aktiv { border-color: var(--lime); }
+    .schema .row.dimmed { opacity: .55; }
+    .schema .nm { font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); flex: 1; }
+    .schema .vl { font-family: var(--mono); font-size: .95rem; }
+    .schema .dir { width: 10px; text-align: center; color: var(--dim); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">LEO<span class="pill">EMS</span></div>
+    <div class="hint">Mockup Funktions-Ebene · Spec 04 §1–§5 · Dummy-Daten</div>
+  </header>
+
+  <div class="scen" id="scen"></div>
+
+  <div class="scene">
+    <!-- Platzhalter-Hintergrund: einfache Ostansicht-Silhouette. Wird in Phase 3b
+         durch das Higgsfield-WebP ersetzt (gleiches Seitenverhältnis 16:9). -->
+    <svg class="bg" viewBox="0 0 960 540" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect width="960" height="540" fill="#0C1F15"/>
+      <rect width="960" height="540" fill="url(#sky)"/>
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#10291B"/><stop offset=".7" stop-color="#0C1F15"/>
+        </linearGradient>
+      </defs>
+      <!-- Boden -->
+      <rect y="430" width="960" height="110" fill="#0A1A12"/>
+      <!-- Haus: Ostansicht (Traufseite), Satteldach als Fläche von oben angeschnitten -->
+      <rect x="380" y="220" width="330" height="210" fill="#122A1C" stroke="#1E3A29"/>
+      <polygon points="370,220 720,220 700,140 390,140" fill="#0F2417" stroke="#1E3A29"/>
+      <!-- PV-Module 2x5 auf der Ost-Dachfläche -->
+      <g fill="#16341F" stroke="#2C4A35" stroke-width="1.2">
+        <rect x="420" y="150" width="50" height="28"/><rect x="475" y="150" width="50" height="28"/>
+        <rect x="530" y="150" width="50" height="28"/><rect x="585" y="150" width="50" height="28"/>
+        <rect x="640" y="150" width="50" height="28"/>
+        <rect x="415" y="183" width="50" height="28"/><rect x="470" y="183" width="50" height="28"/>
+        <rect x="525" y="183" width="50" height="28"/><rect x="580" y="183" width="50" height="28"/>
+        <rect x="635" y="183" width="50" height="28"/>
+      </g>
+      <!-- Fenster -->
+      <g fill="#0C1F15" stroke="#1E3A29">
+        <rect x="410" y="250" width="40" height="55"/><rect x="480" y="250" width="40" height="55"/>
+        <rect x="560" y="250" width="55" height="55"/><rect x="650" y="250" width="35" height="55"/>
+        <rect x="410" y="340" width="40" height="55"/><rect x="480" y="340" width="40" height="55"/>
+        <rect x="560" y="340" width="55" height="70"/><rect x="650" y="340" width="35" height="55"/>
+      </g>
+      <!-- Garage (Anbau Nord = links, Flachdach) + Einfahrt -->
+      <rect x="180" y="300" width="200" height="130" fill="#0F2417" stroke="#1E3A29"/>
+      <rect x="175" y="290" width="210" height="14" fill="#122A1C" stroke="#1E3A29"/>
+      <rect x="60" y="430" width="330" height="70" fill="#0D211660"/>
+      <!-- WP-Außeneinheit -->
+      <rect x="330" y="390" width="42" height="40" fill="#122A1C" stroke="#1E3A29"/>
+      <circle cx="351" cy="410" r="12" fill="none" stroke="#1E3A29" stroke-width="2"/>
+      <!-- Netz-Mast rechts -->
+      <line x1="880" y1="430" x2="880" y2="240" stroke="#1E3A29" stroke-width="4"/>
+      <line x1="850" y1="260" x2="910" y2="260" stroke="#1E3A29" stroke-width="3"/>
+    </svg>
+
+    <div class="kopf" id="kopf">—</div>
+    <div class="bg-note">Platzhalter — Higgsfield-Bild folgt (Phase 3b)</div>
+
+    <!-- Funktions-Ebene: Anker in % via viewBox 960x540 (Spec §1) -->
+    <svg class="overlay" viewBox="0 0 960 540" id="ov"></svg>
+  </div>
+
+  <!-- Schema-Modus (Handy) -->
+  <div class="schema" id="schema"></div>
+
+  <div class="panel-back" id="pback"></div>
+  <div class="panel" id="panel"></div>
+</div>
+
+<script>
+"use strict";
+// ---------- Dummy-Szenarien (Abnahmetest-Fälle, Spec §7) ---------------------
+const SZENARIEN = {
+  "T1 Überschuss-Laden": { pv_e3dc: 3200, sungrow: 0, netz: -140, batt: 600, wallbox: 2400,
+    haus: 460, soc_b: 72, soc_v: 61, laedt: true, phasen: 1, strom: 10, auto: true,
+    grund: "PV-Überschuss: lädt 1-phasig mit 10 A", offline: [] },
+  "T2 Einspeisung":     { pv_e3dc: 4100, sungrow: 0, netz: -1500, batt: -200, haus: 2600,
+    wallbox: 0, soc_b: 100, soc_v: null, laedt: false, phasen: 1, strom: 0, auto: false,
+    grund: "Batterie voll, Einspeisung 1,5 kW", offline: [] },
+  "Nacht / Bezug":      { pv_e3dc: 0, sungrow: 0, netz: 820, batt: -450, haus: 1270,
+    wallbox: 0, soc_b: 34, soc_v: 58, laedt: false, phasen: 1, strom: 0, auto: true,
+    grund: "Nacht: Batterie entlädt, Rest aus dem Netz", offline: [] },
+  "T6 E3DC offline":    { pv_e3dc: 0, sungrow: 0, netz: 0, batt: 0, haus: 0,
+    wallbox: 0, soc_b: null, soc_v: 58, laedt: false, phasen: 1, strom: 0, auto: true,
+    grund: "⚠ Fail-Safe E1: E3DC nicht erreichbar — Laden gestoppt", offline: ["batt","pv"] },
+};
+let aktiv = "T1 Überschuss-Laden";
+
+// ---------- Wertformat (Spec §2): >=1000 W -> kW, 50-999 W -> W, sonst inaktiv
+const fmt = w => Math.abs(w) >= 1000 ? (Math.abs(w)/1000).toFixed(1).replace(".", ",") + " kW"
+  : Math.abs(w) >= 50 ? Math.round(Math.abs(w)) + " W" : null;
+const speed = w => Math.abs(w) > 5000 ? "fast" : Math.abs(w) >= 1000 ? "mid" : "";
+
+// ---------- Anker (% von 960x540) — Spec §1, Review Leo 2026-07-18 ----------
+const A = {
+  pv:      { x: 530, y: 168, w: 118, t: "PV E3DC" },
+  sungrow: { x: 280, y: 268, w: 158, t: "PV Sungrow" },
+  wp:      { x: 300, y: 452, w: 162, t: "Wärmepumpe" },
+  wallbox: { x: 95,  y: 452, w: 128, t: "Wallbox" },
+  haus:    { x: 545, y: 330, w: 108, t: "Haus" },
+  batt:    { x: 668, y: 452, w: 138, t: "Batterie" },
+  netz:    { x: 858, y: 330, w: 108, t: "Netz" },
+};
+const CHIP_H = 44;
+const NS = "http://www.w3.org/2000/svg";
+const el = (n, at, p) => { const e = document.createElementNS(NS, n);
+  for (const k in at) e.setAttribute(k, at[k]); if (p) p.appendChild(e); return e; };
+
+// Flüsse: von Knoten-Chip zum Haus-Chip (Hub)
+const FLOWS = [
+  { id: "pv",      farbe: "var(--lime)", nach: "haus" },
+  { id: "sungrow", farbe: "var(--lime)", nach: "haus" },
+  { id: "batt",    farbe: "var(--gelb)", nach: "haus" },
+  { id: "netz",    farbe: "var(--rot)",  nach: "haus" },
+  { id: "wallbox", farbe: "var(--lime)", nach: "haus" },
+];
+
+const ov = document.getElementById("ov");
+const REF = {};
+function mitte(k){ return { x: A[k].x, y: A[k].y }; }
+
+function buildOverlay(){
+  ov.innerHTML = "";
+  // Flusslinien zuerst (unter den Chips)
+  for (const f of FLOWS){
+    const a = mitte(f.id), b = mitte("haus");
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 24;
+    const d = `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`;
+    REF["f_" + f.id] = el("path", { class: "flow", stroke: f.farbe, d }, ov);
+    REF["a_" + f.id] = el("text", { class: "flow-val", x: mx, y: my + 16, "text-anchor": "middle" }, ov);
+  }
+  // Chips
+  for (const k in A){
+    const c = A[k];
+    const g = el("g", { class: "chip", "data-k": k }, ov);
+    el("rect", { class: "box", x: c.x - c.w/2, y: c.y - CHIP_H/2, width: c.w, height: CHIP_H }, g);
+    const t = el("text", { class: "t", x: c.x - c.w/2 + 8, y: c.y - 6 }, g); t.textContent = c.t;
+    const v = el("text", { class: "v", x: c.x - c.w/2 + 8, y: c.y + 13 }, g);
+    const b = el("text", { class: "b", x: c.x + c.w/2 - 8, y: c.y - 6, "text-anchor": "end" }, g);
+    if (k === "batt"){
+      el("rect", { class: "socbar", x: c.x + c.w/2 - 46, y: c.y + 4, width: 38, height: 8 }, g);
+      REF.socfill = el("rect", { class: "socfill", x: c.x + c.w/2 - 45, y: c.y + 5, width: 0, height: 6 }, g);
+    }
+    REF["c_" + k] = g; REF["v_" + k] = v; REF["b_" + k] = b;
+    g.addEventListener("click", () => openPanel(k));
+  }
+}
+
+// ---------- Schema-Modus (Handy) --------------------------------------------
+const SCHEMA_ORDER = ["pv","sungrow","batt","netz","haus","wallbox","wp"];
+function renderSchema(s){
+  const host = document.getElementById("schema"); host.innerHTML = "";
+  for (const k of SCHEMA_ORDER){
+    const row = document.createElement("div"); row.className = "row"; row.dataset.k = k;
+    const st = nodeState(k, s);
+    if (st.dim) row.classList.add("dimmed"); if (st.aktiv) row.classList.add("aktiv");
+    row.innerHTML = `<span class="nm">${A[k].t}</span><span class="dir">${st.dir}</span><span class="vl">${st.val ?? "—"}</span>`;
+    row.addEventListener("click", () => openPanel(k));
+    host.appendChild(row);
+  }
+}
+
+// ---------- Zustandslogik je Knoten (Spec §3) --------------------------------
+function nodeState(k, s){
+  const off = s.offline.includes(k === "pv" || k === "batt" ? (k === "pv" ? "pv" : "batt") : k);
+  if (k === "pv")      return { val: fmt(s.pv_e3dc), aktiv: !!fmt(s.pv_e3dc), dim: off || !fmt(s.pv_e3dc), dir: "→", badge: off ? "offline" : "" };
+  if (k === "sungrow") return { val: null, aktiv: false, dim: true, dir: "", badge: "geplant" };
+  if (k === "wp")      return { val: null, aktiv: false, dim: true, dir: "", badge: "Stufe 2" };
+  if (k === "batt")    return { val: fmt(s.batt), aktiv: !!fmt(s.batt), dim: off,
+    dir: s.batt > 0 ? "←" : s.batt < 0 ? "→" : "", badge: off ? "offline" : (s.soc_b != null ? s.soc_b + " %" : "— %") };
+  if (k === "netz")    return { val: fmt(s.netz), aktiv: !!fmt(s.netz), dim: false,
+    dir: s.netz > 0 ? "→" : s.netz < 0 ? "←" : "", badge: s.netz > 50 ? "Bezug" : s.netz < -50 ? "Einspeisung" : "" };
+  if (k === "wallbox") return { val: s.auto ? fmt(s.wallbox) ?? (s.soc_v != null ? "SoC " + s.soc_v + " %" : "SoC —") : "kein Auto",
+    aktiv: s.laedt, dim: !s.auto, dir: s.laedt ? "←" : "", badge: s.laedt ? s.phasen + "p · " + s.strom + " A" : "" };
+  return { val: fmt(s.haus) ?? "0 W", aktiv: true, dim: false, dir: "", badge: "" };
+}
+
+// ---------- Rendern ----------------------------------------------------------
+function render(){
+  const s = SZENARIEN[aktiv];
+  document.getElementById("kopf").textContent = s.grund;
+  // Chips
+  for (const k in A){
+    const st = nodeState(k, s);
+    REF["c_" + k].classList.toggle("dimmed", !!st.dim);
+    REF["c_" + k].classList.toggle("aktiv", !!st.aktiv);
+    REF["v_" + k].textContent = st.val ?? "—";
+    REF["b_" + k].textContent = st.badge ?? "";
+  }
+  if (REF.socfill) REF.socfill.setAttribute("width", s.soc_b != null ? Math.round(36 * s.soc_b / 100) : 0);
+  // Flüsse (Richtung via Pfadumkehr wäre im Echt-Build sauberer; Mockup: Farbe+Wert)
+  const flows = {
+    pv:      { w: s.pv_e3dc, farbe: "var(--lime)" },
+    sungrow: { w: s.sungrow, farbe: "var(--lime)" },
+    batt:    { w: s.batt,    farbe: "var(--gelb)" },
+    netz:    { w: s.netz,    farbe: s.netz >= 0 ? "var(--rot)" : "var(--grau)" },
+    wallbox: { w: s.wallbox, farbe: "var(--lime)" },
+  };
+  for (const id in flows){
+    const f = flows[id], on = !!fmt(f.w) && !s.offline.includes(id === "pv" ? "pv" : id);
+    REF["f_" + id].setAttribute("class", "flow" + (on ? " on " + speed(f.w) : ""));
+    REF["f_" + id].setAttribute("stroke", f.farbe);
+    REF["a_" + id].textContent = on ? fmt(f.w) : "";
+  }
+  renderSchema(s);
+}
+
+// ---------- Detail-Panels (Spec §4, Dummy-Inhalte) ---------------------------
+const panel = document.getElementById("panel"), pback = document.getElementById("pback");
+function openPanel(k){
+  const s = SZENARIEN[aktiv];
+  const inhalt = {
+    wallbox: `<h3>Wallbox — Phasen-Diagnose</h3>
+      <dl><dt>Status</dt><dd>${s.laedt ? "lädt " + s.phasen + "-phasig, " + s.strom + " A" : s.auto ? "verbunden, wartet" : "kein Fahrzeug"}</dd>
+      <dt>Grund</dt><dd>${s.grund}</dd>
+      <dt>3p-Bedingung</dt><dd>42 / 60 s erfüllt<div class="prog"><i style="width:70%"></i></div></dd>
+      <dt>Umschaltsperre</dt><dd>noch 6:20 min</dd>
+      <dt>Garantie</dt><dd>inaktiv</dd></dl>
+      <p class="note">Echt-Build: Inhalte aus <code>phasen_info</code> der API.</p>`,
+    batt: `<h3>Batterie (E3DC)</h3>
+      <dl><dt>SoC</dt><dd>${s.soc_b != null ? s.soc_b + " %" : "— (offline)"}</dd>
+      <dt>Leistung</dt><dd>${s.batt > 0 ? "lädt " + fmt(s.batt) : s.batt < 0 ? "entlädt " + fmt(s.batt) : "Ruhe"}</dd>
+      <dt>Reserve</dt><dd>0 % (Default)</dd><dt>Entladesperre</dt><dd>inaktiv</dd></dl>`,
+    pv: `<h3>PV-Erzeugung</h3>
+      <dl><dt>E3DC (9,23 kWp)</dt><dd>${fmt(s.pv_e3dc) ?? "0 W"}</dd>
+      <dt>Sungrow (5,64 kWp)</dt><dd>geplant — Inbetriebnahme Ende 2026</dd>
+      <dt>Forecast heute</dt><dd>31,4 kWh (Dummy)</dd></dl>`,
+    sungrow: `<h3>PV Sungrow</h3><p class="note">Garagendach-Anlage (5,64 kWp O/W), AC-gekoppelt. Knoten ist vorbereitet — Werte kommen nach der Inbetriebnahme (Ende 2026).</p>`,
+    wp: `<h3>Wärmepumpe</h3><p class="note">Stufe 2 — Steuerung folgt nach dem MyVaillant-Praxistest. Der WP-Verbrauch steckt derzeit im Wert „Haus".</p>`,
+    haus: `<h3>Hausverbrauch</h3>
+      <dl><dt>aktuell</dt><dd>${fmt(s.haus) ?? "0 W"}</dd></dl>
+      <p class="note">Bilanz: PV + Netzbezug − Batterieladung − Wallbox. Enthält die Wärmepumpe, solange sie nicht separat gemessen wird.</p>`,
+    netz: `<h3>Netz</h3>
+      <dl><dt>aktuell</dt><dd>${s.netz > 50 ? "Bezug " + fmt(s.netz) : s.netz < -50 ? "Einspeisung " + fmt(s.netz) : "ausgeglichen"}</dd>
+      <dt>heute</dt><dd>Bezug 1,2 kWh · Einspeisung 8,7 kWh (Dummy)</dd></dl>`,
+  };
+  panel.innerHTML = `<button class="x" aria-label="Schließen">×</button>` + (inhalt[k] || "");
+  panel.querySelector(".x").addEventListener("click", closePanel);
+  panel.classList.add("open"); pback.classList.add("open");
+}
+function closePanel(){ panel.classList.remove("open"); pback.classList.remove("open"); }
+pback.addEventListener("click", closePanel);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
+// ---------- Szenario-Schalter ------------------------------------------------
+const scen = document.getElementById("scen");
+for (const name in SZENARIEN){
+  const b = document.createElement("button"); b.textContent = name;
+  b.addEventListener("click", () => { aktiv = name;
+    scen.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); render(); });
+  scen.appendChild(b);
+}
+scen.querySelector("button").classList.add("on");
+
+buildOverlay(); render();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Spec 04 — Energy-Flow-Redesign (Lastverteilungs-Szene v0.3)
 
-**Status:** Phase 1 abgenommen (2026-07-18) · Phase 2 — Design-Spec (Entwurf zur Abnahme)
+**Status:** Phase 1 + 2 abgenommen (2026-07-18, Review Leo: Anker-Positionen korrigiert — Netz rechts, Einfahrt links, WP weit links)
 **Datum:** 2026-07-18
 **Ersetzt:** 2D-Lastverteilungs-Szene v0.2.2 (Ostansicht + Produktfotos) in `backend/leo_ems/web/index.html`
 
@@ -91,9 +91,9 @@ Die Szene besteht aus zwei Ebenen:
 | PV E3DC | Ost-Dachfläche des Hauses (2×5 Module) |
 | PV Sungrow | Garagendach (bis Inbetriebnahme gedimmt, Badge „geplant") |
 | Batterie (E3DC) | Hauswand/Keller-Bereich, Chip mit SoC-Füllbalken |
-| Netz | Bildrand links (Anschlusspunkt/Mast) |
-| Wallbox + Enyaq | Einfahrt rechts; Auto nur sichtbar wenn verbunden |
-| Wärmepumpe | Ostseite des Hauses (Außeneinheit) |
+| Netz | Bildrand rechts (Anschlusspunkt/Mast) |
+| Wallbox + Enyaq | Einfahrt links; Auto nur sichtbar wenn verbunden |
+| Wärmepumpe | Ostseite des Hauses (Außeneinheit) relativ weit links |
 | Hausverbrauch | zentral am Haus (Chip „Haus") |
 
 **Responsive-Verhalten (EF-030):**
@@ -214,7 +214,8 @@ X/Tap außerhalb, ESC am Desktop):
 | Phase | Ergebnis | Status |
 |---|---|---|
 | 1. Design-Requirements | EF-Katalog (dieses Dokument), MoSCoW abgenommen | ✅ abgeschlossen (2026-07-18, EF-023 → Should) |
-| 2. Design-Spec | §1–§7: Layout-Zonen, Daten-Mapping, Zustände, Panels, Animation, Asset-Spec, Abnahmetests | 🔵 zur Abnahme |
-| 3. Design-Exploration | 2–3 Higgsfield-Varianten als Mockup, Leo wählt | ⚪ blockiert: MCP-Auth + Fotos |
+| 2. Design-Spec | §1–§7: Layout-Zonen, Daten-Mapping, Zustände, Panels, Animation, Asset-Spec, Abnahmetests | ✅ abgenommen (2026-07-18) |
+| 3a. Funktions-Ebene-Mockup | Klickbarer HTML-Mockup (Chips, Flüsse, Panels, Schema-Modus) mit Platzhalter-Hintergrund, Dummy-Daten | 🔵 laufend (vorgezogen, higgsfield-unabhängig) |
+| 3b. Higgsfield-Exploration | 2–3 Bild-Varianten, Leo wählt | ⚪ wartet auf Session mit verbundenem Higgsfield-MCP |
 | 4. Implementierung | Neue Szene in `index.html`, Live-Verdrahtung, Tests | ⚪ offen |
 | 5. Validierung | Preview-Verifikation + real auf Pi/Tablet/Handy, Release v0.3.0 | ⚪ offen |
