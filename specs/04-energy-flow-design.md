@@ -168,9 +168,16 @@ X/Tap außerhalb, ESC am Desktop):
 
 ### §6 Higgsfield-Asset-Spezifikation (Phase 3)
 
-- **Motiv:** Leos Haus, Ostansicht, nach Foto-Referenz (`docs/referenz/`):
-  Satteldach mit Giebeln Süd/Nord, PV 2×5 auf der Ost-Dachfläche, Garage
-  (künftig Sungrow), Einfahrt, WP-Außeneinheit Ostseite.
+- **Referenz:** `docs/referenz/HausAnsichten.pdf` — Bauplan-Ansichten M 1:100
+  (Ost/West/Nord/Süd). Für die Bildgenerierung wird die **Ostansicht** als
+  Leitgeometrie genutzt; Nord-/Südansicht liefern die Giebelform.
+- **Motiv (aus den Ansichten):** zweigeschossiges Einfamilienhaus, Satteldach
+  mit Giebeln Süd/Nord (Traufseiten Ost/West), helle Putzfassade; an der
+  Nordseite ein eingeschossiger Anbau mit Flachdach (Garage) — künftiger
+  Sungrow-Standort; PV 2×5 Module auf der Ost-Dachfläche; Einfahrt vor der
+  Garage (Wallbox/Enyaq-Anker); WP-Außeneinheit an der Ostseite.
+  Kamera: Ostansicht, leicht erhöht und minimal seitlich versetzt (kein
+  strenges Ortho — cinematische Tiefe, aber Fassade voll sichtbar).
 - **Stimmung:** cinematisch, dunkel-ruhig (Dämmerung als Leitvariante), damit
   die Lime/Deep-Forest-Overlays kontrastieren; keine Menschen, keine Texte im Bild.
 - **Varianten (EF-023 Should):** Tag / Dämmerung / Nacht, identische Kamera
@@ -197,8 +204,8 @@ X/Tap außerhalb, ESC am Desktop):
 
 ## Offene Punkte
 
-- [ ] **Fotos vom Haus** (Ostansicht ideal, 1–2 Stück) → Leo legt sie unter `docs/referenz/` im leo-ems-Repo ab — Grundlage für die Higgsfield-Generierung.
-- [ ] **Higgsfield-MCP autorisieren** (claude.ai-Connector-Einstellungen oder `/mcp` in interaktiver Session) — nötig ab Phase 3 (Design-Exploration).
+- [x] ~~Referenzmaterial Hausmotiv~~ → ✅ `docs/referenz/HausAnsichten.pdf` (Bauplan-Ansichten alle 4 Seiten, 2026-07-18). Hinweis: PDF enthält persönliche Daten (Adresse/Kontakt) — bleibt im privaten Repo, geht **nicht** als Datei an Higgsfield; die Generierung nutzt die Geometrie-Beschreibung in §6 (ggf. zugeschnittener Bildausschnitt ohne Schriftfeld).
+- [ ] **Higgsfield-MCP autorisieren** — von Leo erledigt (2026-07-18), Verbindung kam in der laufenden Session aber nicht mehr hoch → Phase 3 in einer **neuen Session** starten und Status prüfen.
 - [ ] Kostenrahmen für Higgsfield-Generierungen klären (der Skill sieht Kostenschätzung + Freigabe vor).
 - [ ] Netz-Panel-Tageszähler: prüfen, ob der Store die Tagessummen schon hergibt (sonst Could).
 
