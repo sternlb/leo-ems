@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Leo-EMS</title>
 <style>
-  /* Basel-AI Consulting Branding (00 Kontext/Branding.md): flat, scharfe Kanten, kein Verlauf */
+  /* Basel-AI Consulting Branding — helle Variante (Spec 04, Review Leo 2026-07-19):
+     weißer Hintergrund für die HA-Einbettung, dunkles Lime für Linien/Text auf Weiß.
+     Var-Semantik: --deep = Seiten-/Eingabe-Hintergrund, --off = Textfarbe. */
   :root {
-    --forest: #14532D; --deep: #0C1F15; --lime: #A3E635; --gelb: #FDE047;
-    --off: #FAFAF5; --dim: #9CA89F; --panel: #10291B; --line: #1E3A29;
-    --rot: #F87171; --r: 2px;
+    --forest: #14532D; --deep: #FFFFFF; --lime: #A3E635; --lime-ink: #65A30D;
+    --gelb: #CA8A04; --off: #1F2E24; --dim: #6B7A6E; --panel: #FFFFFF; --line: #C8D2C4;
+    --rot: #DC2626; --grau: #94A3B8; --r: 2px;
     --mono: "Space Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
     --disp: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
     --body: "Inter", "Segoe UI", system-ui, sans-serif;
@@ -19,11 +21,11 @@
   .wrap { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 3rem; }
 
   header { display: flex; align-items: center; gap: .75rem; padding: .75rem 0 1rem; flex-wrap: wrap; }
-  .mark { font-family: var(--disp); font-weight: 700; font-size: 1.5rem; letter-spacing: -.02em; }
+  .mark { font-family: var(--disp); font-weight: 700; font-size: 1.5rem; letter-spacing: -.02em; color: var(--forest); }
   .mark .pill { background: var(--lime); color: var(--forest); padding: .05em .35em; border-radius: var(--r); margin-left: .15em; }
   .badges { display: flex; gap: .5rem; margin-left: auto; flex-wrap: wrap; }
   .badge { font-family: var(--mono); font-size: .72rem; padding: .25em .6em; border: 1px solid var(--line); border-radius: var(--r); color: var(--dim); }
-  .badge.on { border-color: var(--lime); color: var(--lime); }
+  .badge.on { border-color: var(--lime-ink); color: var(--lime-ink); }
   .badge.warn { border-color: var(--gelb); color: var(--gelb); }
   .badge.err { border-color: var(--rot); color: var(--rot); }
 
@@ -35,22 +37,22 @@
   .kw small { font-size: .8rem; color: var(--dim); }
   .sub { font-size: .8rem; color: var(--dim); margin-top: .35rem; }
   .sub b { color: var(--off); font-weight: 500; }
-  .lime { color: var(--lime); } .gelbc { color: var(--gelb); } .rotc { color: var(--rot); }
+  .lime { color: var(--lime-ink); } .gelbc { color: var(--gelb); } .rotc { color: var(--rot); }
 
   section { margin-top: 1.4rem; }
   section > h2 { font-family: var(--disp); font-size: 1.05rem; margin-bottom: .6rem; border-left: 3px solid var(--lime); padding-left: .5rem; }
 
   .grund { font-size: 1.05rem; line-height: 1.5; }
-  .state-badge { display: inline-block; font-family: var(--mono); font-size: .75rem; padding: .3em .7em; border-radius: var(--r); background: var(--forest); color: var(--off); margin-bottom: .5rem; }
+  .state-badge { display: inline-block; font-family: var(--mono); font-size: .75rem; padding: .3em .7em; border-radius: var(--r); background: var(--forest); color: #FAFAF5; margin-bottom: .5rem; }
 
   .bar { height: 22px; display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin: .35rem 0 .2rem; }
   .bar div { height: 100%; }
   .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .75rem; color: var(--dim); font-family: var(--mono); }
   .dot { display: inline-block; width: 9px; height: 9px; border-radius: 1px; margin-right: .35em; }
 
-  .phasen-big { font-family: var(--mono); font-size: 2.2rem; color: var(--lime); }
-  .prog { height: 10px; background: var(--deep); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: .3rem; }
-  .prog div { height: 100%; background: var(--lime); transition: width .5s linear; }
+  .phasen-big { font-family: var(--mono); font-size: 2.2rem; color: var(--lime-ink); }
+  .prog { height: 10px; background: #F3F6F1; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: .3rem; }
+  .prog div { height: 100%; background: var(--lime-ink); transition: width .5s linear; }
   .prog.sperre div { background: var(--gelb); }
   .prog-label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .72rem; color: var(--dim); margin-top: .55rem; }
 
@@ -65,7 +67,7 @@
   .btn { font-family: var(--disp); font-weight: 700; background: var(--lime); color: var(--forest); border: 0; border-radius: var(--r); padding: .55em 1.3em; cursor: pointer; font-size: .9rem; }
   .btn.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); font-weight: 400; }
   .btn:disabled { opacity: .5; cursor: default; }
-  .savemsg { font-family: var(--mono); font-size: .75rem; margin-left: .8rem; color: var(--lime); }
+  .savemsg { font-family: var(--mono); font-size: .75rem; margin-left: .8rem; color: var(--lime-ink); }
 
   table { width: 100%; border-collapse: collapse; font-size: .85rem; }
   th { font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); text-align: left; padding: .4em .5em; border-bottom: 1px solid var(--line); font-weight: 400; }
@@ -74,54 +76,70 @@
   .del { color: var(--rot); background: none; border: 0; cursor: pointer; font-size: 1rem; }
   .switch { cursor: pointer; }
   .wtag { display: inline-block; font-family: var(--mono); font-size: .68rem; border: 1px solid var(--line); border-radius: var(--r); padding: .1em .35em; margin-right: .15em; color: var(--dim); }
-  .wtag.on { border-color: var(--lime); color: var(--lime); }
+  .wtag.on { border-color: var(--lime-ink); color: var(--lime-ink); }
   .hist { font-family: var(--mono); font-size: .75rem; color: var(--dim); line-height: 1.9; overflow-x: auto; white-space: nowrap; }
   .hist b { color: var(--off); font-weight: 500; }
   .offline { text-align: center; padding: 2rem; color: var(--dim); font-family: var(--mono); }
   .hidden { display: none; }
 
-  /* --- 2D-Lastverteilungs-Szene (Ostansicht nach Bauplan + Produktfotos) ------ */
-  .scene-card { padding: 1rem 1.25rem 1.25rem; }
-  #house { width: 100%; height: auto; display: block; max-width: 640px; margin: 0 auto; }
-  #house text { font-family: var(--mono); font-size: 11px; fill: var(--dim); }
-  #house text.val { fill: var(--off); font-size: 13px; }
-  #house .flow { fill: none; stroke-width: 2.4; stroke-linecap: round;
-                 stroke-dasharray: .1 8; opacity: 0; transition: opacity .4s; }
-  #house .flow.on { opacity: 1; animation: dash .8s linear infinite; }
-  @keyframes dash { to { stroke-dashoffset: -32; } }
-  #house .sun { opacity: .12; transition: opacity .8s; }
-  #house.pv-on .sun { opacity: 1; }
-  #house .sparkle { opacity: 0; transform-box: fill-box; transform-origin: center; fill: var(--gelb); }
-  #house.pv-on .sparkle { animation: glint 2.6s ease-in-out infinite; }
-  @keyframes glint {
-    0%, 100% { opacity: 0; transform: scale(.2) rotate(0deg); }
-    12%      { opacity: 1; transform: scale(1) rotate(20deg); }
-    26%      { opacity: 0; transform: scale(.2) rotate(40deg); }
-  }
-  #house.pv-on .pvpanel { stroke: rgba(163,230,53,.5); }
+  /* --- Energy-Flow-Szene (Spec 04, v0.3): stilisierte Ostansicht + Overlay ---- */
+  .scene-card { padding: 0; overflow: hidden; }
+  .scene { position: relative; aspect-ratio: 16/9; overflow: hidden; background: var(--panel); }
+  .scene .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scene svg.overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .kopf { position: absolute; left: .6rem; top: .5rem; font-family: var(--mono); font-size: .72rem;
+    color: var(--forest); background: rgba(255,255,255,.88); border: 1px solid var(--line);
+    border-radius: var(--r); padding: .3em .6em; max-width: 70%; }
+  .kopf.warnung { border-color: var(--rot); color: var(--rot); }
 
-  .connectors { width: 100%; max-width: 640px; margin: -2px auto -6px; display: block; height: 22px; }
-  .connectors .flow { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: .1 8; opacity: 0; transition: opacity .4s; }
-  .connectors .flow.on { opacity: 1; animation: dash .8s linear infinite; }
-
-  .lv-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; max-width: 640px; margin: 0 auto; }
-  .lv-card { background: var(--deep); border: 1px solid var(--line); border-radius: var(--r); padding: .6rem .6rem .75rem; text-align: center; transition: border-color .3s; }
-  .lv-card.active { border-color: var(--lime); }
-  .lv-photo { height: 92px; display: flex; align-items: center; justify-content: center; margin-bottom: .4rem; }
-  .lv-photo img { max-height: 100%; max-width: 100%; object-fit: contain; filter: brightness(.97); }
-  .lv-name { font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); }
-  .lv-val { font-family: var(--mono); font-size: 1.05rem; margin-top: .15rem; }
-  .lv-sub { font-family: var(--mono); font-size: .68rem; color: var(--dim); margin-top: .1rem; min-height: 1.1em; }
-  .lv-soc { height: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: .4rem; }
-  .lv-soc div { height: 100%; background: var(--lime); transition: width .6s; }
-  .lv-badge { display: inline-block; font-family: var(--mono); font-size: .6rem; padding: .1em .5em; border-radius: var(--r); border: 1px solid var(--line); color: var(--dim); margin-top: .35rem; }
-  .lv-badge.on { border-color: var(--lime); color: var(--lime); }
-  @media (max-width: 560px) {
-    .lv-cards { grid-template-columns: 1fr; }
-    .connectors { display: none; }
-  }
+  .flow { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1 9; opacity: 0; }
+  .flow.on { opacity: 1; animation: dash 1.2s linear infinite; }
+  .flow.on.mid { animation-duration: .8s; } .flow.on.fast { animation-duration: .5s; }
+  @keyframes dash { to { stroke-dashoffset: -10; } }
+  .flow-val { font-family: var(--mono); font-size: 11px; fill: var(--forest); paint-order: stroke; stroke: #FFFFFF; stroke-width: 3px; }
+  .cable { fill: none; stroke: var(--lime-ink); stroke-width: 2.5; stroke-linecap: round; }
+  .cable.laedt { stroke-dasharray: 2 6; animation: dash 1s linear infinite; }
   @media (prefers-reduced-motion: reduce) {
-    #house .flow.on, #house.pv-on .sparkle, .connectors .flow.on { animation: none; }
+    .flow.on { animation: none; stroke-dasharray: none; opacity: .9; }
+    .cable.laedt { animation: none; stroke-dasharray: none; }
+  }
+
+  .chip { cursor: pointer; }
+  .chip rect.box { fill: rgba(255,255,255,.92); stroke: var(--line); stroke-width: 1.5; rx: 2; }
+  .chip.aktiv rect.box { stroke: var(--lime-ink); }
+  .chip.dimmed { opacity: .55; }
+  .chip text { font-family: var(--mono); fill: var(--off); }
+  .chip .t { font-size: 10px; letter-spacing: .08em; fill: var(--dim); text-transform: uppercase; }
+  .chip .v { font-size: 13px; fill: var(--forest); }
+  .chip .b { font-size: 9px; fill: #B45309; }
+  .socbar { fill: #F3F6F1; stroke: var(--line); stroke-width: 1; }
+  .socfill { fill: #EAB308; }
+
+  .panel-back { position: fixed; inset: 0; background: rgba(20,40,28,.35); display: none; z-index: 40; }
+  .panel { position: fixed; z-index: 41; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: min(440px, calc(100vw - 2rem)); background: var(--panel); border: 2px solid var(--lime-ink);
+    border-radius: var(--r); padding: 1rem 1.1rem; display: none; box-shadow: 0 12px 40px rgba(20,40,28,.18); }
+  .panel.open, .panel-back.open { display: block; }
+  .panel h3 { font-family: var(--disp); font-size: 1rem; margin-bottom: .6rem; color: var(--forest); }
+  .panel .x { position: absolute; top: .5rem; right: .7rem; background: none; border: 0; color: var(--dim);
+    font-size: 1.1rem; cursor: pointer; }
+  .panel dl { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; font-size: .85rem; }
+  .panel dt { color: var(--dim); font-family: var(--mono); font-size: .75rem; }
+  .panel .note { font-size: .78rem; color: var(--dim); margin-top: .6rem; line-height: 1.45; }
+
+  /* Schema-Modus Handy (Spec §1 Responsive) */
+  .schema { display: none; }
+  @media (max-width: 767px) {
+    .scene { aspect-ratio: auto; height: 130px; }
+    .scene svg.overlay { display: none; }
+    .schema { display: block; margin: .6rem .75rem .75rem; }
+    .schema .row { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem;
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: .4rem; cursor: pointer; }
+    .schema .row.aktiv { border-color: var(--lime-ink); }
+    .schema .row.dimmed { opacity: .55; }
+    .schema .nm { font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); flex: 1; }
+    .schema .vl { font-family: var(--mono); font-size: .95rem; color: var(--forest); }
+    .schema .dir { width: 10px; text-align: center; color: var(--dim); }
   }
   footer { margin-top: 2.5rem; font-family: var(--mono); font-size: .68rem; color: var(--dim); display: flex; justify-content: space-between; }
 </style>
@@ -143,9 +161,223 @@
   <section>
     <h2>Lastverteilung</h2>
     <div class="card scene-card">
-      <svg id="house" viewBox="0 0 700 260" role="img" aria-label="Haus Ostansicht mit PV-Dach, Netzanschluss und Hausverbrauch"></svg>
-      <svg id="connectors" class="connectors" viewBox="0 0 700 22" aria-hidden="true"></svg>
-      <div class="lv-cards" id="lv-cards"></div>
+      <div class="scene" role="img" aria-label="Energiefluss-Szene: Haus-Ostansicht mit Garage, PV, Batterie, Wallbox, Wärmepumpe und Netzanschluss">
+        <!-- Stilisierte Ostansicht nach Bauplan (docs/referenz/HausAnsichten.pdf).
+             Maßstab 40 px/m: Garage 6 m (2 Tore, freistehend), 5 m Abstand, Haus ~10 m Traufseite. -->
+        <svg class="bg" viewBox="0 0 960 540" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F1F6EF"/>
+            </linearGradient>
+            <linearGradient id="glas" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#E3F1F8"/><stop offset="1" stop-color="#C9E2EF"/>
+            </linearGradient>
+            <linearGradient id="dach" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#CDD3CC"/><stop offset="1" stop-color="#BBC3BA"/>
+            </linearGradient>
+          </defs>
+          <rect width="960" height="540" fill="url(#sky)"/>
+
+          <!-- Boden + Einfahrt (gepflastert, nur vor der Garage) -->
+          <rect y="470" width="960" height="70" fill="#E9EEE6"/>
+          <line x1="0" y1="470" x2="960" y2="470" stroke="#C4CEc0" stroke-width="1.5"/>
+          <rect x="30" y="470" width="260" height="70" fill="#E2E8DE"/>
+          <g stroke="#CDD6C8" stroke-width="1">
+            <line x1="30" y1="492" x2="290" y2="492"/><line x1="30" y1="514" x2="290" y2="514"/>
+            <line x1="110" y1="470" x2="104" y2="540"/><line x1="200" y1="470" x2="194" y2="540"/>
+            <line x1="288" y1="470" x2="282" y2="540"/>
+          </g>
+
+          <!-- Garage (freistehend, 6 m x 3 m, Flachdach ohne Überstand) -->
+          <rect x="40" y="330" width="240" height="14" fill="url(#dach)" stroke="#9AA69A" stroke-width="1"/>
+          <rect x="40" y="344" width="240" height="126" fill="#FFFFFF" stroke="#B9C4B6" stroke-width="1.5"/>
+          <rect x="40" y="344" width="240" height="7" fill="#F1F4EF"/>
+          <!-- Tor links (geöffnet, wenn Enyaq verbunden) + Wallbox innen links -->
+          <g id="torL_auf" style="display:none">
+            <rect x="62" y="366" width="94" height="104" fill="#41504A"/>
+            <rect x="62" y="366" width="94" height="16" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1"/>
+            <line x1="62" y1="374" x2="156" y2="374" stroke="#A7B2A6" stroke-width="1"/>
+            <rect x="66" y="382" width="86" height="4" fill="#2E3B35"/>
+            <g id="wallbox_unit">
+              <rect x="63" y="382" width="11" height="16" rx="1.5" fill="#EDF0EA" stroke="#7C8A7E" stroke-width="1"/>
+              <circle cx="68.5" cy="388" r="2.6" fill="none" stroke="#65A30D" stroke-width="1.3"/>
+            </g>
+          </g>
+          <!-- Tor links (geschlossen): Sektionaltor mit 4 Paneelen + Griff -->
+          <g id="torL_zu">
+            <rect x="62" y="366" width="94" height="104" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1.5"/>
+            <line x1="62" y1="392" x2="156" y2="392" stroke="#A7B2A6" stroke-width="1"/>
+            <line x1="62" y1="418" x2="156" y2="418" stroke="#A7B2A6" stroke-width="1"/>
+            <line x1="62" y1="444" x2="156" y2="444" stroke="#A7B2A6" stroke-width="1"/>
+            <rect x="102" y="452" width="14" height="4" rx="2" fill="#8A968C"/>
+          </g>
+          <!-- Tor rechts (symmetrisch, immer zu) -->
+          <g>
+            <rect x="164" y="366" width="94" height="104" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1.5"/>
+            <line x1="164" y1="392" x2="258" y2="392" stroke="#A7B2A6" stroke-width="1"/>
+            <line x1="164" y1="418" x2="258" y2="418" stroke="#A7B2A6" stroke-width="1"/>
+            <line x1="164" y1="444" x2="258" y2="444" stroke="#A7B2A6" stroke-width="1"/>
+            <rect x="204" y="452" width="14" height="4" rx="2" fill="#8A968C"/>
+          </g>
+
+          <!-- Haus (Ostansicht nach Bauplan, Traufseite ~10 m) -->
+          <polygon points="488,138 872,138 892,222 468,222" fill="url(#dach)" stroke="#9AA69A" stroke-width="1.5"/>
+          <line x1="488" y1="141" x2="872" y2="141" stroke="#9AA69A" stroke-width="2"/>
+          <g stroke="#AEB6AD" stroke-width=".8" opacity=".8">
+            <line x1="482" y1="160" x2="878" y2="160"/><line x1="477" y1="180" x2="883" y2="180"/>
+            <line x1="472" y1="200" x2="888" y2="200"/>
+          </g>
+          <!-- PV 2x5 Module auf der Ost-Dachfläche -->
+          <g>
+            <g fill="#2E3D4E" stroke="#8FA0B4" stroke-width="1.2">
+              <rect x="500" y="146" width="68" height="30"/><rect x="574" y="146" width="68" height="30"/>
+              <rect x="648" y="146" width="68" height="30"/><rect x="722" y="146" width="68" height="30"/>
+              <rect x="796" y="146" width="68" height="30"/>
+              <rect x="497" y="181" width="68" height="30"/><rect x="571" y="181" width="68" height="30"/>
+              <rect x="645" y="181" width="68" height="30"/><rect x="719" y="181" width="68" height="30"/>
+              <rect x="793" y="181" width="68" height="30"/>
+            </g>
+            <g stroke="#46586C" stroke-width=".7">
+              <line x1="500" y1="161" x2="864" y2="161"/><line x1="497" y1="196" x2="861" y2="196"/>
+              <line x1="523" y1="146" x2="523" y2="176"/><line x1="545" y1="146" x2="545" y2="176"/>
+              <line x1="597" y1="146" x2="597" y2="176"/><line x1="619" y1="146" x2="619" y2="176"/>
+              <line x1="671" y1="146" x2="671" y2="176"/><line x1="693" y1="146" x2="693" y2="176"/>
+              <line x1="745" y1="146" x2="745" y2="176"/><line x1="767" y1="146" x2="767" y2="176"/>
+              <line x1="819" y1="146" x2="819" y2="176"/><line x1="841" y1="146" x2="841" y2="176"/>
+              <line x1="520" y1="181" x2="520" y2="211"/><line x1="542" y1="181" x2="542" y2="211"/>
+              <line x1="594" y1="181" x2="594" y2="211"/><line x1="616" y1="181" x2="616" y2="211"/>
+              <line x1="668" y1="181" x2="668" y2="211"/><line x1="690" y1="181" x2="690" y2="211"/>
+              <line x1="742" y1="181" x2="742" y2="211"/><line x1="764" y1="181" x2="764" y2="211"/>
+              <line x1="816" y1="181" x2="816" y2="211"/><line x1="838" y1="181" x2="838" y2="211"/>
+            </g>
+          </g>
+          <!-- Fassade + Traufschatten + Sockel + Regenfallrohre -->
+          <rect x="480" y="222" width="400" height="248" fill="#FFFFFF" stroke="#B9C4B6" stroke-width="1.5"/>
+          <rect x="480" y="222" width="400" height="8" fill="#F1F4EF"/>
+          <rect x="480" y="462" width="400" height="8" fill="#E4E9E1"/>
+          <line x1="474" y1="222" x2="474" y2="470" stroke="#AEB6AD" stroke-width="3"/>
+          <line x1="886" y1="222" x2="886" y2="470" stroke="#AEB6AD" stroke-width="3"/>
+          <!-- OG nach Plan: Doppelfenster links (mit Lüftungsgitter), 2 schmale Einzelfenster -->
+          <g>
+            <rect x="548" y="250" width="12" height="12" fill="#EDF0EA" stroke="#A7B2A6" stroke-width="1"/>
+            <rect x="566" y="246" width="46" height="56" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+            <line x1="589" y1="246" x2="589" y2="302" stroke="#7C8A7E" stroke-width="2"/>
+            <rect x="644" y="246" width="25" height="56" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+            <rect x="760" y="246" width="24" height="56" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+          </g>
+          <!-- EG nach Plan: bodentiefes Fenster, Haustür mit Seitenteil, Lüftungsgitter -->
+          <g>
+            <rect x="643" y="368" width="24" height="94" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+            <rect x="729" y="368" width="17" height="94" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+            <rect x="748" y="368" width="36" height="96" fill="#6B7280" stroke="#4B5563" stroke-width="1.5"/>
+            <rect x="762" y="380" width="8" height="56" rx="2" fill="#D5DBE2"/>
+            <circle cx="756" cy="418" r="1.8" fill="#D5DBE2"/>
+            <rect x="742" y="464" width="48" height="6" fill="#CDD5CB" stroke="#AEB6AD" stroke-width="1"/>
+            <rect x="830" y="374" width="10" height="10" fill="#EDF0EA" stroke="#A7B2A6" stroke-width="1"/>
+          </g>
+
+          <!-- Terrassenüberdachung (endet ~1 m vor der Garage, Pfosten mit Dachüberstand) -->
+          <g id="terrasse">
+            <rect x="322" y="464" width="158" height="6" fill="#E5DFD0" stroke="#C9C2AE" stroke-width="1"/>
+            <g stroke="#C9C2AE" stroke-width=".8">
+              <line x1="350" y1="464" x2="350" y2="470"/><line x1="382" y1="464" x2="382" y2="470"/>
+              <line x1="414" y1="464" x2="414" y2="470"/><line x1="446" y1="464" x2="446" y2="470"/>
+            </g>
+            <polygon points="480,342 320,352 320,359 480,349" fill="#DDE9F0" opacity=".9" stroke="#9AA69A" stroke-width="1.2"/>
+            <g stroke="#AEB6AD" stroke-width="1">
+              <line x1="348" y1="357" x2="348" y2="362"/><line x1="392" y1="354" x2="392" y2="359"/>
+              <line x1="436" y1="351" x2="436" y2="356"/>
+            </g>
+            <rect x="332" y="358" width="4" height="106" fill="#8A968C"/>
+            <line x1="336" y1="368" x2="354" y2="357" stroke="#8A968C" stroke-width="2"/>
+            <!-- Blauregen am Pfosten -->
+            <g id="blauregen">
+              <path d="M338,464 C330,442 342,424 333,402 C328,388 337,374 333,360"
+                fill="none" stroke="#8A7355" stroke-width="2"/>
+              <path d="M333,360 C324,356 314,357 306,361" fill="none" stroke="#8A7355" stroke-width="1.5"/>
+              <path d="M334,362 C342,357 350,356 358,358" fill="none" stroke="#8A7355" stroke-width="1.5"/>
+              <g fill="#9FBE7F" stroke="#7EA25F" stroke-width=".6">
+                <circle cx="312" cy="360" r="5"/><circle cx="322" cy="356" r="6"/>
+                <circle cx="334" cy="354" r="6"/><circle cx="346" cy="356" r="5"/>
+                <circle cx="356" cy="359" r="4"/><circle cx="330" cy="366" r="4"/>
+                <circle cx="336" cy="410" r="3.5"/><circle cx="334" cy="432" r="3"/>
+              </g>
+              <g fill="#B7A6D9" stroke="#9F8AC9" stroke-width=".5">
+                <circle cx="314" cy="368" r="3"/><circle cx="313" cy="374" r="2.6"/><circle cx="312" cy="379" r="2"/>
+                <circle cx="327" cy="372" r="3"/><circle cx="326" cy="379" r="2.6"/><circle cx="325" cy="385" r="2"/>
+                <circle cx="342" cy="366" r="3"/><circle cx="341" cy="372" r="2.6"/><circle cx="340" cy="377" r="2"/>
+                <circle cx="352" cy="364" r="2.6"/><circle cx="351" cy="369" r="2"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- Wärmepumpe: Vaillant aroTHERM (grobe Skizze) vor der Fassade, weit links -->
+          <g id="wp_unit">
+            <rect x="496" y="426" width="46" height="40" rx="4" fill="#EDF0EA" stroke="#8A968C" stroke-width="1.5"/>
+            <rect x="500" y="431" width="30" height="30" rx="4" fill="#F7F9F5" stroke="#9AA69A" stroke-width="1"/>
+            <g stroke="#9AA69A" stroke-width="1.2">
+              <line x1="503" y1="437" x2="527" y2="437"/><line x1="503" y1="442" x2="527" y2="442"/>
+              <line x1="503" y1="447" x2="527" y2="447"/><line x1="503" y1="452" x2="527" y2="452"/>
+              <line x1="503" y1="457" x2="527" y2="457"/>
+            </g>
+            <circle cx="515" cy="446" r="11" fill="none" stroke="#AEB6AD" stroke-width="1" opacity=".7"/>
+            <rect x="534" y="434" width="6" height="24" rx="1" fill="#DEE3DC" stroke="#9AA69A" stroke-width=".8"/>
+            <rect x="500" y="466" width="8" height="4" fill="#8A968C"/><rect x="530" y="466" width="8" height="4" fill="#8A968C"/>
+          </g>
+
+          <!-- Enyaq frontal im offenen linken Garagentor (nur sichtbar wenn verbunden) -->
+          <g id="enyaq" style="display:none">
+            <path id="cable" class="cable" d="M68,398 C66,414 66,430 69,441"/>
+            <ellipse cx="109" cy="468" rx="36" ry="4" fill="#2E3B35" opacity=".5"/>
+            <path d="M75,470 L75,438 Q75,428 80,424 L84,416 Q86,411 93,411 L125,411 Q132,411 134,416 L138,424 Q143,428 143,438 L143,470 Z"
+              fill="#F2F4F1" stroke="#7C8A7E" stroke-width="1.8"/>
+            <path d="M86,419 Q88,414 94,414 L124,414 Q130,414 132,419 L134,425 L84,425 Z"
+              fill="url(#glas)" stroke="#7C8A7E" stroke-width="1"/>
+            <rect x="70" y="427" width="6" height="5" rx="1.5" fill="#F2F4F1" stroke="#7C8A7E" stroke-width="1"/>
+            <rect x="142" y="427" width="6" height="5" rx="1.5" fill="#F2F4F1" stroke="#7C8A7E" stroke-width="1"/>
+            <path d="M83,429 Q109,434 135,429" fill="none" stroke="#AEB6AD" stroke-width="1"/>
+            <polygon points="80,434 95,436 95,440 80,439" fill="#DCE7EE" stroke="#7C8A7E" stroke-width="1"/>
+            <polygon points="138,434 123,436 123,440 138,439" fill="#DCE7EE" stroke="#7C8A7E" stroke-width="1"/>
+            <path d="M96,433 L122,433 L124,437 L122,446 L96,446 L94,437 Z" fill="#3F4A44" stroke="#8A968C" stroke-width="1.2"/>
+            <g stroke="#6B7A6E" stroke-width=".8">
+              <line x1="99" y1="434" x2="99" y2="445"/><line x1="103" y1="434" x2="103" y2="445"/>
+              <line x1="107" y1="434" x2="107" y2="445"/><line x1="111" y1="434" x2="111" y2="445"/>
+              <line x1="115" y1="434" x2="115" y2="445"/><line x1="119" y1="434" x2="119" y2="445"/>
+            </g>
+            <rect x="99" y="449" width="20" height="6" rx="1" fill="#FFFFFF" stroke="#9AA69A" stroke-width=".8"/>
+            <rect x="88" y="457" width="42" height="7" rx="2" fill="#3F4A44"/>
+            <rect x="77" y="461" width="10" height="9" rx="2" fill="#3F4A44"/>
+            <rect x="131" y="461" width="10" height="9" rx="2" fill="#3F4A44"/>
+            <rect x="65" y="441" width="7" height="7" rx="1" fill="#65A30D"/>
+          </g>
+
+          <!-- Netzanschluss rechts: Mast mit Traversen, Isolatoren + Leitungen -->
+          <g>
+            <line x1="926" y1="470" x2="926" y2="248" stroke="#8A968C" stroke-width="4"/>
+            <line x1="900" y1="268" x2="952" y2="268" stroke="#8A968C" stroke-width="3"/>
+            <line x1="906" y1="292" x2="946" y2="292" stroke="#8A968C" stroke-width="3"/>
+            <g fill="#6B7A6E">
+              <rect x="902" y="262" width="4" height="6"/><rect x="946" y="262" width="4" height="6"/>
+              <rect x="908" y="286" width="4" height="6"/><rect x="940" y="286" width="4" height="6"/>
+            </g>
+            <path d="M904,268 Q880,300 886,340" fill="none" stroke="#AEB6AD" stroke-width="1.2"/>
+            <path d="M948,268 Q960,274 960,282" fill="none" stroke="#AEB6AD" stroke-width="1.2"/>
+            <path d="M944,292 Q960,298 960,306" fill="none" stroke="#AEB6AD" stroke-width="1.2"/>
+          </g>
+
+          <!-- Bepflanzung -->
+          <g>
+            <ellipse cx="906" cy="462" rx="16" ry="10" fill="#DDE7D3" stroke="#B9C9AB" stroke-width="1"/>
+            <ellipse cx="890" cy="466" rx="11" ry="7" fill="#D3E0C7" stroke="#B9C9AB" stroke-width="1"/>
+            <ellipse cx="20" cy="464" rx="18" ry="11" fill="#DDE7D3" stroke="#B9C9AB" stroke-width="1"/>
+          </g>
+        </svg>
+
+        <div class="kopf" id="kopf">—</div>
+        <svg class="overlay" viewBox="0 0 960 540" id="ov"></svg>
+      </div>
+      <!-- Schema-Modus (Handy) -->
+      <div class="schema" id="schema"></div>
     </div>
     <div class="grid tiles" style="margin-top:.75rem">
       <div class="card"><h3>PV gesamt</h3><div class="kw lime" id="t-pv">–</div>
@@ -240,7 +472,10 @@
     <div class="card"><div class="hist" id="hist">–</div></div>
   </section>
 
-  <footer><span id="f-ver">Leo-EMS</span><span>basel<span style="color:var(--lime)">AI</span> · lokal, kein Cloud-Zwang</span></footer>
+  <footer><span id="f-ver">Leo-EMS</span><span>basel<span style="color:var(--lime-ink)">AI</span> · lokal, kein Cloud-Zwang</span></footer>
+
+  <div class="panel-back" id="pback"></div>
+  <div class="panel" id="panel"></div>
 </div>
 
 <script>
@@ -279,10 +514,9 @@ const w = v => v == null ? "–" : (Math.abs(v) >= 1000 ? (v/1000).toFixed(1) + 
 const pct = v => v == null ? "–" : Math.round(v) + " %";
 const mmss = s => Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0");
 
-// ---------- 2D-Lastverteilungs-Szene -----------------------------------------
-// Flache Ostansicht nach dem Bauplan (Juli 2026): Dachüberstand/Traufe sichtbar
-// als Band am First, PV-Module auf der Ost-Dachfläche. Fotos: E3DC S10E,
-// Enyaq iV80 (Moon White), Vaillant aroTHERM plus — von Leo ausgewählt (2026-07-14).
+// ---------- Energy-Flow-Szene (Spec 04, v0.3) --------------------------------
+// Stilisierte Ostansicht (SVG-Hintergrund im Markup) + Funktions-Ebene als
+// Overlay: Knoten-Chips, Flusslinien mit kW-Werten, Detail-Panels, Schema-Modus.
 const SVGNS = "http://www.w3.org/2000/svg";
 const SREF = {};
 
@@ -293,147 +527,189 @@ function sEl(tag, attrs, parent) {
   return e;
 }
 
-function buildScene() {
-  const sv = $("house");
+// Wertformat (Spec §2): >=1000 W -> "x,y kW", 50–999 W -> "xxx W", sonst inaktiv
+const fmtFluss = v => v == null ? null
+  : Math.abs(v) >= 1000 ? (Math.abs(v)/1000).toFixed(1).replace(".", ",") + " kW"
+  : Math.abs(v) >= 50 ? Math.round(Math.abs(v)) + " W" : null;
+const flussSpeed = v => Math.abs(v) > 5000 ? "fast" : Math.abs(v) >= 1000 ? "mid" : "";
 
-  // Boden
-  sEl("rect", { x: 0, y: 245, width: 700, height: 15, fill: "#0E2517" }, sv);
-
-  // Sonne (sichtbar wenn PV liefert)
-  const sun = sEl("g", { class: "sun" }, sv);
-  sEl("circle", { cx: 645, cy: 34, r: 13, fill: "var(--gelb)" }, sun);
-  for (let i = 0; i < 8; i++) {
-    const a = i * Math.PI / 4;
-    sEl("line", { x1: 645 + Math.cos(a) * 18, y1: 34 + Math.sin(a) * 18,
-                  x2: 645 + Math.cos(a) * 25, y2: 34 + Math.sin(a) * 25,
-                  stroke: "var(--gelb)", "stroke-width": 2.4, "stroke-linecap": "round" }, sun);
-  }
-
-  // Netz-Mast (links) mit Zuleitung ins Haus
-  const mast = sEl("g", {}, sv);
-  sEl("line", { x1: 26, y1: 245, x2: 26, y2: 110, stroke: "#6B7280", "stroke-width": 3.5 }, mast);
-  sEl("line", { x1: 13, y1: 122, x2: 39, y2: 122, stroke: "#6B7280", "stroke-width": 2.5 }, mast);
-  sEl("line", { x1: 15, y1: 135, x2: 37, y2: 135, stroke: "#6B7280", "stroke-width": 2.5 }, mast);
-  SREF.fNetz = sEl("path", { class: "flow", stroke: "#F87171", d: "M26,150 C26,190 45,205 60,208" }, sv);
-
-  // Haus: Ostwand (Bauplan-Ostansicht), Dachtraufe als Band, Tür + Fenster
-  sEl("rect", { x: 60, y: 55, width: 580, height: 190, fill: "#E3E1D6" }, sv);
-  // Dachfläche: leicht geneigtes Band am First (Blick von Ost auf die geneigte Dachfläche)
-  sEl("polygon", { points: "40,55 660,55 630,14 70,14", fill: "#2E2F2A" }, sv);
-  sEl("polygon", { points: "36,58 664,58 662,51 38,51", fill: "#1E1F1B" }, sv);
-
-  // PV-Module auf der Dachfläche (2 Reihen)
-  const pvTop = { x0: 78, x1: 622, y0: 17, y1: 30 };
-  const pvBot = { x0: 47, x1: 653, y0: 32, y1: 50 };
-  const lerp = (a, b, t) => a + (b - a) * t;
-  for (let i = 0; i < 9; i++) {
-    const t0 = i / 9, t1 = (i + 0.86) / 9;
-    for (const band of [pvTop, pvBot]) {
-      const p = [
-        [lerp(band.x0, band.x1, t0), band.y0], [lerp(band.x0, band.x1, t1), band.y0],
-        [lerp(band.x0, band.x1, t1), band.y1], [lerp(band.x0, band.x1, t0), band.y1],
-      ].map(p => p.join(",")).join(" ");
-      sEl("polygon", { class: "pvpanel", points: p, fill: "#12202C", stroke: "rgba(255,255,255,.18)", "stroke-width": .8 }, sv);
-    }
-  }
-  const star = "M0,-5 L1.3,-1.3 L5,0 L1.3,1.3 L0,5 L-1.3,1.3 L-5,0 L-1.3,-1.3 Z";
-  [[180, 24, "0s"], [400, 40, ".9s"], [540, 22, "1.7s"]].forEach(([x, y, d]) => {
-    sEl("path", { class: "sparkle", d: star, transform: `translate(${x},${y})`, style: `animation-delay:${d}` }, sv);
-  });
-
-  // Fenster (OG) + Fenster/Tür (EG) nach der Bauplan-Ostansicht
-  const fenster = (x, y, w, h) => sEl("rect", { x, y, width: w, height: h, fill: "#7E97A6", stroke: "#3A3F42", "stroke-width": 1 }, sv);
-  fenster(140, 92, 66, 52); fenster(320, 92, 66, 52);
-  fenster(140, 178, 66, 55);
-  sEl("rect", { x: 468, y: 150, width: 58, height: 95, fill: "#DEDCD2", stroke: "#9B998F", "stroke-width": 1 }, sv);
-  sEl("circle", { cx: 515, cy: 200, r: 2, fill: "#6B6A63" }, sv);
-
-  // Hausanschluss-Knoten (in der Wandlücke zwischen OG-Fenster und Haustür)
-  // + Verteilung zu den Karten darunter
-  sEl("circle", { cx: 427, cy: 245, r: 5, fill: "var(--deep)", stroke: "var(--lime)", "stroke-width": 2 }, sv);
-  SREF.fPV = sEl("path", { class: "flow", stroke: "var(--lime)", d: "M427,58 C427,120 427,180 427,240" }, sv);
-
-  // Beschriftung: Hausverbrauch
-  sEl("text", { x: 399, y: 255, "text-anchor": "end" }, sv).textContent = "Haus";
-  SREF.lHaus = sEl("text", { x: 407, y: 255, "text-anchor": "start", class: "val" }, sv);
-  SREF.lPVval = sEl("text", { x: 645, y: 60, "text-anchor": "middle", class: "val" }, sv);
+// 50-W-Schwelle mit Hysterese gegen Flackern (Spec §2): an ab 60 W, aus unter 40 W
+const flussAn = {};
+function hysterese(id, v) {
+  const abs = Math.abs(v || 0);
+  if (abs >= 60) flussAn[id] = true;
+  else if (abs < 40) flussAn[id] = false;
+  return !!flussAn[id];
 }
 
-function buildConnectors() {
-  const sv = $("connectors");
-  const cx = [117, 350, 583];
-  ["fBatt", "fAuto", "fWp"].forEach((key, i) => {
-    SREF[key] = sEl("path", { class: "flow", stroke: "var(--lime)", d: `M427,0 L${cx[i]},21` }, sv);
-  });
-}
+// Knoten-Anker in viewBox-Koordinaten 960x540 (deckungsgleich mit dem Hintergrund)
+const ANKER = {
+  pv:      { x: 690, y: 180, w: 118, t: "PV E3DC" },
+  sungrow: { x: 160, y: 296, w: 158, t: "PV Sungrow" },
+  wallbox: { x: 110, y: 505, w: 128, t: "Wallbox" },
+  wp:      { x: 330, y: 505, w: 162, t: "Wärmepumpe" },
+  haus:    { x: 680, y: 330, w: 108, t: "Haus" },
+  batt:    { x: 592, y: 505, w: 138, t: "Batterie" },
+  netz:    { x: 898, y: 310, w: 108, t: "Netz" },
+};
+const CHIP_H = 44;
+const FLOW_IDS = ["pv", "sungrow", "batt", "netz", "wallbox"];
 
-function buildCards() {
-  const wrap = $("lv-cards");
-  wrap.innerHTML = `
-    <div class="lv-card" id="card-batt">
-      <div class="lv-photo"><img src="assets/e3dc.png" alt="E3DC-Batteriespeicher"></div>
-      <div class="lv-name">E3DC-Batterie</div>
-      <div class="lv-val" id="v-batt-val">–</div>
-      <div class="lv-soc"><div id="v-batt-soc" style="width:0%"></div></div>
-      <div class="lv-sub" id="v-batt-sub"></div>
-    </div>
-    <div class="lv-card" id="card-auto">
-      <div class="lv-photo"><img src="assets/enyaq.png" alt="Škoda Enyaq iV80"></div>
-      <div class="lv-name">Enyaq iV80 / Wallbox</div>
-      <div class="lv-val" id="v-auto-val">–</div>
-      <div class="lv-soc"><div id="v-auto-soc" style="width:0%"></div></div>
-      <div class="lv-sub" id="v-auto-sub"></div>
-    </div>
-    <div class="lv-card" id="card-wp">
-      <div class="lv-photo"><img src="assets/waermepumpe.jpg" alt="Vaillant aroTHERM plus"></div>
-      <div class="lv-name">Wärmepumpe</div>
-      <div class="lv-val" id="v-wp-val">–</div>
-      <span class="lv-badge" id="v-wp-badge">Stufe 2 · geplant</span>
-    </div>`;
+function fahrzeugDa(st) {
+  return ["verbunden","laden_1p","laden_3p","pausiert","beendet"].includes(st.state);
+}
+function e3dcWeg(st) {
+  return st.state === "abgeschaltet" || st.soc_batterie == null;
 }
 
 function buildScenes() {
-  buildScene();
-  buildConnectors();
-  buildCards();
+  const ov = $("ov");
+  // Flusslinien zuerst (unter den Chips), Quadratische Kurve zum Haus-Hub
+  for (const id of FLOW_IDS) {
+    const a = ANKER[id], b = ANKER.haus;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 24;
+    SREF["f_" + id] = sEl("path", { class: "flow", d: `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}` }, ov);
+    SREF["a_" + id] = sEl("text", { class: "flow-val", x: mx, y: my + 16, "text-anchor": "middle" }, ov);
+  }
+  // Knoten-Chips
+  for (const k in ANKER) {
+    const c = ANKER[k];
+    const g = sEl("g", { class: "chip", "data-k": k }, ov);
+    sEl("rect", { class: "box", x: c.x - c.w/2, y: c.y - CHIP_H/2, width: c.w, height: CHIP_H }, g);
+    sEl("text", { class: "t", x: c.x - c.w/2 + 8, y: c.y - 6 }, g).textContent = c.t;
+    const v = sEl("text", { class: "v", x: c.x - c.w/2 + 8, y: c.y + 13 }, g);
+    const b = sEl("text", { class: "b", x: c.x + c.w/2 - 8, y: c.y - 6, "text-anchor": "end" }, g);
+    if (k === "batt") {
+      sEl("rect", { class: "socbar", x: c.x + c.w/2 - 46, y: c.y + 4, width: 38, height: 8 }, g);
+      SREF.socfill = sEl("rect", { class: "socfill", x: c.x + c.w/2 - 45, y: c.y + 5, width: 0, height: 6 }, g);
+    }
+    SREF["c_" + k] = g; SREF["v_" + k] = v; SREF["b_" + k] = b;
+    g.addEventListener("click", () => openPanel(k));
+  }
 }
 
-function setFlow(el, on) { if (el) el.classList.toggle("on", !!on); }
+// Zustandslogik je Knoten (Spec §3) — liefert val/aktiv/dim/dir/badge
+function nodeState(k, st) {
+  const off = e3dcWeg(st);
+  if (k === "pv")      return { val: fmtFluss(st.p_pv_e3dc_w), aktiv: hysterese("pv", st.p_pv_e3dc_w), dim: off || !fmtFluss(st.p_pv_e3dc_w), dir: "→", badge: off ? "offline" : "" };
+  if (k === "sungrow") return { val: fmtFluss(st.p_sungrow_w), aktiv: hysterese("sungrow", st.p_sungrow_w), dim: !fmtFluss(st.p_sungrow_w), dir: "→", badge: fmtFluss(st.p_sungrow_w) ? "" : "geplant" };
+  if (k === "wp")      return { val: null, aktiv: false, dim: true, dir: "", badge: "Stufe 2" };
+  if (k === "batt") {
+    const pb = st.p_batterie_w || 0;
+    return { val: fmtFluss(pb), aktiv: hysterese("batt", pb), dim: off,
+      dir: pb > 0 ? "←" : pb < 0 ? "→" : "",
+      badge: off ? "offline" : (st.soc_batterie != null ? Math.round(st.soc_batterie) + " %" : "— %") };
+  }
+  if (k === "netz") {
+    const pn = st.p_netz_w || 0;
+    return { val: fmtFluss(pn), aktiv: hysterese("netz", pn), dim: false,
+      dir: pn > 0 ? "→" : pn < 0 ? "←" : "",
+      badge: pn > 50 ? "Bezug" : pn < -50 ? "Einspeisung" : "" };
+  }
+  if (k === "wallbox") {
+    const da = fahrzeugDa(st);
+    return { val: da ? (fmtFluss(st.p_wallbox_w) ?? (st.soc_fahrzeug != null ? "SoC " + Math.round(st.soc_fahrzeug) + " %" : "SoC —")) : "kein Auto",
+      aktiv: !!st.laedt, dim: !da, dir: st.laedt ? "←" : "",
+      badge: st.garantieladung ? "Garantie" : st.laedt ? st.phasen + "p · " + st.strom_a + " A" : "" };
+  }
+  return { val: fmtFluss(st.p_haus_w) ?? "0 W", aktiv: true, dim: false, dir: "", badge: "" };
+}
+
+const SCHEMA_ORDER = ["pv","sungrow","batt","netz","haus","wallbox","wp"];
+function renderSchema(st) {
+  const host = $("schema"); host.innerHTML = "";
+  for (const k of SCHEMA_ORDER) {
+    const row = document.createElement("div"); row.className = "row"; row.dataset.k = k;
+    const s = nodeState(k, st);
+    if (s.dim) row.classList.add("dimmed"); if (s.aktiv) row.classList.add("aktiv");
+    row.innerHTML = `<span class="nm">${ANKER[k].t}</span><span class="dir">${s.dir}</span><span class="vl">${s.val ?? "—"}</span>`;
+    row.addEventListener("click", () => openPanel(k));
+    host.appendChild(row);
+  }
+}
 
 function updateScene(st) {
-  const house = $("house");
-  if (!house || !house.firstChild) return;
-  const pv = st.p_pv_w || 0, pn = st.p_netz_w || 0, pb = st.p_batterie_w || 0;
-
-  house.classList.toggle("pv-on", pv > 50);
-  setFlow(SREF.fPV, pv > 50 || Math.abs(pn) > 50);
-  setFlow(SREF.fNetz, Math.abs(pn) > 50);
-  SREF.fNetz.setAttribute("stroke", pn < 0 ? "#6B7280" : "#F87171");
-  SREF.lPVval.textContent = w(pv);
-  SREF.lHaus.textContent = w(st.p_haus_w);
-
-  setFlow(SREF.fBatt, Math.abs(pb) > 50);
-  setFlow(SREF.fAuto, !!st.laedt);
-  setFlow(SREF.fWp, false);
-
-  // Batterie-Karte
-  const soc = Math.max(0, Math.min(100, st.soc_batterie ?? 0));
-  $("v-batt-soc").style.width = soc + "%";
-  $("v-batt-val").textContent = pct(st.soc_batterie);
-  $("v-batt-sub").textContent = (pb > 50 ? "lädt " : pb < -50 ? "entlädt " : "") + w(Math.abs(pb))
-    + (st.entladesperre ? " · Entladesperre" : "");
-  $("card-batt").classList.toggle("active", Math.abs(pb) > 50);
-
-  // Fahrzeug-/Wallbox-Karte
-  const carDa = ["verbunden","laden_1p","laden_3p","pausiert","beendet"].includes(st.state);
-  $("v-auto-val").textContent = carDa ? pct(st.soc_fahrzeug) : "nicht verbunden";
-  $("v-auto-soc").style.width = carDa ? Math.max(0, Math.min(100, st.soc_fahrzeug ?? 0)) + "%" : "0%";
-  $("v-auto-sub").textContent = !carDa ? "" : st.laedt ? `lädt · ${st.strom_a} A ${st.phasen}p` : "steht";
-  $("card-auto").classList.toggle("active", !!st.laedt);
-
-  $("v-wp-val").textContent = "–";
-  $("v-wp-badge").classList.toggle("on", false);
+  if (!SREF.c_haus) return;
+  // Kopfzeile: Klartext-Status, Warnstil bei Fail-Safe (T-EF-6)
+  const kopf = $("kopf");
+  kopf.textContent = st.grund || "—";
+  kopf.classList.toggle("warnung", e3dcWeg(st));
+  // Hintergrund-Zustände: Garagentor links + Enyaq + Ladekabel
+  const da = fahrzeugDa(st);
+  $("torL_zu").style.display  = da ? "none" : "";
+  $("torL_auf").style.display = da ? "" : "none";
+  $("enyaq").style.display    = da ? "" : "none";
+  $("cable").setAttribute("class", "cable" + (st.laedt ? " laedt" : ""));
+  // Chips
+  for (const k in ANKER) {
+    const s = nodeState(k, st);
+    SREF["c_" + k].classList.toggle("dimmed", !!s.dim);
+    SREF["c_" + k].classList.toggle("aktiv", !!s.aktiv);
+    SREF["v_" + k].textContent = s.val ?? "—";
+    SREF["b_" + k].textContent = s.badge ?? "";
+  }
+  SREF.socfill.setAttribute("width", st.soc_batterie != null
+    ? Math.round(36 * Math.max(0, Math.min(100, st.soc_batterie)) / 100) : 0);
+  // Flüsse: Farbe + Wert + Geschwindigkeit
+  const fluesse = {
+    pv:      { v: st.p_pv_e3dc_w,  farbe: "var(--lime-ink)" },
+    sungrow: { v: st.p_sungrow_w,  farbe: "var(--lime-ink)" },
+    batt:    { v: st.p_batterie_w, farbe: "#EAB308" },
+    netz:    { v: st.p_netz_w,     farbe: (st.p_netz_w || 0) >= 0 ? "var(--rot)" : "var(--grau)" },
+    wallbox: { v: st.p_wallbox_w,  farbe: "var(--lime-ink)" },
+  };
+  const off = e3dcWeg(st);
+  for (const id in fluesse) {
+    const f = fluesse[id];
+    const on = hysterese(id, f.v) && !(off && (id === "pv" || id === "batt"));
+    SREF["f_" + id].setAttribute("class", "flow" + (on ? " on " + flussSpeed(f.v) : ""));
+    SREF["f_" + id].setAttribute("stroke", f.farbe);
+    SREF["a_" + id].textContent = on ? fmtFluss(f.v) : "";
+  }
+  renderSchema(st);
 }
+
+// Detail-Panels (Spec §4) mit Live-Daten aus dem letzten Status
+const panelEl = () => $("panel");
+function openPanel(k) {
+  const st = lastStatus;
+  if (!st) return;
+  const pi = st.phasen_info;
+  const pb = st.p_batterie_w || 0;
+  const inhalt = {
+    wallbox: `<h3>Wallbox — Phasen-Diagnose</h3>
+      <dl><dt>Status</dt><dd>${st.laedt ? "lädt " + st.phasen + "-phasig, " + st.strom_a + " A" : fahrzeugDa(st) ? "verbunden, wartet" : "kein Fahrzeug"}</dd>
+      <dt>Grund</dt><dd>${(pi && pi.grund) || st.grund || "—"}</dd>
+      ${pi && pi.entprellung_aktiv ? `<dt>Bedingung</dt><dd>${Math.floor(pi.entprellung_seit_s)} / ${pi.entprellung_noetig_s} s → ${pi.wechsel_ziel}p
+        <div class="prog"><div style="width:${Math.round(100 * pi.entprellung_seit_s / pi.entprellung_noetig_s)}%"></div></div></dd>` : ""}
+      ${pi && pi.umschaltsperre_aktiv ? `<dt>Umschaltsperre</dt><dd>noch ${mmss(pi.umschaltsperre_rest_s)} min</dd>` : ""}
+      <dt>Garantie</dt><dd>${st.garantieladung ? "aktiv" : "inaktiv"}</dd>
+      <dt>Leistung</dt><dd>${fmtFluss(st.p_wallbox_w) ?? "0 W"}</dd></dl>`,
+    batt: `<h3>Batterie (E3DC)</h3>
+      <dl><dt>SoC</dt><dd>${st.soc_batterie != null ? Math.round(st.soc_batterie) + " %" : "— (offline)"}</dd>
+      <dt>Leistung</dt><dd>${pb > 50 ? "lädt " + fmtFluss(pb) : pb < -50 ? "entlädt " + fmtFluss(pb) : "Ruhe"}</dd>
+      <dt>Reserve</dt><dd>${cfgCache ? cfgCache.soc_reserve_pct + " %" : "—"}</dd>
+      <dt>Entladesperre</dt><dd>${st.entladesperre ? "aktiv" : "inaktiv"}</dd></dl>`,
+    pv: `<h3>PV-Erzeugung</h3>
+      <dl><dt>E3DC (9,23 kWp)</dt><dd>${fmtFluss(st.p_pv_e3dc_w) ?? "0 W"}</dd>
+      <dt>Sungrow (5,64 kWp)</dt><dd>${fmtFluss(st.p_sungrow_w) ?? "geplant — Inbetriebnahme Ende 2026"}</dd>
+      <dt>gesamt</dt><dd>${fmtFluss(st.p_pv_w) ?? "0 W"}</dd></dl>`,
+    sungrow: `<h3>PV Sungrow</h3><p class="note">Garagendach-Anlage (5,64 kWp O/W), AC-gekoppelt. Knoten ist vorbereitet — Werte kommen nach der Inbetriebnahme (Ende 2026).</p>`,
+    wp: `<h3>Wärmepumpe</h3><p class="note">Stufe 2 — Steuerung folgt nach dem MyVaillant-Praxistest. Der WP-Verbrauch steckt derzeit im Wert „Haus".</p>`,
+    haus: `<h3>Hausverbrauch</h3>
+      <dl><dt>aktuell</dt><dd>${fmtFluss(st.p_haus_w) ?? "0 W"}</dd>
+      <dt>Überschuss</dt><dd>${fmtFluss(st.ueberschuss_w) ?? "0 W"}</dd></dl>
+      <p class="note">Bilanz: PV + Netzbezug − Batterieladung − Wallbox. Enthält die Wärmepumpe, solange sie nicht separat gemessen wird.</p>`,
+    netz: `<h3>Netz</h3>
+      <dl><dt>aktuell</dt><dd>${(st.p_netz_w || 0) > 50 ? "Bezug " + fmtFluss(st.p_netz_w) : (st.p_netz_w || 0) < -50 ? "Einspeisung " + fmtFluss(st.p_netz_w) : "ausgeglichen"}</dd></dl>`,
+  };
+  panelEl().innerHTML = `<button class="x" aria-label="Schließen">×</button>` + (inhalt[k] || "");
+  panelEl().querySelector(".x").addEventListener("click", closePanel);
+  panelEl().classList.add("open"); $("pback").classList.add("open");
+}
+function closePanel() { panelEl().classList.remove("open"); $("pback").classList.remove("open"); }
+$("pback").addEventListener("click", closePanel);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
 
 function render(st) {
   $("b-modus").textContent = "Modus: " + (st.modus || "–");

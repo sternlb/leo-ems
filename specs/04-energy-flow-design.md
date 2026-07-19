@@ -215,7 +215,7 @@ X/Tap außerhalb, ESC am Desktop):
 |---|---|---|
 | 1. Design-Requirements | EF-Katalog (dieses Dokument), MoSCoW abgenommen | ✅ abgeschlossen (2026-07-18, EF-023 → Should) |
 | 2. Design-Spec | §1–§7: Layout-Zonen, Daten-Mapping, Zustände, Panels, Animation, Asset-Spec, Abnahmetests | ✅ abgenommen (2026-07-18) |
-| 3a. Funktions-Ebene-Mockup | Klickbarer HTML-Mockup (Chips, Flüsse, Panels, Schema-Modus) mit Platzhalter-Hintergrund, Dummy-Daten | 🔵 laufend (vorgezogen, higgsfield-unabhängig) |
-| 3b. Higgsfield-Exploration | 2–3 Bild-Varianten, Leo wählt | ⚪ wartet auf Session mit verbundenem Higgsfield-MCP |
-| 4. Implementierung | Neue Szene in `index.html`, Live-Verdrahtung, Tests | ⚪ offen |
-| 5. Validierung | Preview-Verifikation + real auf Pi/Tablet/Handy, Release v0.3.0 | ⚪ offen |
+| 3a. Funktions-Ebene-Mockup | Klickbarer HTML-Mockup (Chips, Flüsse, Panels, Schema-Modus) mit Platzhalter-Hintergrund, Dummy-Daten | ✅ abgeschlossen (2026-07-19, mehrere Review-Runden: helles Theme, Garage freistehend mit Tor-Logik, Enyaq frontal, Terrassenüberdachung) |
+| 3b. Higgsfield-Exploration | 2–3 Bild-Varianten, Leo wählt | ⏸ zurückgestellt (2026-07-19, Kosten) — der detaillierte SVG-Hintergrund aus 3a ist der Design-Kandidat |
+| 4. Implementierung | Neue Szene in `index.html`, Live-Verdrahtung, Tests | ✅ umgesetzt (2026-07-19, v0.3.0): helles Theme fürs ganze Dashboard, Szene mit Live-Mapping §2 inkl. Hysterese, Panels mit `phasen_info`, Schema-Modus; verifiziert am Preview-Server (T-EF-3/5/6/7) |
+| 5. Validierung | Real auf Pi/Tablet/Handy, T-EF-1/2 mit echten Flüssen, Release v0.3.0 | 🔵 nächster Schritt: Add-on-Update auf dem Pi |
