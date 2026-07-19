@@ -95,6 +95,10 @@ leo-ems/
 - **Watchdog-Test (T4):** Integrationstest — Container kill, prüfen dass die E3DC-Sperre binnen TTL ausläuft (gegen den E3DC-Simulator; einmalig real vor der EVCC-Ablösung).
 - **Migrationstest (REQ-008):** EMS zwei Wochen parallel zu EVCC im Beobachtungsmodus (nur messen/loggen, nicht steuern), Solaranteil vergleichen; erst dann EVCC deaktivieren.
 
+## Offene Punkte — Backlog (laufend)
+
+- [ ] **Deployment ohne manuellen `git pull` (2026-07-19):** Aktuell ist Leo-EMS ein **lokales Add-on** (`git clone`/`git pull` per SSH nach `/addons/leo-ems`, siehe [docs/addon-install.md](../docs/addon-install.md)) — jedes Update braucht einen manuellen Schritt auf dem Pi. ADR-001 sieht eigentlich ein **Add-on-Repository** vor („Installation über 'eigene Repositories' im Add-on-Store"); das wurde bisher nicht genutzt. Lösungsrichtung: das leo-ems-GitHub-Repo unter Einstellungen → Add-ons → Add-on-Store → Repositories als eigene Repository-URL eintragen (statt lokalem Ordner) — der Supervisor prüft dann selbst auf neue Versionen und kann sie automatisch installieren (Auto-Update-Schalter). Voraussetzung: `repository.yaml` im Repo-Root, saubere Versions-Tags statt jedes Commit als Update zu werten. Aufwand: einmalige Einrichtung, danach entfällt der manuelle Pull komplett.
+
 ## Offene Punkte Phase 3 — alle geschlossen (2026-07-12)
 
 - [x] **API-Absicherung:** statischer Bearer-Token (Leo folgt der Empfehlung). Ausführliches Konzept inkl. Bedrohungsmodell und verworfener Alternativen: [docs/api-token-auth.md](../docs/api-token-auth.md). Implementiert in `config.get_or_create_token()` + `api.require_token()`.
