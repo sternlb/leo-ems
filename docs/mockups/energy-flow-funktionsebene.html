@@ -5,20 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Leo-EMS — Energy-Flow-Mockup (Funktions-Ebene, Spec 04)</title>
 <style>
-  /* Basel-AI Branding — identisch zu web/index.html */
+  /* Basel-AI Branding — helle Variante (Review Leo 2026-07-19: weißer Hintergrund
+     für die HA-Einbettung, helle Palette; Lime als Akzent, dunkles Lime für Linien/Text) */
   :root {
-    --forest: #14532D; --deep: #0C1F15; --lime: #A3E635; --gelb: #FDE047;
-    --off: #FAFAF5; --dim: #9CA89F; --panel: #10291B; --line: #1E3A29;
-    --rot: #F87171; --grau: #9CA89F; --r: 2px;
+    --bg: #FFFFFF; --ink: #1F2E24; --forest: #14532D;
+    --lime: #A3E635; --lime-ink: #65A30D;
+    --gelb: #EAB308; --rot: #DC2626; --grau: #94A3B8;
+    --dim: #6B7A6E; --panel: #FFFFFF; --line: #C8D2C4; --r: 2px;
     --mono: "Space Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
     --disp: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
     --body: "Inter", "Segoe UI", system-ui, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; }
-  body { background: var(--deep); color: var(--off); font-family: var(--body); font-size: 15px; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 1rem 1rem 3rem; }
   header { display: flex; align-items: baseline; gap: .75rem; padding: .75rem 0 1rem; flex-wrap: wrap; }
-  .mark { font-family: var(--disp); font-weight: 700; font-size: 1.3rem; letter-spacing: -.02em; }
+  .mark { font-family: var(--disp); font-weight: 700; font-size: 1.3rem; letter-spacing: -.02em; color: var(--forest); }
   .mark .pill { background: var(--lime); color: var(--forest); padding: .05em .35em; border-radius: var(--r); margin-left: .15em; }
   .hint { font-family: var(--mono); font-size: .72rem; color: var(--dim); }
 
@@ -26,7 +28,7 @@
   .scen { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .8rem; }
   .scen button { font-family: var(--mono); font-size: .72rem; padding: .35em .7em; background: var(--panel);
     border: 1px solid var(--line); border-radius: var(--r); color: var(--dim); cursor: pointer; }
-  .scen button.on { border-color: var(--lime); color: var(--lime); }
+  .scen button.on { border-color: var(--lime-ink); color: var(--lime-ink); }
 
   /* ---- Szene: Hintergrund-Ebene + SVG-Overlay (Spec §1) -------------------- */
   .scene { position: relative; border: 1px solid var(--line); border-radius: var(--r);
@@ -36,7 +38,7 @@
   .bg-note { position: absolute; right: .6rem; bottom: .4rem; font-family: var(--mono);
     font-size: .62rem; color: var(--dim); opacity: .8; }
   .kopf { position: absolute; left: .6rem; top: .5rem; font-family: var(--mono); font-size: .72rem;
-    color: var(--lime); background: rgba(12,31,21,.75); border: 1px solid var(--line);
+    color: var(--forest); background: rgba(255,255,255,.88); border: 1px solid var(--line);
     border-radius: var(--r); padding: .3em .6em; max-width: 70%; }
 
   /* Flusslinien (Spec §5): 3 Geschwindigkeitsstufen */
@@ -44,39 +46,42 @@
   .flow.on { opacity: 1; animation: dash 1.2s linear infinite; }
   .flow.on.mid { animation-duration: .8s; } .flow.on.fast { animation-duration: .5s; }
   @keyframes dash { to { stroke-dashoffset: -10; } }
-  .flow-val { font-family: var(--mono); font-size: 11px; fill: var(--off); paint-order: stroke; stroke: var(--deep); stroke-width: 3px; }
+  .flow-val { font-family: var(--mono); font-size: 11px; fill: var(--forest); paint-order: stroke; stroke: #FFFFFF; stroke-width: 3px; }
   .arrow { opacity: 0; }
+  .cable { fill: none; stroke: var(--lime-ink); stroke-width: 2.5; stroke-linecap: round; }
+  .cable.laedt { stroke-dasharray: 2 6; animation: dash 1s linear infinite; }
   @media (prefers-reduced-motion: reduce) {
     .flow.on { animation: none; stroke-dasharray: none; opacity: .9; }
+    .cable.laedt { animation: none; stroke-dasharray: none; }
     .flow-glow, .sparkle { display: none; }
     .arrow.on { opacity: 1; }
   }
 
   /* Knoten-Chips */
   .chip { cursor: pointer; }
-  .chip rect.box { fill: rgba(12,31,21,.88); stroke: var(--line); stroke-width: 1; rx: 2; }
-  .chip.aktiv rect.box { stroke: var(--lime); }
+  .chip rect.box { fill: rgba(255,255,255,.92); stroke: var(--line); stroke-width: 1.5; rx: 2; }
+  .chip.aktiv rect.box { stroke: var(--lime-ink); }
   .chip.dimmed { opacity: .55; }
-  .chip text { font-family: var(--mono); fill: var(--off); }
+  .chip text { font-family: var(--mono); fill: var(--ink); }
   .chip .t { font-size: 10px; letter-spacing: .08em; fill: var(--dim); text-transform: uppercase; }
-  .chip .v { font-size: 13px; }
-  .chip .b { font-size: 9px; fill: var(--gelb); }
-  .socbar { fill: var(--deep); stroke: var(--line); stroke-width: 1; }
+  .chip .v { font-size: 13px; fill: var(--forest); }
+  .chip .b { font-size: 9px; fill: #B45309; }
+  .socbar { fill: #F3F6F1; stroke: var(--line); stroke-width: 1; }
   .socfill { fill: var(--gelb); }
 
   /* Detail-Panel (Spec §4) */
-  .panel-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 40; }
+  .panel-back { position: fixed; inset: 0; background: rgba(20,40,28,.35); display: none; z-index: 40; }
   .panel { position: fixed; z-index: 41; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    width: min(440px, calc(100vw - 2rem)); background: var(--panel); border: 2px solid var(--lime);
-    border-radius: var(--r); padding: 1rem 1.1rem; display: none; }
+    width: min(440px, calc(100vw - 2rem)); background: var(--panel); border: 2px solid var(--lime-ink);
+    border-radius: var(--r); padding: 1rem 1.1rem; display: none; box-shadow: 0 12px 40px rgba(20,40,28,.18); }
   .panel.open, .panel-back.open { display: block; }
-  .panel h3 { font-family: var(--disp); font-size: 1rem; margin-bottom: .6rem; }
+  .panel h3 { font-family: var(--disp); font-size: 1rem; margin-bottom: .6rem; color: var(--forest); }
   .panel .x { position: absolute; top: .5rem; right: .7rem; background: none; border: 0; color: var(--dim);
     font-size: 1.1rem; cursor: pointer; }
   .panel dl { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; font-size: .85rem; }
   .panel dt { color: var(--dim); font-family: var(--mono); font-size: .75rem; }
-  .panel .prog { height: 8px; background: var(--deep); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: .2rem; }
-  .panel .prog i { display: block; height: 100%; background: var(--lime); }
+  .panel .prog { height: 8px; background: #F3F6F1; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: .2rem; }
+  .panel .prog i { display: block; height: 100%; background: var(--lime-ink); }
   .panel .note { font-size: .78rem; color: var(--dim); margin-top: .6rem; line-height: 1.45; }
 
   /* Schema-Modus Handy (Spec §1 Responsive) */
@@ -87,10 +92,10 @@
     .schema { display: block; margin-top: .6rem; }
     .schema .row { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem;
       background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: .4rem; cursor: pointer; }
-    .schema .row.aktiv { border-color: var(--lime); }
+    .schema .row.aktiv { border-color: var(--lime-ink); }
     .schema .row.dimmed { opacity: .55; }
     .schema .nm { font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); flex: 1; }
-    .schema .vl { font-family: var(--mono); font-size: .95rem; }
+    .schema .vl { font-family: var(--mono); font-size: .95rem; color: var(--forest); }
     .schema .dir { width: 10px; text-align: center; color: var(--dim); }
   }
 </style>
@@ -105,51 +110,238 @@
   <div class="scen" id="scen"></div>
 
   <div class="scene">
-    <!-- Platzhalter-Hintergrund: einfache Ostansicht-Silhouette. Wird in Phase 3b
-         durch das Higgsfield-WebP ersetzt (gleiches Seitenverhältnis 16:9). -->
+    <!-- Stilisierte Ostansicht nach Bauplan (docs/referenz/HausAnsichten.pdf).
+         Maßstab 40 px/m: Garage 6 m (2 Tore, freistehend), 5 m Abstand, Haus ~10 m Traufseite.
+         Higgsfield-Variante (Phase 3b) zurückgestellt — dieser SVG-Hintergrund ist der
+         aktuelle Kandidat für den finalen Look. -->
     <svg class="bg" viewBox="0 0 960 540" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <rect width="960" height="540" fill="#0C1F15"/>
-      <rect width="960" height="540" fill="url(#sky)"/>
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#10291B"/><stop offset=".7" stop-color="#0C1F15"/>
+          <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F1F6EF"/>
+        </linearGradient>
+        <linearGradient id="glas" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#E3F1F8"/><stop offset="1" stop-color="#C9E2EF"/>
+        </linearGradient>
+        <linearGradient id="dach" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#CDD3CC"/><stop offset="1" stop-color="#BBC3BA"/>
         </linearGradient>
       </defs>
-      <!-- Boden -->
-      <rect y="430" width="960" height="110" fill="#0A1A12"/>
-      <!-- Haus: Ostansicht (Traufseite), Satteldach als Fläche von oben angeschnitten -->
-      <rect x="380" y="220" width="330" height="210" fill="#122A1C" stroke="#1E3A29"/>
-      <polygon points="370,220 720,220 700,140 390,140" fill="#0F2417" stroke="#1E3A29"/>
-      <!-- PV-Module 2x5 auf der Ost-Dachfläche -->
-      <g fill="#16341F" stroke="#2C4A35" stroke-width="1.2">
-        <rect x="420" y="150" width="50" height="28"/><rect x="475" y="150" width="50" height="28"/>
-        <rect x="530" y="150" width="50" height="28"/><rect x="585" y="150" width="50" height="28"/>
-        <rect x="640" y="150" width="50" height="28"/>
-        <rect x="415" y="183" width="50" height="28"/><rect x="470" y="183" width="50" height="28"/>
-        <rect x="525" y="183" width="50" height="28"/><rect x="580" y="183" width="50" height="28"/>
-        <rect x="635" y="183" width="50" height="28"/>
+      <rect width="960" height="540" fill="url(#sky)"/>
+
+      <!-- Boden + Einfahrt (gepflastert, mit Fugen) -->
+      <rect y="470" width="960" height="70" fill="#E9EEE6"/>
+      <line x1="0" y1="470" x2="960" y2="470" stroke="#C4CEc0" stroke-width="1.5"/>
+      <rect x="30" y="470" width="260" height="70" fill="#E2E8DE"/>
+      <g stroke="#CDD6C8" stroke-width="1">
+        <line x1="30" y1="492" x2="290" y2="492"/><line x1="30" y1="514" x2="290" y2="514"/>
+        <line x1="110" y1="470" x2="104" y2="540"/><line x1="200" y1="470" x2="194" y2="540"/>
+        <line x1="288" y1="470" x2="282" y2="540"/>
       </g>
-      <!-- Fenster -->
-      <g fill="#0C1F15" stroke="#1E3A29">
-        <rect x="410" y="250" width="40" height="55"/><rect x="480" y="250" width="40" height="55"/>
-        <rect x="560" y="250" width="55" height="55"/><rect x="650" y="250" width="35" height="55"/>
-        <rect x="410" y="340" width="40" height="55"/><rect x="480" y="340" width="40" height="55"/>
-        <rect x="560" y="340" width="55" height="70"/><rect x="650" y="340" width="35" height="55"/>
+
+      <!-- ================= GARAGE (freistehend, 6 m x 3 m, Flachdach) ============ -->
+      <!-- Attika/Flachdach -->
+      <rect x="40" y="330" width="240" height="14" fill="url(#dach)" stroke="#9AA69A" stroke-width="1"/>
+      <!-- Wand -->
+      <rect x="40" y="344" width="240" height="126" fill="#FFFFFF" stroke="#B9C4B6" stroke-width="1.5"/>
+      <rect x="40" y="344" width="240" height="7" fill="#F1F4EF"/>
+      <!-- Tor links (geöffnet, wenn Enyaq verbunden): dunkle Öffnung + hochgefahrene Sektionen -->
+      <g id="torL_auf" style="display:none">
+        <rect x="62" y="366" width="94" height="104" fill="#41504A"/>
+        <rect x="62" y="366" width="94" height="16" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1"/>
+        <line x1="62" y1="374" x2="156" y2="374" stroke="#A7B2A6" stroke-width="1"/>
+        <rect x="66" y="382" width="86" height="4" fill="#2E3B35"/>
+        <!-- Wallbox (go-e) in der Garage, linke Seite -->
+        <g id="wallbox_unit">
+          <rect x="63" y="382" width="11" height="16" rx="1.5" fill="#EDF0EA" stroke="#7C8A7E" stroke-width="1"/>
+          <circle cx="68.5" cy="388" r="2.6" fill="none" stroke="#65A30D" stroke-width="1.3"/>
+        </g>
       </g>
-      <!-- Garage (Anbau Nord = links, Flachdach) + Einfahrt -->
-      <rect x="180" y="300" width="200" height="130" fill="#0F2417" stroke="#1E3A29"/>
-      <rect x="175" y="290" width="210" height="14" fill="#122A1C" stroke="#1E3A29"/>
-      <rect x="60" y="430" width="330" height="70" fill="#0D211660"/>
-      <!-- WP-Außeneinheit -->
-      <rect x="330" y="390" width="42" height="40" fill="#122A1C" stroke="#1E3A29"/>
-      <circle cx="351" cy="410" r="12" fill="none" stroke="#1E3A29" stroke-width="2"/>
-      <!-- Netz-Mast rechts -->
-      <line x1="880" y1="430" x2="880" y2="240" stroke="#1E3A29" stroke-width="4"/>
-      <line x1="850" y1="260" x2="910" y2="260" stroke="#1E3A29" stroke-width="3"/>
+      <!-- Tor links (geschlossen): Sektionaltor mit 4 Paneelen + Griff -->
+      <g id="torL_zu">
+        <rect x="62" y="366" width="94" height="104" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1.5"/>
+        <line x1="62" y1="392" x2="156" y2="392" stroke="#A7B2A6" stroke-width="1"/>
+        <line x1="62" y1="418" x2="156" y2="418" stroke="#A7B2A6" stroke-width="1"/>
+        <line x1="62" y1="444" x2="156" y2="444" stroke="#A7B2A6" stroke-width="1"/>
+        <rect x="102" y="452" width="14" height="4" rx="2" fill="#8A968C"/>
+      </g>
+      <!-- Tor rechts (symmetrisch, immer zu) -->
+      <g>
+        <rect x="164" y="366" width="94" height="104" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1.5"/>
+        <line x1="164" y1="392" x2="258" y2="392" stroke="#A7B2A6" stroke-width="1"/>
+        <line x1="164" y1="418" x2="258" y2="418" stroke="#A7B2A6" stroke-width="1"/>
+        <line x1="164" y1="444" x2="258" y2="444" stroke="#A7B2A6" stroke-width="1"/>
+        <rect x="204" y="452" width="14" height="4" rx="2" fill="#8A968C"/>
+      </g>
+
+      <!-- ================= HAUS (Ostansicht nach Bauplan, Traufseite ~10 m) ====== -->
+      <!-- Dachfläche Ost (angeschnitten sichtbar) mit Ziegellinien, First + Traufe -->
+      <polygon points="488,138 872,138 892,222 468,222" fill="url(#dach)" stroke="#9AA69A" stroke-width="1.5"/>
+      <line x1="488" y1="141" x2="872" y2="141" stroke="#9AA69A" stroke-width="2"/>
+      <g stroke="#AEB6AD" stroke-width=".8" opacity=".8">
+        <line x1="482" y1="160" x2="878" y2="160"/><line x1="477" y1="180" x2="883" y2="180"/>
+        <line x1="472" y1="200" x2="888" y2="200"/>
+      </g>
+      <!-- PV 2x5 Module auf der Ost-Dachfläche (dunkle Zellen, sichtbarer Rahmen) -->
+      <g>
+        <g fill="#2E3D4E" stroke="#8FA0B4" stroke-width="1.2">
+          <rect x="500" y="146" width="68" height="30"/><rect x="574" y="146" width="68" height="30"/>
+          <rect x="648" y="146" width="68" height="30"/><rect x="722" y="146" width="68" height="30"/>
+          <rect x="796" y="146" width="68" height="30"/>
+          <rect x="497" y="181" width="68" height="30"/><rect x="571" y="181" width="68" height="30"/>
+          <rect x="645" y="181" width="68" height="30"/><rect x="719" y="181" width="68" height="30"/>
+          <rect x="793" y="181" width="68" height="30"/>
+        </g>
+        <g stroke="#46586C" stroke-width=".7">
+          <line x1="500" y1="161" x2="864" y2="161"/><line x1="497" y1="196" x2="861" y2="196"/>
+          <line x1="523" y1="146" x2="523" y2="176"/><line x1="545" y1="146" x2="545" y2="176"/>
+          <line x1="597" y1="146" x2="597" y2="176"/><line x1="619" y1="146" x2="619" y2="176"/>
+          <line x1="671" y1="146" x2="671" y2="176"/><line x1="693" y1="146" x2="693" y2="176"/>
+          <line x1="745" y1="146" x2="745" y2="176"/><line x1="767" y1="146" x2="767" y2="176"/>
+          <line x1="819" y1="146" x2="819" y2="176"/><line x1="841" y1="146" x2="841" y2="176"/>
+          <line x1="520" y1="181" x2="520" y2="211"/><line x1="542" y1="181" x2="542" y2="211"/>
+          <line x1="594" y1="181" x2="594" y2="211"/><line x1="616" y1="181" x2="616" y2="211"/>
+          <line x1="668" y1="181" x2="668" y2="211"/><line x1="690" y1="181" x2="690" y2="211"/>
+          <line x1="742" y1="181" x2="742" y2="211"/><line x1="764" y1="181" x2="764" y2="211"/>
+          <line x1="816" y1="181" x2="816" y2="211"/><line x1="838" y1="181" x2="838" y2="211"/>
+        </g>
+      </g>
+      <!-- Fassade + Traufschatten + Sockel -->
+      <rect x="480" y="222" width="400" height="248" fill="#FFFFFF" stroke="#B9C4B6" stroke-width="1.5"/>
+      <rect x="480" y="222" width="400" height="8" fill="#F1F4EF"/>
+      <rect x="480" y="462" width="400" height="8" fill="#E4E9E1"/>
+      <!-- Regenfallrohre an beiden Hausecken -->
+      <line x1="474" y1="222" x2="474" y2="470" stroke="#AEB6AD" stroke-width="3"/>
+      <line x1="886" y1="222" x2="886" y2="470" stroke="#AEB6AD" stroke-width="3"/>
+      <!-- OG nach Plan: Doppelfenster links (mit Lüftungsgitter), 2 schmale Einzelfenster -->
+      <g>
+        <rect x="548" y="250" width="12" height="12" fill="#EDF0EA" stroke="#A7B2A6" stroke-width="1"/>
+        <rect x="566" y="246" width="46" height="56" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+        <line x1="589" y1="246" x2="589" y2="302" stroke="#7C8A7E" stroke-width="2"/>
+        <rect x="644" y="246" width="25" height="56" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+        <rect x="760" y="246" width="24" height="56" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+      </g>
+      <!-- EG nach Plan: bodentiefes Fenster, Haustür mit Seitenteil, Lüftungsgitter -->
+      <g>
+        <rect x="643" y="368" width="24" height="94" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+        <rect x="729" y="368" width="17" height="94" fill="url(#glas)" stroke="#7C8A7E" stroke-width="2"/>
+        <rect x="748" y="368" width="36" height="96" fill="#6B7280" stroke="#4B5563" stroke-width="1.5"/>
+        <rect x="762" y="380" width="8" height="56" rx="2" fill="#D5DBE2"/>
+        <circle cx="756" cy="418" r="1.8" fill="#D5DBE2"/>
+        <rect x="742" y="464" width="48" height="6" fill="#CDD5CB" stroke="#AEB6AD" stroke-width="1"/>
+        <rect x="830" y="374" width="10" height="10" fill="#EDF0EA" stroke="#A7B2A6" stroke-width="1"/>
+      </g>
+
+      <!-- Terrassenüberdachung zwischen Haus und Garage (endet ~1 m vor der Garage) -->
+      <g id="terrasse">
+        <rect x="322" y="464" width="158" height="6" fill="#E5DFD0" stroke="#C9C2AE" stroke-width="1"/>
+        <g stroke="#C9C2AE" stroke-width=".8">
+          <line x1="350" y1="464" x2="350" y2="470"/><line x1="382" y1="464" x2="382" y2="470"/>
+          <line x1="414" y1="464" x2="414" y2="470"/><line x1="446" y1="464" x2="446" y2="470"/>
+        </g>
+        <polygon points="480,342 320,352 320,359 480,349" fill="#DDE9F0" opacity=".9" stroke="#9AA69A" stroke-width="1.2"/>
+        <g stroke="#AEB6AD" stroke-width="1">
+          <line x1="348" y1="357" x2="348" y2="362"/><line x1="392" y1="354" x2="392" y2="359"/>
+          <line x1="436" y1="351" x2="436" y2="356"/>
+        </g>
+        <!-- Stützpfosten 40 cm hinter der Dachkante (Dachüberstand), mit Kopfband -->
+        <rect x="332" y="358" width="4" height="106" fill="#8A968C"/>
+        <line x1="336" y1="368" x2="354" y2="357" stroke="#8A968C" stroke-width="2"/>
+        <!-- Blauregen am Pfosten: Ranke, Laub + hängende Blütentrauben -->
+        <g id="blauregen">
+          <path d="M338,464 C330,442 342,424 333,402 C328,388 337,374 333,360"
+            fill="none" stroke="#8A7355" stroke-width="2"/>
+          <path d="M333,360 C324,356 314,357 306,361" fill="none" stroke="#8A7355" stroke-width="1.5"/>
+          <path d="M334,362 C342,357 350,356 358,358" fill="none" stroke="#8A7355" stroke-width="1.5"/>
+          <g fill="#9FBE7F" stroke="#7EA25F" stroke-width=".6">
+            <circle cx="312" cy="360" r="5"/><circle cx="322" cy="356" r="6"/>
+            <circle cx="334" cy="354" r="6"/><circle cx="346" cy="356" r="5"/>
+            <circle cx="356" cy="359" r="4"/><circle cx="330" cy="366" r="4"/>
+            <circle cx="336" cy="410" r="3.5"/><circle cx="334" cy="432" r="3"/>
+          </g>
+          <g fill="#B7A6D9" stroke="#9F8AC9" stroke-width=".5">
+            <circle cx="314" cy="368" r="3"/><circle cx="313" cy="374" r="2.6"/><circle cx="312" cy="379" r="2"/>
+            <circle cx="327" cy="372" r="3"/><circle cx="326" cy="379" r="2.6"/><circle cx="325" cy="385" r="2"/>
+            <circle cx="342" cy="366" r="3"/><circle cx="341" cy="372" r="2.6"/><circle cx="340" cy="377" r="2"/>
+            <circle cx="352" cy="364" r="2.6"/><circle cx="351" cy="369" r="2"/>
+          </g>
+        </g>
+      </g>
+
+      <!-- Wärmepumpe: Vaillant aroTHERM (grobe Skizze) vor der Fassade, weit links -->
+      <g id="wp_unit">
+        <rect x="496" y="426" width="46" height="40" rx="4" fill="#EDF0EA" stroke="#8A968C" stroke-width="1.5"/>
+        <rect x="500" y="431" width="30" height="30" rx="4" fill="#F7F9F5" stroke="#9AA69A" stroke-width="1"/>
+        <g stroke="#9AA69A" stroke-width="1.2">
+          <line x1="503" y1="437" x2="527" y2="437"/><line x1="503" y1="442" x2="527" y2="442"/>
+          <line x1="503" y1="447" x2="527" y2="447"/><line x1="503" y1="452" x2="527" y2="452"/>
+          <line x1="503" y1="457" x2="527" y2="457"/>
+        </g>
+        <circle cx="515" cy="446" r="11" fill="none" stroke="#AEB6AD" stroke-width="1" opacity=".7"/>
+        <rect x="534" y="434" width="6" height="24" rx="1" fill="#DEE3DC" stroke="#9AA69A" stroke-width=".8"/>
+        <rect x="500" y="466" width="8" height="4" fill="#8A968C"/><rect x="530" y="466" width="8" height="4" fill="#8A968C"/>
+      </g>
+
+      <!-- Enyaq frontal im offenen linken Garagentor (nur sichtbar wenn verbunden),
+           Frontansicht nach Skizze: Grill mit Lamellen, schmale Scheinwerfer, Spiegel,
+           Kennzeichen + Lufteinlass. Ladekabel von der Wallbox am Boden entlang. -->
+      <g id="enyaq" style="display:none">
+        <path id="cable" class="cable" d="M68,398 C66,414 66,430 69,441"/>
+        <ellipse cx="109" cy="468" rx="36" ry="4" fill="#2E3B35" opacity=".5"/>
+        <!-- Karosserie-Silhouette -->
+        <path d="M75,470 L75,438 Q75,428 80,424 L84,416 Q86,411 93,411 L125,411 Q132,411 134,416 L138,424 Q143,428 143,438 L143,470 Z"
+          fill="#F2F4F1" stroke="#7C8A7E" stroke-width="1.8"/>
+        <!-- Windschutzscheibe + Dachlinie -->
+        <path d="M86,419 Q88,414 94,414 L124,414 Q130,414 132,419 L134,425 L84,425 Z"
+          fill="url(#glas)" stroke="#7C8A7E" stroke-width="1"/>
+        <!-- Außenspiegel -->
+        <rect x="70" y="427" width="6" height="5" rx="1.5" fill="#F2F4F1" stroke="#7C8A7E" stroke-width="1"/>
+        <rect x="142" y="427" width="6" height="5" rx="1.5" fill="#F2F4F1" stroke="#7C8A7E" stroke-width="1"/>
+        <!-- Motorhauben-Kontur -->
+        <path d="M83,429 Q109,434 135,429" fill="none" stroke="#AEB6AD" stroke-width="1"/>
+        <!-- Scheinwerfer (schmal, angewinkelt) -->
+        <polygon points="80,434 95,436 95,440 80,439" fill="#DCE7EE" stroke="#7C8A7E" stroke-width="1"/>
+        <polygon points="138,434 123,436 123,440 138,439" fill="#DCE7EE" stroke="#7C8A7E" stroke-width="1"/>
+        <!-- Grill mit senkrechten Lamellen + Rahmen -->
+        <path d="M96,433 L122,433 L124,437 L122,446 L96,446 L94,437 Z" fill="#3F4A44" stroke="#8A968C" stroke-width="1.2"/>
+        <g stroke="#6B7A6E" stroke-width=".8">
+          <line x1="99" y1="434" x2="99" y2="445"/><line x1="103" y1="434" x2="103" y2="445"/>
+          <line x1="107" y1="434" x2="107" y2="445"/><line x1="111" y1="434" x2="111" y2="445"/>
+          <line x1="115" y1="434" x2="115" y2="445"/><line x1="119" y1="434" x2="119" y2="445"/>
+        </g>
+        <!-- Kennzeichen + unterer Lufteinlass -->
+        <rect x="99" y="449" width="20" height="6" rx="1" fill="#FFFFFF" stroke="#9AA69A" stroke-width=".8"/>
+        <rect x="88" y="457" width="42" height="7" rx="2" fill="#3F4A44"/>
+        <!-- Räder (frontal angeschnitten) -->
+        <rect x="77" y="461" width="10" height="9" rx="2" fill="#3F4A44"/>
+        <rect x="131" y="461" width="10" height="9" rx="2" fill="#3F4A44"/>
+        <!-- Ladeport-Anzeige links -->
+        <rect x="65" y="441" width="7" height="7" rx="1" fill="#65A30D"/>
+      </g>
+
+      <!-- Netzanschluss rechts: Mast mit Traversen, Isolatoren + Leitungen -->
+      <g>
+        <line x1="926" y1="470" x2="926" y2="248" stroke="#8A968C" stroke-width="4"/>
+        <line x1="900" y1="268" x2="952" y2="268" stroke="#8A968C" stroke-width="3"/>
+        <line x1="906" y1="292" x2="946" y2="292" stroke="#8A968C" stroke-width="3"/>
+        <g fill="#6B7A6E">
+          <rect x="902" y="262" width="4" height="6"/><rect x="946" y="262" width="4" height="6"/>
+          <rect x="908" y="286" width="4" height="6"/><rect x="940" y="286" width="4" height="6"/>
+        </g>
+        <path d="M904,268 Q880,300 886,340" fill="none" stroke="#AEB6AD" stroke-width="1.2"/>
+        <path d="M948,268 Q960,274 960,282" fill="none" stroke="#AEB6AD" stroke-width="1.2"/>
+        <path d="M944,292 Q960,298 960,306" fill="none" stroke="#AEB6AD" stroke-width="1.2"/>
+      </g>
+
+      <!-- Bepflanzung -->
+      <g>
+        <ellipse cx="330" cy="464" rx="0" ry="0"/>
+        <ellipse cx="906" cy="462" rx="16" ry="10" fill="#DDE7D3" stroke="#B9C9AB" stroke-width="1"/>
+        <ellipse cx="890" cy="466" rx="11" ry="7" fill="#D3E0C7" stroke="#B9C9AB" stroke-width="1"/>
+        <ellipse cx="20" cy="464" rx="18" ry="11" fill="#DDE7D3" stroke="#B9C9AB" stroke-width="1"/>
+      </g>
     </svg>
 
     <div class="kopf" id="kopf">—</div>
-    <div class="bg-note">Platzhalter — Higgsfield-Bild folgt (Phase 3b)</div>
 
     <!-- Funktions-Ebene: Anker in % via viewBox 960x540 (Spec §1) -->
     <svg class="overlay" viewBox="0 0 960 540" id="ov"></svg>
@@ -186,15 +378,16 @@ const fmt = w => Math.abs(w) >= 1000 ? (Math.abs(w)/1000).toFixed(1).replace("."
   : Math.abs(w) >= 50 ? Math.round(Math.abs(w)) + " W" : null;
 const speed = w => Math.abs(w) > 5000 ? "fast" : Math.abs(w) >= 1000 ? "mid" : "";
 
-// ---------- Anker (% von 960x540) — Spec §1, Review Leo 2026-07-18 ----------
+// ---------- Anker (% von 960x540) — Layout 2026-07-19: Garage freistehend links,
+// Haus rechts, Netz-Mast am rechten Rand, Chips in der Vordergrund-Zeile ----------
 const A = {
-  pv:      { x: 530, y: 168, w: 118, t: "PV E3DC" },
-  sungrow: { x: 280, y: 268, w: 158, t: "PV Sungrow" },
-  wp:      { x: 300, y: 452, w: 162, t: "Wärmepumpe" },
-  wallbox: { x: 95,  y: 452, w: 128, t: "Wallbox" },
-  haus:    { x: 545, y: 330, w: 108, t: "Haus" },
-  batt:    { x: 668, y: 452, w: 138, t: "Batterie" },
-  netz:    { x: 858, y: 330, w: 108, t: "Netz" },
+  pv:      { x: 690, y: 180, w: 118, t: "PV E3DC" },
+  sungrow: { x: 160, y: 296, w: 158, t: "PV Sungrow" },
+  wallbox: { x: 110, y: 505, w: 128, t: "Wallbox" },
+  wp:      { x: 330, y: 505, w: 162, t: "Wärmepumpe" },
+  haus:    { x: 680, y: 330, w: 108, t: "Haus" },
+  batt:    { x: 592, y: 505, w: 138, t: "Batterie" },
+  netz:    { x: 898, y: 310, w: 108, t: "Netz" },
 };
 const CHIP_H = 44;
 const NS = "http://www.w3.org/2000/svg";
@@ -203,11 +396,11 @@ const el = (n, at, p) => { const e = document.createElementNS(NS, n);
 
 // Flüsse: von Knoten-Chip zum Haus-Chip (Hub)
 const FLOWS = [
-  { id: "pv",      farbe: "var(--lime)", nach: "haus" },
-  { id: "sungrow", farbe: "var(--lime)", nach: "haus" },
+  { id: "pv",      farbe: "var(--lime-ink)", nach: "haus" },
+  { id: "sungrow", farbe: "var(--lime-ink)", nach: "haus" },
   { id: "batt",    farbe: "var(--gelb)", nach: "haus" },
   { id: "netz",    farbe: "var(--rot)",  nach: "haus" },
-  { id: "wallbox", farbe: "var(--lime)", nach: "haus" },
+  { id: "wallbox", farbe: "var(--lime-ink)", nach: "haus" },
 ];
 
 const ov = document.getElementById("ov");
@@ -274,6 +467,11 @@ function nodeState(k, s){
 function render(){
   const s = SZENARIEN[aktiv];
   document.getElementById("kopf").textContent = s.grund;
+  // Hintergrund-Zustände: Garagentor links + Enyaq + Ladekabel
+  document.getElementById("torL_zu").style.display  = s.auto ? "none" : "";
+  document.getElementById("torL_auf").style.display = s.auto ? "" : "none";
+  document.getElementById("enyaq").style.display    = s.auto ? "" : "none";
+  document.getElementById("cable").setAttribute("class", "cable" + (s.laedt ? " laedt" : ""));
   // Chips
   for (const k in A){
     const st = nodeState(k, s);
@@ -285,11 +483,11 @@ function render(){
   if (REF.socfill) REF.socfill.setAttribute("width", s.soc_b != null ? Math.round(36 * s.soc_b / 100) : 0);
   // Flüsse (Richtung via Pfadumkehr wäre im Echt-Build sauberer; Mockup: Farbe+Wert)
   const flows = {
-    pv:      { w: s.pv_e3dc, farbe: "var(--lime)" },
-    sungrow: { w: s.sungrow, farbe: "var(--lime)" },
+    pv:      { w: s.pv_e3dc, farbe: "var(--lime-ink)" },
+    sungrow: { w: s.sungrow, farbe: "var(--lime-ink)" },
     batt:    { w: s.batt,    farbe: "var(--gelb)" },
     netz:    { w: s.netz,    farbe: s.netz >= 0 ? "var(--rot)" : "var(--grau)" },
-    wallbox: { w: s.wallbox, farbe: "var(--lime)" },
+    wallbox: { w: s.wallbox, farbe: "var(--lime-ink)" },
   };
   for (const id in flows){
     const f = flows[id], on = !!fmt(f.w) && !s.offline.includes(id === "pv" ? "pv" : id);
