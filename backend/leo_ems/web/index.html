@@ -84,6 +84,7 @@
 
   /* --- Energy-Flow-Szene (Spec 04, v0.3): stilisierte Ostansicht + Overlay ---- */
   .scene-card { padding: 0; overflow: hidden; }
+  .scene-toggle { display: none; }  /* nur auf dem Handy sichtbar (Media-Query unten) */
   .scene { position: relative; aspect-ratio: 16/9; overflow: hidden; background: var(--panel); }
   .scene .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
   .scene svg.overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -129,17 +130,70 @@
 
   /* Schema-Modus Handy (Spec §1 Responsive) */
   .schema { display: none; }
+
+  /* Einklappbare Sektionen (Punkt 6): Chevron/Interaktion nur auf dem Handy.
+     Auf Desktop bleibt die h2 optisch gleich (nur flex), Inhalt immer sichtbar. */
+  .collapsible > h2 { display: flex; align-items: center; justify-content: space-between; }
+  .collapsible > h2::after { content: ""; }
+
   @media (max-width: 767px) {
     .scene { aspect-ratio: auto; height: 130px; }
     .scene svg.overlay { display: none; }
+
+    /* Deko-Band einklappbar (Punkt 5): spart ~130px, Info steckt in der Schema-Liste */
+    .scene-toggle { display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+      width: 100%; background: var(--panel); border: 0; border-bottom: 1px solid var(--line);
+      font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--dim); padding: .8rem; cursor: pointer; min-height: 44px; text-align: left; }
+    .scene-toggle .st-status { flex: 1; color: var(--forest); text-transform: none; letter-spacing: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .scene-toggle::after { content: "▾"; font-size: .9rem; transition: transform .2s; }
+    .scene-card.scene-collapsed .scene-toggle::after { transform: rotate(-90deg); }
+    .scene-card.scene-collapsed .scene { display: none; }
+    /* eingeklappt: Status wandert in den Toggle-Knopf, ausgeklappt zeigt ihn die Szene (.kopf) */
+    .scene-card:not(.scene-collapsed) .scene-toggle .st-status { display: none; }
     .schema { display: block; margin: .6rem .75rem .75rem; }
     .schema .row { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem;
       background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: .4rem; cursor: pointer; }
     .schema .row.aktiv { border-color: var(--lime-ink); }
     .schema .row.dimmed { opacity: .55; }
-    .schema .nm { font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); flex: 1; }
-    .schema .vl { font-family: var(--mono); font-size: .95rem; color: var(--forest); }
+    .schema .nm { font-family: var(--mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); flex: 1; }
+    .schema .vl { font-family: var(--mono); font-size: 1rem; color: var(--forest); }
     .schema .dir { width: 10px; text-align: center; color: var(--dim); }
+
+    /* Lesbarkeit auf dem Handy: kleine Texte anheben (waren teils <11px) */
+    label.f span { font-size: .78rem; }
+    .sub { font-size: .85rem; }
+    .badge { font-size: .8rem; padding: .35em .7em; }
+    .kopf { font-size: .8rem; }
+
+    /* Touch-Ziele: Eingaben/Buttons waren ~30px hoch, Empfehlung ist 44px */
+    input[type=number], input[type=time] { padding: .75em .7em; font-size: 1rem; }
+    .modes button, .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+    .modes button { font-size: .85rem; }
+    .del { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .wtag.switch { padding: .35em .55em; font-size: .75rem; }
+
+    /* Protokoll: umbrechen statt seitlich scrollen */
+    .hist { white-space: normal; overflow-x: visible; line-height: 1.7; }
+
+    /* Laderegeln: Tabelle wird auf dem Handy zu gestapelten Karten */
+    #rules thead { display: none; }
+    #rules, #rules tbody, #rules tr, #rules td { display: block; width: 100%; }
+    #rules tr { border: 1px solid var(--line); border-radius: var(--r); padding: .6rem .8rem; margin-bottom: .6rem; }
+    #rules td { border-bottom: none; padding: .35rem 0; }
+    #rules td::before { content: attr(data-label); display: block; font-family: var(--mono); font-size: .65rem;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin-bottom: .2rem; }
+    #rules td:not([data-label])::before { content: none; }
+
+    /* Sektionen einklappen: h2 wird zum Toggle, Chevron zeigt den Zustand */
+    .collapsible > h2 { cursor: pointer; min-height: 44px; user-select: none;
+      -webkit-tap-highlight-color: transparent; margin-bottom: .4rem; }
+    .collapsible > h2::after { content: "▾"; font-family: var(--mono); font-size: .85rem;
+      color: var(--dim); transition: transform .2s; margin-left: .5rem; }
+    .collapsible.collapsed > h2 { margin-bottom: 0; }
+    .collapsible.collapsed > h2::after { transform: rotate(-90deg); }
+    .collapsible.collapsed > :not(h2) { display: none; }
   }
   footer { margin-top: 2.5rem; font-family: var(--mono); font-size: .68rem; color: var(--dim); display: flex; justify-content: space-between; }
 </style>
@@ -160,8 +214,11 @@
   <!-- Lastverteilung -->
   <section>
     <h2>Lastverteilung</h2>
-    <div class="card scene-card">
-      <div class="scene" role="img" aria-label="Energiefluss-Szene: Haus-Ostansicht mit Garage, PV, Batterie, Wallbox, Wärmepumpe und Netzanschluss">
+    <div class="card scene-card scene-collapsed" id="scene-card">
+      <button class="scene-toggle" id="scene-toggle" type="button" aria-expanded="false" aria-controls="scene">
+        <span>Hausansicht</span><span class="st-status" id="st-status">—</span>
+      </button>
+      <div class="scene" id="scene" role="img" aria-label="Energiefluss-Szene: Haus-Ostansicht mit Garage, PV, Batterie, Wallbox, Wärmepumpe und Netzanschluss">
         <!-- Stilisierte Ostansicht nach Bauplan (docs/referenz/HausAnsichten.pdf).
              Maßstab 40 px/m: Garage 6 m (2 Tore, freistehend), 5 m Abstand, Haus ~10 m Traufseite. -->
         <svg class="bg" viewBox="0 0 960 540" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -420,7 +477,7 @@
   </section>
 
   <!-- Einstellungen -->
-  <section>
+  <section class="collapsible" id="sect-settings">
     <h2>Einstellungen</h2>
     <div class="card">
       <h3>Lademodus</h3>
@@ -450,7 +507,7 @@
   </section>
 
   <!-- Laderegeln -->
-  <section>
+  <section class="collapsible" id="sect-rules">
     <h2>Laderegeln (Garantieladung)</h2>
     <div class="card">
       <table id="rules">
@@ -467,7 +524,7 @@
   </section>
 
   <!-- Protokoll -->
-  <section>
+  <section class="collapsible" id="sect-log">
     <h2>Protokoll</h2>
     <div class="card"><div class="hist" id="hist">–</div></div>
   </section>
@@ -634,6 +691,7 @@ function updateScene(st) {
   const kopf = $("kopf");
   kopf.textContent = st.grund || "—";
   kopf.classList.toggle("warnung", e3dcWeg(st));
+  $("st-status").textContent = st.grund || "—";   // Status auch im eingeklappten Toggle-Knopf
   // Hintergrund-Zustände: Garagentor links + Enyaq + Ladekabel
   const da = fahrzeugDa(st);
   $("torL_zu").style.display  = da ? "none" : "";
@@ -710,6 +768,37 @@ function openPanel(k) {
 function closePanel() { panelEl().classList.remove("open"); $("pback").classList.remove("open"); }
 $("pback").addEventListener("click", closePanel);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
+// Deko-Band ein-/ausklappen (Handy, Punkt 5). Auf dem Desktop hat die Klasse keine
+// Wirkung (CSS nur in der Media-Query) und der Knopf ist ausgeblendet.
+function setSceneOpen(open) {
+  $("scene-card").classList.toggle("scene-collapsed", !open);
+  $("scene-toggle").setAttribute("aria-expanded", open ? "true" : "false");
+  localStorage.setItem("leoems_scene_open", open ? "1" : "0");
+}
+$("scene-toggle").addEventListener("click", () =>
+  setSceneOpen($("scene-card").classList.contains("scene-collapsed")));
+setSceneOpen(localStorage.getItem("leoems_scene_open") === "1");  // Default: eingeklappt
+
+// Sektionen ein-/ausklappen (Handy, Punkt 6). Default eingeklappt für den
+// Status-Blick, Zustand je Sektion gemerkt. Auf Desktop ohne sichtbaren Effekt.
+document.querySelectorAll(".collapsible").forEach(sec => {
+  const key = "leoems_sect_" + sec.id, h = sec.querySelector("h2");
+  const apply = open => {
+    sec.classList.toggle("collapsed", !open);
+    h.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  h.setAttribute("role", "button");
+  h.setAttribute("tabindex", "0");
+  h.addEventListener("click", () => {
+    const open = sec.classList.contains("collapsed");
+    apply(open); localStorage.setItem(key, open ? "1" : "0");
+  });
+  h.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); h.click(); }
+  });
+  apply(localStorage.getItem(key) === "1");  // Default: eingeklappt
+});
 
 function render(st) {
   $("b-modus").textContent = "Modus: " + (st.modus || "–");
@@ -827,10 +916,12 @@ async function ladeRegeln() {
   for (const r of regeln) {
     const tr = document.createElement("tr");
     const tagesspan = document.createElement("td");
+    tagesspan.dataset.label = "Tage";
     tagTags(tagesspan, new Set(r.wochentage), false);
     tr.appendChild(tagesspan);
-    tr.insertAdjacentHTML("beforeend", `<td class="mono">${r.abfahrtszeit}</td><td class="mono">${r.soc_min} %</td>`);
+    tr.insertAdjacentHTML("beforeend", `<td class="mono" data-label="Abfahrt">${r.abfahrtszeit}</td><td class="mono" data-label="Mindest-SoC">${r.soc_min} %</td>`);
     const aktivTd = document.createElement("td");
+    aktivTd.dataset.label = "Aktiv";
     aktivTd.innerHTML = `<span class="badge switch ${r.aktiv ? "on" : ""}">${r.aktiv ? "AN" : "AUS"}</span>`;
     aktivTd.firstChild.onclick = async () => {
       await api("api/v1/rules/" + r.id, { method: "PUT", body: JSON.stringify({
