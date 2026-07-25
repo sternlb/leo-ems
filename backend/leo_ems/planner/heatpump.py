@@ -1,0 +1,294 @@
+"""Wärmepumpen-Steuerung — REQ-010/011/012/014/064 (Stufe 2).
+
+Zwei Überschuss-Hebel auf dieselbe Vaillant-Anlage:
+
+  1. **Warmwasser vorziehen** (REQ-010): Sollwert von 45 auf 60 °C anheben,
+     solange PV-Überschuss trägt, und automatisch zurückstellen.
+  2. **Heizkreis anheben** (REQ-011): Raum-Sollwert um Δ anheben — nur in der
+     Heizperiode und nur, wenn das Zeitprogramm überhaupt einen Sollwert hat.
+
+Festlegungen von Leo (2026-07-25):
+  - **Vorrang Auto.** Der Controller sieht nur den Überschuss, der nach der
+    Wallbox-Zuteilung übrig ist — das Ladeverhalten ändert sich dadurch nicht.
+  - **Konservative Schwellen:** an ab 2,5 kW, zurück unter 0,5 kW.
+
+Drei Eigenheiten, die die Logik prägen:
+
+  * **Kein Leistungsmesswert.** Die WP hat in HA nur Energiezähler, ihr
+    Verbrauch steckt also im Hausverbrauch und senkt den gemessenen Überschuss,
+    sobald ein Boost läuft. Genau dafür ist das Hysterese-Band da: der Abstand
+    zwischen An- und Aus-Schwelle (2,5 → 0,5 kW) ist so breit wie der
+    geschätzte WP-Verbrauch `wp_leistung_w`, damit sich der Boost nicht selbst
+    abschaltet. Wird das Band zu schmal konfiguriert, zieht `_aus_schwelle()`
+    die Aus-Schwelle nach unten statt in den Schaltzyklus zu laufen.
+  * **Cloud-Ratenlimit** (REQ-014). Geschrieben wird nur bei Zustandswechsel
+    und höchstens alle `wp_cloud_min_gap_s`. Ein Sollwert gilt als „gewünscht",
+    bis ihn ein Rücklesen bestätigt — dadurch wird ein verlorener Cloud-Aufruf
+    von selbst wiederholt, ohne Dauerschleife.
+  * **Keine Dauer-Übersteuerung.** Sobald ein Sollwert bestätigt ist, schreibt
+    das EMS nicht mehr nach. Wer in der MyVaillant-App etwas von Hand ändert,
+    wird nicht überstimmt.
+
+Reine Logik, testbar ohne Geräte: Zeit kommt von außen, Geräte-Werte als dict.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+from ..config import RegelConfig
+
+TOLERANZ_K = 0.5   # Sollwert gilt als erreicht/bestätigt innerhalb dieser Spanne
+
+
+@dataclass
+class HeatPumpCommand:
+    """Was gesendet werden soll; None = nichts zu tun."""
+
+    ww_soll_c: float | None = None
+    raum_soll_c: float | None = None
+    ww_boost: bool = False
+    hk_boost: bool = False
+    grund: str = "—"
+
+
+class HeatPumpController:
+    def __init__(self, cfg: RegelConfig):
+        self.cfg = cfg
+        self.ww_boost = False
+        self.hk_boost = False
+        self._ziel: dict[str, float | None] = {"ww": None, "hk": None}
+        self._hk_basis: float | None = None      # Raum-Sollwert vor der Anhebung
+        self._seit: dict[str, datetime] = {}
+        self._start: dict[str, datetime] = {}
+        self._last_write: datetime | None = None
+        self._grund = "Wärmepumpe noch nicht bewertet"
+        self._frei_w = 0.0
+
+    # --- Hilfen ------------------------------------------------------------
+    def _held(self, key: str, bedingung: bool, now: datetime) -> timedelta:
+        """Wie lange ist `bedingung` ununterbrochen wahr (über die Ticks)?"""
+        if bedingung:
+            self._seit.setdefault(key, now)
+            return now - self._seit[key]
+        self._seit.pop(key, None)
+        return timedelta(0)
+
+    def _laufzeit(self, key: str, now: datetime) -> timedelta:
+        start = self._start.get(key)
+        return now - start if start else timedelta(0)
+
+    def _ww_untergrenze(self) -> float:
+        """Komfortgrenze Warmwasser (REQ-012): nie unter die harte Grenze stellen."""
+        grenze = self.cfg.hard_limit_ww_min_temp
+        return max(self.cfg.wp_ww_normal_c, grenze) if grenze is not None else self.cfg.wp_ww_normal_c
+
+    def _aus_schwelle(self, an_w: int, aus_w: int) -> float:
+        """Aus-Schwelle, die den eigenen Verbrauch nicht gegen den Boost wendet.
+
+        Der laufende Boost drückt den gemessenen Überschuss um rund
+        `wp_leistung_w`. Ist das Band an→aus schmaler als dieser Verbrauch,
+        würde der Boost sich selbst abschalten — dann zählt die weiter unten
+        liegende Schwelle (toleriert etwas Netzbezug statt Schaltzyklen).
+        """
+        return min(aus_w, an_w - self.cfg.wp_leistung_w)
+
+    # --- Hauptentscheidung -------------------------------------------------
+    def update(self, now: datetime, *, frei_w: float, wp: dict | None) -> HeatPumpCommand:
+        """Ein Tick. `frei_w` ist der Überschuss NACH der Wallbox-Zuteilung."""
+        if not wp:
+            # Fail-Safe E7: WP/HA nicht erreichbar → nichts entscheiden, nichts
+            # zurücksetzen. Offene Sollwerte bleiben stehen und gehen raus,
+            # sobald die Verbindung wieder steht.
+            self._grund = "keine Verbindung zur Wärmepumpe — keine Befehle"
+            self._frei_w = frei_w
+            return HeatPumpCommand(ww_boost=self.ww_boost, hk_boost=self.hk_boost, grund=self._grund)
+
+        self._frei_w = frei_w
+        gruende = [self._ww_entscheiden(now, frei_w, wp)]
+        gruende.append(self._hk_entscheiden(now, frei_w, wp))
+        self._grund = " · ".join(g for g in gruende if g)
+
+        return self._befehl(now, wp)
+
+    # --- Warmwasser (REQ-010) ----------------------------------------------
+    def _ww_entscheiden(self, now: datetime, frei: float, wp: dict) -> str:
+        ist = wp.get("ww_ist_c")
+        boost_c = self.cfg.wp_ww_boost_c
+        normal_c = self._ww_untergrenze()
+        an = self.cfg.wp_ww_an_w
+        aus = self._aus_schwelle(an, self.cfg.wp_ww_aus_w)
+
+        if self.ww_boost:
+            if ist is not None and ist >= boost_c - TOLERANZ_K:
+                return self._ww_beenden(normal_c, f"Warmwasser {ist:.0f} °C erreicht — zurück auf {normal_c:.0f} °C")
+            zu_wenig = self._held("ww_aus", frei < aus, now)
+            laufzeit = self._laufzeit("ww", now)
+            if zu_wenig >= timedelta(seconds=self.cfg.wp_aus_entprellung_s):
+                if laufzeit >= timedelta(seconds=self.cfg.wp_min_laufzeit_s):
+                    return self._ww_beenden(
+                        normal_c,
+                        f"Warmwasser-Boost aus: Überschuss {frei / 1000:.1f} kW < {aus / 1000:.1f} kW"
+                        f" — zurück auf {normal_c:.0f} °C")
+                rest = self.cfg.wp_min_laufzeit_s - int(laufzeit.total_seconds())
+                return (f"Warmwasser-Boost {boost_c:.0f} °C: Überschuss weg, Mindestlaufzeit läuft"
+                        f" (noch {rest // 60}:{rest % 60:02d} min)")
+            stand = f"{ist:.0f} → {boost_c:.0f} °C" if ist is not None else f"Ziel {boost_c:.0f} °C"
+            return f"Warmwasser-Boost aktiv ({stand}), Überschuss {frei / 1000:.1f} kW"
+
+        # nicht aktiv → Startbedingung
+        if ist is not None and ist >= boost_c - TOLERANZ_K:
+            self._seit.pop("ww_an", None)
+            return f"Warmwasser schon bei {ist:.0f} °C — kein Boost nötig"
+        gehalten = self._held("ww_an", frei >= an, now)
+        if gehalten >= timedelta(seconds=self.cfg.wp_entprellung_s):
+            self.ww_boost = True
+            self._start["ww"] = now
+            self._ziel["ww"] = boost_c
+            self._seit.pop("ww_aus", None)
+            return (f"Warmwasser-Boost startet: Überschuss {frei / 1000:.1f} kW ≥ "
+                    f"{an / 1000:.1f} kW → Sollwert {boost_c:.0f} °C")
+        if gehalten > timedelta(0):
+            noetig = self.cfg.wp_entprellung_s
+            return (f"Warmwasser: Überschuss reicht, Bedingungszeit läuft "
+                    f"({int(gehalten.total_seconds())}/{noetig} s)")
+        return f"Warmwasser: Überschuss {frei / 1000:.1f} kW < {an / 1000:.1f} kW"
+
+    def _ww_beenden(self, normal_c: float, grund: str) -> str:
+        self.ww_boost = False
+        self._ziel["ww"] = normal_c
+        self._start.pop("ww", None)
+        self._seit.pop("ww_aus", None)
+        return grund
+
+    # --- Heizkreis (REQ-011) ------------------------------------------------
+    def _hk_entscheiden(self, now: datetime, frei: float, wp: dict) -> str:
+        aussen = wp.get("aussen_c")
+        basis_ist = wp.get("raum_soll_c")
+
+        # Heizperiode: draußen kalt genug UND das Zeitprogramm hat einen Sollwert.
+        # Im Sommer liefert die Anlage 0 °C — dann gäbe es nichts anzuheben.
+        zu_warm = aussen is not None and aussen > self.cfg.wp_hk_max_aussen_c
+        kein_sollwert = basis_ist is None or basis_ist <= 0
+
+        if self.hk_boost:
+            if zu_warm or kein_sollwert:
+                return self._hk_beenden("Heizkreis-Anhebung aus: außerhalb der Heizperiode")
+            aus = self._aus_schwelle(self.cfg.wp_hk_an_w, self.cfg.wp_hk_aus_w)
+            zu_wenig = self._held("hk_aus", frei < aus, now)
+            laufzeit = self._laufzeit("hk", now)
+            if zu_wenig >= timedelta(seconds=self.cfg.wp_aus_entprellung_s):
+                if laufzeit >= timedelta(seconds=self.cfg.wp_min_laufzeit_s):
+                    return self._hk_beenden(
+                        f"Heizkreis-Anhebung aus: Überschuss {frei / 1000:.1f} kW < "
+                        f"{aus / 1000:.1f} kW")
+                rest = self.cfg.wp_min_laufzeit_s - int(laufzeit.total_seconds())
+                return f"Heizkreis-Anhebung: Mindestlaufzeit läuft (noch {rest // 60}:{rest % 60:02d} min)"
+            ziel = self._ziel["hk"] if self._ziel["hk"] is not None else basis_ist
+            return f"Heizkreis angehoben auf {ziel:.1f} °C (+{self.cfg.wp_hk_anhebung_k:.1f} K)"
+
+        # nicht aktiv → Startbedingung
+        if zu_warm:
+            self._seit.pop("hk_an", None)
+            return f"Heizkreis: {aussen:.0f} °C draußen — keine Anhebung"
+        if kein_sollwert:
+            self._seit.pop("hk_an", None)
+            return "Heizkreis: Zeitprogramm ohne Sollwert — keine Anhebung"
+        # Die WP kann nur eines zur Zeit: läuft der Warmwasser-Boost, hat er Vorrang.
+        if self.ww_boost:
+            self._seit.pop("hk_an", None)
+            return "Heizkreis: Warmwasser hat Vorrang"
+        if self._held("hk_an", frei >= self.cfg.wp_hk_an_w, now) >= timedelta(
+            seconds=self.cfg.wp_entprellung_s
+        ):
+            ziel = min(basis_ist + self.cfg.wp_hk_anhebung_k, self.cfg.wp_hk_max_raum_c)
+            if ziel <= basis_ist + TOLERANZ_K:
+                return f"Heizkreis: Komfort-Obergrenze {self.cfg.wp_hk_max_raum_c:.0f} °C erreicht"
+            self.hk_boost = True
+            self._start["hk"] = now
+            self._hk_basis = basis_ist
+            self._ziel["hk"] = ziel
+            self._seit.pop("hk_aus", None)
+            return f"Heizkreis-Anhebung startet: {basis_ist:.1f} → {ziel:.1f} °C"
+        return "Heizkreis: keine Anhebung"
+
+    def _hk_beenden(self, grund: str) -> str:
+        self.hk_boost = False
+        if self._hk_basis is not None:
+            self._ziel["hk"] = self._hk_basis
+        self._hk_basis = None
+        self._start.pop("hk", None)
+        self._seit.pop("hk_aus", None)
+        return grund
+
+    # --- Schreibzugriffe drosseln (REQ-014) ---------------------------------
+    def _befehl(self, now: datetime, wp: dict) -> HeatPumpCommand:
+        """Offene Sollwerte in Befehle übersetzen — höchstens einer pro Gap.
+
+        Ein Ziel bleibt offen, bis das Rücklesen es bestätigt; danach schreibt
+        das EMS nicht mehr nach (Handbedienung in der App bleibt möglich).
+        """
+        cmd = HeatPumpCommand(ww_boost=self.ww_boost, hk_boost=self.hk_boost, grund=self._grund)
+        gap_ok = self._last_write is None or (
+            now - self._last_write >= timedelta(seconds=self.cfg.wp_cloud_min_gap_s)
+        )
+
+        ziel_ww, ist_ww = self._ziel["ww"], wp.get("ww_soll_c")
+        if ziel_ww is not None:
+            if ist_ww is not None and abs(ist_ww - ziel_ww) <= TOLERANZ_K:
+                self._ziel["ww"] = None       # von der Cloud bestätigt
+            elif gap_ok:
+                cmd.ww_soll_c = ziel_ww
+                gap_ok = False                # pro Tick nur ein Cloud-Aufruf
+
+        ziel_hk, ist_hk = self._ziel["hk"], wp.get("raum_soll_c")
+        if ziel_hk is not None:
+            if ist_hk is not None and abs(ist_hk - ziel_hk) <= TOLERANZ_K:
+                self._ziel["hk"] = None
+            elif gap_ok:
+                cmd.raum_soll_c = ziel_hk
+
+        return cmd
+
+    def schreiben_bestaetigt(self, now: datetime) -> None:
+        """Von der Regelschleife aufzurufen, NACHDEM wirklich gesendet wurde.
+
+        Im Beobachtungsmodus wird nicht gesendet und damit auch nicht bestätigt —
+        der Status zeigt dann dauerhaft, was das EMS tun *würde*.
+        """
+        self._last_write = now
+
+    # --- Anzeige (REQ-050/051) ---------------------------------------------
+    def status(self, wp: dict | None) -> dict:
+        """Zweigeteilte Sicht fürs Dashboard: Warmwasser und Heizkreis (Issue #1)."""
+        wp = wp or {}
+        return {
+            "verbunden": bool(wp),
+            "grund": self._grund,
+            "frei_w": round(self._frei_w),
+            "warmwasser": {
+                "ist_c": wp.get("ww_ist_c"),
+                "soll_c": wp.get("ww_soll_c"),
+                "modus": wp.get("ww_modus"),
+                "sonderfunktion": wp.get("ww_sonderfunktion"),
+                "boost": self.ww_boost,
+                "boost_c": self.cfg.wp_ww_boost_c,
+                "normal_c": self._ww_untergrenze(),
+                "offen_c": self._ziel["ww"],
+            },
+            "heizkreis": {
+                "vorlauf_c": wp.get("hk_vorlauf_c"),
+                "vorlauf_soll_c": wp.get("hk_vorlauf_soll_c"),
+                "zustand": wp.get("hk_zustand"),
+                "modus": wp.get("hk_modus"),
+                "raum_ist_c": wp.get("raum_ist_c"),
+                "raum_soll_c": wp.get("raum_soll_c"),
+                "boost": self.hk_boost,
+                "anhebung_k": self.cfg.wp_hk_anhebung_k,
+                "basis_c": self._hk_basis,
+                "offen_c": self._ziel["hk"],
+            },
+            "aussen_c": wp.get("aussen_c"),
+            "cop": wp.get("cop"),
+        }

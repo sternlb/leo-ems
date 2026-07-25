@@ -134,6 +134,7 @@ Grundprinzip: **Das EMS steuert nur aktiv, wenn seine Datenlage frisch ist.** Je
 | E4 | Forecast.Solar weg | HTTP-Fehler | **Keine Änderung am Betrieb** (Leo, 2026-07-12): EMS arbeitet unverändert weiter mit der letzten gespeicherten Prognose. |
 | E5 | Sungrow weg | Modbus-Timeout | **Sungrow-Werte auf 0 setzen und weiterarbeiten** (Leo, 2026-07-12): Erzeugung = E3DC-only; Überschussrechnung am Netzpunkt bleibt korrekt. |
 | E6 | EMS selbst stirbt | — | Keine persistenten Übersteuerungen: alle Overrides tragen TTL (max. 15 min). Wallbox und E3DC laufen autonom weiter. **Watchdog-Test ist Teil der Abnahme.** |
+| E7 | Vaillant/HA weg | Lesefehler gegen die HA-API | **Keine Änderung am Betrieb** (Stufe 2, v0.4.0): keine WP-Sollwerte mehr, aber auch kein Zurücksetzen — der Ladebetrieb läuft unverändert weiter. Offene Sollwerte gehen raus, sobald die Verbindung wieder steht. Details: [docs/waermepumpe.md](../docs/waermepumpe.md). |
 
 ## 8. Sicherheit & Nachvollziehbarkeit
 

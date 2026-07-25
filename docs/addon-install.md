@@ -15,6 +15,11 @@ Das EMS läuft als **Home-Assistant-Add-on aus einem registrierten Add-on-Reposi
 3. **Konfigurieren** (Tab *Konfiguration*): Geräte-Zugangsdaten eintragen —
    `e3dc_host/user/password/rscp_key`, `goe_host`, `skoda_user/password`, `lat`/`lon`
    (Sungrow leer lassen bis zur Installation Ende 2026). Zugangsdaten liegen nur hier, nie im Code.
+   Für die **Wärmepumpe** (ab v0.4.0) sind `vaillant_ww_entity` und
+   `vaillant_zone_entity` bereits vorbelegt; `ha_base_url`/`ha_token` bleiben
+   leer, weil das Add-on über den Supervisor-Proxy geht (`homeassistant_api: true`
+   in der `config.yaml`). `vaillant_ww_entity` leeren = WP nicht ansteuern.
+   Details: [waermepumpe.md](waermepumpe.md).
 4. **`Watchdog` aktivieren** (Tab *Info*, Schalter „Watchdog") — startet das Add-on bei Absturz neu; wird bei einer Neuinstallation nicht automatisch übernommen.
 5. **Sidebar-Panel aktivieren** (Tab *Info*, Schalter „Zur Seitenleiste hinzufügen") — Ingress-Panel ist nach der Installation noch aus; per API nicht setzbar.
 6. **Starten.** Im *Protokoll* erscheinen der API-Token (einmalig, für die App) und die Liste der verbundenen Geräte.

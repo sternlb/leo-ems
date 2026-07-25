@@ -41,26 +41,42 @@ enthalten keine Geheimnisse.
    Grundlage sind die Statusfelder `p_pv_w`, `p_pv_e3dc_w`, `p_haus_w`,
    `p_batterie_w`, `p_wallbox_w` (Bilanz: Haus = PV + Netz − Batterieladung − Wallbox).
    Darunter weiterhin die Kacheln PV gesamt / Haus / Batterie / Netz / Wallbox.
-2. **Ladestatus:** Zustand + Klartext-Grund (REQ-050), Garantieladungs-Badge.
-3. **Phasen & Entprellung** — beantwortet „Überschuss ist da, warum lädt er nur 1p?":
+   Die **Batterie-Kachel zeigt seit v0.4.0 den SoC als Hauptwert** (Prozent +
+   Füllbalken), die Lade-/Entladeleistung steht darunter — vorher war es
+   umgekehrt und der SoC fehlte in der Handy-Schemaliste ganz (Issue #2).
+   Die Schemaliste führt jetzt bei jeder Zeile die Zusatzangabe mit (Batterie:
+   SoC, Netz: Bezug/Einspeisung, Wallbox: Phasen/Strom).
+2. **Wärmepumpe (v0.4.0, Issue #1):** zweigeteilt in **Warmwasser**
+   (Speichertemperatur, Sollwert, Modus, `BOOST`-Badge) und **Heizkreis**
+   (Vorlauftemperatur, Raum-Ist/-Soll, Zustand, Außentemperatur,
+   `ANHEBUNG`-Badge). Darunter der Klartext-Grund der Überschuss-Steuerung.
+   Quelle ist `status.wp` aus `planner/heatpump.py`; ohne Verbindung steht dort
+   „keine Verbindung zur Wärmepumpe" und es wird nichts gestellt (Fail-Safe E7).
+3. **Ladestatus:** Zustand + Klartext-Grund (REQ-050), Garantieladungs-Badge.
+4. **Phasen & Entprellung** — beantwortet „Überschuss ist da, warum lädt er nur 1p?":
    `status.phasen_info` (aus `ChargeController.phase_diagnose`) liefert
    - `entprellung_aktiv/seit_s/noetig_s`: die 60/180-s-Bedingungszeit läuft noch
    - `umschaltsperre_aktiv/rest_s`: 10-min-Mindestabstand zwischen Umschaltungen
    - `grund`: Klartext, z. B. *„Überschuss 4.8 kW ≥ 3p-Schwelle 4.2 kW —
      Entprellung läuft (34/60 s), zusätzlich Umschaltsperre (noch 7:12 min)"*
    Die Seite zählt Countdown/Fortschritt zwischen den 5-s-Polls lokal weiter.
-4. **Einstellungen:** Lademodus (`PUT /api/v1/mode`, neu), Fahrzeug-Ladelimit,
+5. **Einstellungen:** Lademodus (`PUT /api/v1/mode`, neu), Fahrzeug-Ladelimit,
    Ladegrenzen (min/max A), Batterie-Reserve, Batterie-Vorrang (prioritySoc),
    Ziel-Netzbezug, Phasenschwellen + Umschaltsperre (`PUT /api/v1/config`) —
-   und der Beobachtungs-/Scharf-Schalter mit Rückfrage.
-5. **Laderegeln:** Regelliste anlegen/aktivieren/löschen (Garantieladung §4.3).
-6. **Protokoll:** letzte Entscheidungen aus `GET /api/v1/history`.
+   und der Beobachtungs-/Scharf-Schalter mit Rückfrage. Seit v0.4.0 zusätzlich
+   die WP-Schwellen (An/Aus, Boost- und Rückstelltemperatur, Heizkreis-Anhebung,
+   Raum-Obergrenze, Außentemperatur-Grenze); die Timing-Parameter
+   (Entprellung, Mindestlaufzeit, Cloud-Gap) bleiben API-only.
+6. **Laderegeln:** Regelliste anlegen/aktivieren/löschen (Garantieladung §4.3).
+7. **Protokoll:** letzte Entscheidungen aus `GET /api/v1/history`.
 
 ## Neue/geänderte API
 
 - `PUT /api/v1/mode` — `{"modus": "Nur-PV|PV+Min|Schnell|Aus", "fahrzeug_limit_soc": 0–100?}`
   setzt den Modus live in der Regelschleife (vorher nur intern).
-- `GET /api/v1/status` — erweitert um Leistungsbilanz + `phasen_info` (s. o.).
+- `GET /api/v1/status` — erweitert um Leistungsbilanz + `phasen_info` (s. o.)
+  und seit v0.4.0 um `wp` (Wärmepumpe, zweigeteilt `warmwasser`/`heizkreis`).
+- `GET/PUT /api/v1/config` — die `wp_*`-Parameter aus `RegelConfig`.
 
 ## Lokal testen (ohne Pi)
 

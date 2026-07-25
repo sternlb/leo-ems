@@ -1,7 +1,7 @@
 name: Leo-EMS
-version: "0.3.2"
+version: "0.4.0"
 slug: leo_ems
-description: Energy Management System — koordiniert E3DC, go-e Wallbox, Enyaq und (Stufe 2) Vaillant WP
+description: Energy Management System — koordiniert E3DC, go-e Wallbox, Enyaq und Vaillant WP
 url: https://github.com/sternlb/leo-ems
 arch:
   - aarch64
@@ -24,6 +24,10 @@ panel_icon: mdi:ev-station
 panel_title: Leo-EMS
 map:
   - addon_config:rw
+# Die Wärmepumpe hängt über die MyVaillant-Integration in Home Assistant und wird
+# über die HA-REST-API gelesen/gestellt (devices/vaillant.py) — dafür braucht das
+# Add-on den SUPERVISOR_TOKEN mit Core-API-Recht.
+homeassistant_api: true
 options:
   e3dc_host: ""
   e3dc_user: ""
@@ -35,6 +39,12 @@ options:
   sungrow_host: ""
   lat: "49.48"
   lon: "11.25"
+  # Wärmepumpe: leere ww-Entity = WP nicht angebunden.
+  # ha_base_url/ha_token nur für den Betrieb außerhalb des Add-ons setzen.
+  vaillant_ww_entity: "water_heater.home_domestic_hot_water_0"
+  vaillant_zone_entity: "climate.home_zone_zone_1_circuit_0_climate"
+  ha_base_url: ""
+  ha_token: ""
 schema:
   e3dc_host: str?
   e3dc_user: str?
@@ -46,3 +56,7 @@ schema:
   sungrow_host: str?
   lat: str?
   lon: str?
+  vaillant_ww_entity: str?
+  vaillant_zone_entity: str?
+  ha_base_url: str?
+  ha_token: password?

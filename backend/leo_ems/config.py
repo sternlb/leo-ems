@@ -46,6 +46,24 @@ class RegelConfig:
     hard_limit_ev_min_soc: int | None = None
     hard_limit_ww_min_temp: float | None = None
 
+    # --- Wärmepumpe, Stufe 2 (REQ-010–014, planner/heatpump.py) --------------
+    # Schwellen konservativ nach Leos Festlegung 2026-07-25: an ab 2,5 kW,
+    # zurück unter 0,5 kW — bezogen auf den Überschuss NACH der Wallbox.
+    wp_ww_an_w: int = 2500             # Warmwasser-Boost startet ab
+    wp_ww_aus_w: int = 500             # darunter zurück auf Normal
+    wp_ww_boost_c: float = 60.0        # Boost-Sollwert Warmwasser (Issue #1)
+    wp_ww_normal_c: float = 45.0       # Rückstellwert (Issue #1)
+    wp_hk_an_w: int = 2500             # Heizkreis-Anhebung startet ab
+    wp_hk_aus_w: int = 500
+    wp_hk_anhebung_k: float = 1.5      # Anhebung des Raum-Sollwerts
+    wp_hk_max_raum_c: float = 23.0     # Komfort-Obergrenze (REQ-012)
+    wp_hk_max_aussen_c: float = 15.0   # darüber keine Heizkreis-Anhebung
+    wp_leistung_w: int = 2000          # geschätzte el. Leistung im Boost (kein Messwert!)
+    wp_min_laufzeit_s: int = 1800      # Mindestlaufzeit je Boost (REQ-064)
+    wp_entprellung_s: int = 600        # Bedingungszeit vor dem Start
+    wp_aus_entprellung_s: int = 300    # Bedingungszeit vor dem Zurückstellen
+    wp_cloud_min_gap_s: int = 900      # Mindestabstand Cloud-Schreibzugriffe (REQ-014)
+
 
 def load_config() -> RegelConfig:
     if CONFIG_FILE.exists():

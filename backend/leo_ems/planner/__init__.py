@@ -1,6 +1,7 @@
 from .surplus import berechne_ueberschuss
 from .rules import ChargingRule, naechste_abfahrt, plane_garantieladung
-from .charge_control import ChargeController, ChargeState, ChargeCommand
+from .charge_control import VOLT, ChargeController, ChargeState, ChargeCommand
+from .heatpump import HeatPumpCommand, HeatPumpController
 
 __all__ = [
     "berechne_ueberschuss",
@@ -10,4 +11,7 @@ __all__ = [
     "ChargeController",
     "ChargeState",
     "ChargeCommand",
+    "HeatPumpController",
+    "HeatPumpCommand",
+    "VOLT",
 ]

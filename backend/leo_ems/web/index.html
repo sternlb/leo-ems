@@ -39,6 +39,14 @@
   .sub b { color: var(--off); font-weight: 500; }
   .lime { color: var(--lime-ink); } .gelbc { color: var(--gelb); } .rotc { color: var(--rot); }
 
+
+  /* Wärmepumpe: zwei Absätze nebeneinander — Warmwasser | Heizkreis (Issue #1) */
+  .wp-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+  .wp-split > div + div { border-left: 1px solid var(--line); padding-left: 1.1rem; }
+  .wp-split h3 { display: flex; align-items: center; gap: .5rem; }
+  .wp-grund { margin-top: .9rem; padding-top: .7rem; border-top: 1px solid var(--line);
+    font-size: .85rem; color: var(--dim); line-height: 1.5; }
+
   section { margin-top: 1.4rem; }
   section > h2 { font-family: var(--disp); font-size: 1.05rem; margin-bottom: .6rem; border-left: 3px solid var(--lime); padding-left: .5rem; }
 
@@ -160,6 +168,9 @@
     .schema .nm { font-family: var(--mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); flex: 1; }
     .schema .vl { font-family: var(--mono); font-size: 1rem; color: var(--forest); }
     .schema .dir { width: 10px; text-align: center; color: var(--dim); }
+    .wp-split { grid-template-columns: 1fr; gap: .8rem; }
+    .wp-split > div + div { border-left: 0; border-top: 1px solid var(--line);
+      padding-left: 0; padding-top: .8rem; }
 
     /* Lesbarkeit auf dem Handy: kleine Texte anheben (waren teils <11px) */
     label.f span { font-size: .78rem; }
@@ -450,6 +461,28 @@
     </div>
   </section>
 
+  <!-- Wärmepumpe: zweigeteilt Warmwasser / Heizkreis (Issue #1) -->
+  <section>
+    <h2>Wärmepumpe</h2>
+    <div class="card">
+      <div class="wp-split">
+        <div>
+          <h3>Warmwasser <span class="badge on hidden" id="wp-ww-boost">BOOST</span></h3>
+          <div class="kw" id="wp-ww-ist">–</div>
+          <div class="sub">Sollwert <b id="wp-ww-soll">–</b> · Modus <b id="wp-ww-modus">–</b></div>
+          <div class="sub" id="wp-ww-sonder"></div>
+        </div>
+        <div>
+          <h3>Heizkreis <span class="badge on hidden" id="wp-hk-boost">ANHEBUNG</span></h3>
+          <div class="kw" id="wp-hk-vorlauf">–</div>
+          <div class="sub">Raum <b id="wp-hk-raum">–</b> · Soll <b id="wp-hk-raum-soll">–</b></div>
+          <div class="sub">Zustand <b id="wp-hk-zustand">–</b> · außen <b id="wp-aussen">–</b></div>
+        </div>
+      </div>
+      <div class="wp-grund" id="wp-grund">–</div>
+    </div>
+  </section>
+
   <!-- Status + Phasen -->
   <section>
     <h2>Ladestatus</h2>
@@ -502,6 +535,22 @@
         <button class="btn" id="save">Speichern</button>
         <button class="btn ghost" id="toggle-ro">–</button>
         <span class="savemsg" id="savemsg"></span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:.75rem">
+      <h3>Wärmepumpe — Überschuss-Nutzung</h3>
+      <div class="form-grid">
+        <label class="f"><span>WW-Boost ab (W)</span><input type="number" id="c-wp_ww_an_w" min="500" max="10000" step="100"></label>
+        <label class="f"><span>WW-Boost aus unter (W)</span><input type="number" id="c-wp_ww_aus_w" min="-2000" max="5000" step="100"></label>
+        <label class="f"><span>WW-Boost-Temperatur (°C)</span><input type="number" id="c-wp_ww_boost_c" min="35" max="70" step="1"></label>
+        <label class="f"><span>WW-Rückstellwert (°C)</span><input type="number" id="c-wp_ww_normal_c" min="35" max="70" step="1"></label>
+        <label class="f"><span>Heizkreis-Anhebung (K)</span><input type="number" id="c-wp_hk_anhebung_k" min="0" max="5" step="0.5"></label>
+        <label class="f"><span>Raum-Obergrenze (°C)</span><input type="number" id="c-wp_hk_max_raum_c" min="15" max="28" step="0.5"></label>
+        <label class="f"><span>Anhebung nur unter (°C außen)</span><input type="number" id="c-wp_hk_max_aussen_c" min="-10" max="25" step="1"></label>
+      </div>
+      <div class="sub" style="margin-top:.7rem">
+        Der Abstand zwischen An- und Aus-Schwelle sollte mindestens so groß sein wie
+        der WP-Verbrauch im Boost (~2 kW) — sonst schaltet der Boost sich selbst ab.
       </div>
     </div>
   </section>
@@ -650,7 +699,14 @@ function nodeState(k, st) {
   const off = e3dcWeg(st);
   if (k === "pv")      return { val: fmtFluss(st.p_pv_e3dc_w), aktiv: hysterese("pv", st.p_pv_e3dc_w), dim: off || !fmtFluss(st.p_pv_e3dc_w), dir: "→", badge: off ? "offline" : "" };
   if (k === "sungrow") return { val: fmtFluss(st.p_sungrow_w), aktiv: hysterese("sungrow", st.p_sungrow_w), dim: !fmtFluss(st.p_sungrow_w), dir: "→", badge: fmtFluss(st.p_sungrow_w) ? "" : "geplant" };
-  if (k === "wp")      return { val: null, aktiv: false, dim: true, dir: "", badge: "Stufe 2" };
+  if (k === "wp") {
+    const wp = st.wp;
+    if (!wp || !wp.verbunden) return { val: null, aktiv: false, dim: true, dir: "", badge: "offline" };
+    const ww = wp.warmwasser || {}, hk = wp.heizkreis || {};
+    return { val: ww.ist_c != null ? Math.round(ww.ist_c) + " °C" : "—",
+      aktiv: !!(ww.boost || hk.boost), dim: !(ww.boost || hk.boost), dir: ww.boost || hk.boost ? "←" : "",
+      badge: ww.boost ? "WW-Boost" : hk.boost ? "Heizkreis +" : (ww.soll_c != null ? "Soll " + Math.round(ww.soll_c) + " °C" : "") };
+  }
   if (k === "batt") {
     const pb = st.p_batterie_w || 0;
     return { val: fmtFluss(pb), aktiv: hysterese("batt", pb), dim: off,
@@ -727,6 +783,58 @@ function updateScene(st) {
   renderSchema(st);
 }
 
+// ---------- Wärmepumpe (Issue #1) -------------------------------------------
+// Zwei Absätze: Warmwasser und Heizkreis, jeweils mit Temperatur. Werte kommen
+// aus status.wp (backend/leo_ems/planner/heatpump.py).
+const grad = (v, n = 1) => v == null ? "–" : v.toFixed(n).replace(".", ",") + " °C";
+
+function wpPanel(st) {
+  const wp = st.wp;
+  if (!wp || !wp.verbunden) {
+    return `<h3>Wärmepumpe</h3><p class="note">Keine Verbindung zur Wärmepumpe.
+      Die Werte kommen über Home Assistant aus der MyVaillant-Integration —
+      siehe docs/systems/vaillant.md.</p>`;
+  }
+  const ww = wp.warmwasser, hk = wp.heizkreis;
+  return `<h3>Wärmepumpe — Warmwasser</h3>
+    <dl><dt>Speicher</dt><dd>${grad(ww.ist_c, 0)}</dd>
+    <dt>Sollwert</dt><dd>${grad(ww.soll_c, 0)}${ww.boost ? " (Boost)" : ""}</dd>
+    <dt>Modus</dt><dd>${ww.modus || "–"}</dd>
+    ${ww.sonderfunktion ? `<dt>Sonderfunktion</dt><dd>${ww.sonderfunktion}</dd>` : ""}</dl>
+    <h3 style="margin-top:.9rem">Heizkreis</h3>
+    <dl><dt>Vorlauf</dt><dd>${grad(hk.vorlauf_c)}</dd>
+    <dt>Raum</dt><dd>${grad(hk.raum_ist_c)} / Soll ${hk.raum_soll_c ? grad(hk.raum_soll_c) : "–"}</dd>
+    <dt>Zustand</dt><dd>${hk.zustand || "–"} · ${hk.modus || "–"}</dd>
+    <dt>Außen</dt><dd>${grad(wp.aussen_c)}${wp.cop != null ? " · COP " + wp.cop.toFixed(1).replace(".", ",") : ""}</dd></dl>
+    <p class="note">${wp.grund}</p>`;
+}
+
+function renderWp(st) {
+  const wp = st.wp;
+  const leer = !wp || !wp.verbunden;
+  const ww = leer ? {} : wp.warmwasser, hk = leer ? {} : wp.heizkreis;
+
+  $("wp-ww-ist").textContent = grad(ww.ist_c, 0);
+  $("wp-ww-soll").textContent = grad(ww.soll_c, 0);
+  $("wp-ww-modus").textContent = ww.modus || "–";
+  $("wp-ww-sonder").textContent = ww.sonderfunktion ? "Sonderfunktion: " + ww.sonderfunktion : "";
+  $("wp-ww-boost").textContent = "BOOST " + (ww.boost_c != null ? Math.round(ww.boost_c) + " °C" : "");
+  $("wp-ww-boost").classList.toggle("hidden", !ww.boost);
+
+  $("wp-hk-vorlauf").textContent = grad(hk.vorlauf_c);
+  $("wp-hk-raum").textContent = grad(hk.raum_ist_c);
+  // Im Sommer liefert die Anlage 0 °C — das ist "kein Sollwert", nicht "0 Grad"
+  $("wp-hk-raum-soll").textContent = hk.raum_soll_c ? grad(hk.raum_soll_c) : "–";
+  $("wp-hk-zustand").textContent = hk.zustand || "–";
+  $("wp-aussen").textContent = grad(leer ? null : wp.aussen_c);
+  $("wp-hk-boost").textContent = "ANHEBUNG +" + (hk.anhebung_k != null ? hk.anhebung_k.toFixed(1).replace(".", ",") : "") + " K";
+  $("wp-hk-boost").classList.toggle("hidden", !hk.boost);
+
+  $("wp-grund").textContent = leer
+    ? "Keine Verbindung zur Wärmepumpe — es werden keine Sollwerte gestellt."
+    : wp.grund;
+}
+
 // Detail-Panels (Spec §4) mit Live-Daten aus dem letzten Status
 const panelEl = () => $("panel");
 function openPanel(k) {
@@ -753,7 +861,7 @@ function openPanel(k) {
       <dt>Sungrow (5,64 kWp)</dt><dd>${fmtFluss(st.p_sungrow_w) ?? "geplant — Inbetriebnahme Ende 2026"}</dd>
       <dt>gesamt</dt><dd>${fmtFluss(st.p_pv_w) ?? "0 W"}</dd></dl>`,
     sungrow: `<h3>PV Sungrow</h3><p class="note">Garagendach-Anlage (5,64 kWp O/W), AC-gekoppelt. Knoten ist vorbereitet — Werte kommen nach der Inbetriebnahme (Ende 2026).</p>`,
-    wp: `<h3>Wärmepumpe</h3><p class="note">Stufe 2 — Steuerung folgt nach dem MyVaillant-Praxistest. Der WP-Verbrauch steckt derzeit im Wert „Haus".</p>`,
+    wp: wpPanel(st),
     haus: `<h3>Hausverbrauch</h3>
       <dl><dt>aktuell</dt><dd>${fmtFluss(st.p_haus_w) ?? "0 W"}</dd>
       <dt>Überschuss</dt><dd>${fmtFluss(st.ueberschuss_w) ?? "0 W"}</dd></dl>
@@ -824,6 +932,7 @@ function render(st) {
   $("t-soc-v").textContent = st.soc_fahrzeug == null ? "–" : pct(st.soc_fahrzeug) + " / " + pct(st.fahrzeug_limit_soc);
 
   updateScene(st);
+  renderWp(st);
 
   $("s-state").textContent = st.state || "–";
   $("s-garantie").classList.toggle("hidden", !st.garantieladung);
@@ -859,7 +968,10 @@ function renderPhasen() {
 
 // --- Einstellungen ----------------------------------------------------------
 const CFG_FELDER = ["min_current_a","max_current_a","soc_reserve_pct","priority_soc_pct",
-                    "residual_power_w","phase_up_w","phase_down_w","phase_min_gap_s"];
+                    "residual_power_w","phase_up_w","phase_down_w","phase_min_gap_s",
+                    // Wärmepumpe (Issue #1); Timing-Parameter bleiben API-only
+                    "wp_ww_an_w","wp_ww_aus_w","wp_ww_boost_c","wp_ww_normal_c",
+                    "wp_hk_anhebung_k","wp_hk_max_raum_c","wp_hk_max_aussen_c"];
 let cfgCache = null;
 
 async function ladeConfig() {

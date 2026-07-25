@@ -7,6 +7,7 @@ Die Fail-Safe-Matrix (Spec §7) wird HIER zentral ausgewertet:
   E3 Škoda alt/weg     → Betrieb unverändert, SoC-Schätzung/letzter Wert
   E4 Forecast weg      → Betrieb unverändert, letzte Prognose
   E5 Sungrow weg       → Werte = 0, weiterarbeiten
+  E7 Vaillant/HA weg   → keine WP-Befehle, Ladebetrieb unverändert
 """
 
 from __future__ import annotations
@@ -16,7 +17,9 @@ from datetime import datetime, timedelta
 
 from ..config import RegelConfig
 from ..planner import (
+    VOLT,
     ChargeController,
+    HeatPumpController,
     berechne_ueberschuss,
     plane_garantieladung,
 )
@@ -34,6 +37,7 @@ class ControlLoop:
         self.store = store
         self.adapters = adapters
         self.controller = ChargeController(cfg)
+        self.heatpump = HeatPumpController(cfg)   # Stufe 2 (REQ-010/011)
         self.mode = "Nur-PV"                 # Default-Modus (Spec §3)
         self.vehicle_limit_soc = 80          # fahrzeugseitiges Limit (Baseline)
         self._ueberschuss_fenster: list[float] = []  # gleitender Mittelwert über 3 (Spec §2)
@@ -107,6 +111,13 @@ class ControlLoop:
             guarantee_active=garantie, soc_fahrzeug=soc_v, vehicle_limit_soc=self.vehicle_limit_soc,
         )
 
+        # 7b) Wärmepumpe (Stufe 2, REQ-010/011). Vorrang Auto (Leo, 2026-07-25):
+        #     die WP sieht nur, was nach der Wallbox-Zuteilung übrig bleibt.
+        wp_data = await self._safe_read(self.adapters.get("vaillant"))
+        ev_zuteilung_w = cmd.current_a * VOLT * cmd.phases if cmd.charging else 0
+        wp_cmd = self.heatpump.update(now, frei_w=surplus - ev_zuteilung_w, wp=wp_data)
+        await self._sende_wp(now, wp_cmd)
+
         # 8) Batterie-Entladesperre als Lease abgleichen (Spec §5.1)
         await self._abgleich_entladesperre(now, e3dc, cmd.charging, e_data["p_batterie_w"])
 
@@ -142,6 +153,8 @@ class ControlLoop:
             "entladesperre": self.guard.active("e3dc_entladesperre", now),
             # Entprellungs-/Sperr-Transparenz der 1p/3p-Umschaltung (Spec §4.2)
             "phasen_info": self.controller.phase_diagnose(now, surplus),
+            # Wärmepumpe, zweigeteilt Warmwasser/Heizkreis (REQ-051, Issue #1)
+            "wp": self.heatpump.status(wp_data),
         }
         self.store.log_decision(
             now, grund,
@@ -172,6 +185,30 @@ class ControlLoop:
             "state": "abgeschaltet", "grund": "E3DC nicht erreichbar (Fail-Safe E1)", "laedt": False,
         }
         self.store.log_decision(now, "failsafe_e1", {}, "ladung_stop", "E3DC weg → abgeschaltet")
+
+    async def _sende_wp(self, now: datetime, wp_cmd) -> None:
+        """WP-Sollwerte an die MyVaillant-Cloud (REQ-013/014).
+
+        Jeder Aufruf kostet Cloud-Budget — der HeatPumpController hat schon
+        entschieden, dass genau jetzt geschrieben werden darf. Im
+        Beobachtungsmodus geht NICHTS raus; die Entscheidung steht trotzdem im
+        Status ("würde …") und wird nicht als geschrieben bestätigt.
+        """
+        vaillant = self.adapters.get("vaillant")
+        if vaillant is None or self.cfg.read_only:
+            return
+        if wp_cmd.ww_soll_c is None and wp_cmd.raum_soll_c is None:
+            return
+        if wp_cmd.ww_soll_c is not None:
+            await self._safe_cmd(vaillant.set_ww_soll, wp_cmd.ww_soll_c)
+        if wp_cmd.raum_soll_c is not None:
+            await self._safe_cmd(vaillant.set_raum_soll, wp_cmd.raum_soll_c)
+        self.heatpump.schreiben_bestaetigt(now)
+        self.store.log_decision(
+            now, wp_cmd.grund,
+            {"ww_soll_c": wp_cmd.ww_soll_c, "raum_soll_c": wp_cmd.raum_soll_c},
+            "wp_sollwert", "waermepumpe",
+        )
 
     async def _abgleich_entladesperre(self, now, e3dc, charging: bool, p_batterie_w: float) -> None:
         """Sperre setzen, solange geladen wird UND Batterie entlädt; per Lease/TTL (Spec §5.1)."""

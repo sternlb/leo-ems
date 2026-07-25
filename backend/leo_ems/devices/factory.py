@@ -17,6 +17,9 @@ OPTIONS_FILE = Path("/data/options.json")  # vom HA-Supervisor aus den Add-on-Op
 _KEYS = (
     "e3dc_host", "e3dc_user", "e3dc_password", "e3dc_rscp_key",
     "goe_host", "skoda_user", "skoda_password", "sungrow_host", "lat", "lon",
+    # Wärmepumpe über Home Assistant (Stufe 2, devices/vaillant.py).
+    # ha_base_url/ha_token leer = Supervisor-Proxy + SUPERVISOR_TOKEN.
+    "ha_base_url", "ha_token", "vaillant_ww_entity", "vaillant_zone_entity",
 )
 
 
@@ -69,6 +72,17 @@ def build_adapters(conn: dict) -> dict:
     else:
         from .sungrow import SungrowStub
         adapters["sungrow"] = SungrowStub()
+
+    # Wärmepumpe: nur bauen, wenn eine Warmwasser-Entity konfiguriert ist.
+    # Leeres Feld = WP nicht angebunden, das Dashboard zeigt dann „nicht verbunden".
+    if conn.get("vaillant_ww_entity"):
+        from .vaillant import ZONE_ENTITY, VaillantAdapter
+        adapters["vaillant"] = VaillantAdapter(
+            base_url=conn.get("ha_base_url"),
+            token=conn.get("ha_token"),
+            ww_entity=conn["vaillant_ww_entity"],
+            zone_entity=conn.get("vaillant_zone_entity") or ZONE_ENTITY,
+        )
 
     if conn.get("lat") and conn.get("lon"):
         from .forecast import ForecastAdapter
