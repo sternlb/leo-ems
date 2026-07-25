@@ -39,6 +39,11 @@
   .sub b { color: var(--off); font-weight: 500; }
   .lime { color: var(--lime-ink); } .gelbc { color: var(--gelb); } .rotc { color: var(--rot); }
 
+  /* Batterie-Kachel: SoC ist der Hauptwert (Issue #2), Balken zeigt ihn nochmal */
+  .socbar-t { height: 6px; background: #F3F6F1; border: 1px solid var(--line);
+    border-radius: var(--r); overflow: hidden; margin: .45rem 0 .15rem; }
+  .socbar-t div { height: 100%; width: 0; background: #EAB308; transition: width .5s linear; }
+  .socbar-t.laedt div { background: var(--lime-ink); }
 
   /* Wärmepumpe: zwei Absätze nebeneinander — Warmwasser | Heizkreis (Issue #1) */
   .wp-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
@@ -168,6 +173,9 @@
     .schema .nm { font-family: var(--mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); flex: 1; }
     .schema .vl { font-family: var(--mono); font-size: 1rem; color: var(--forest); }
     .schema .dir { width: 10px; text-align: center; color: var(--dim); }
+    /* Zusatzangabe je Zeile — bei der Batterie ist das der SoC (Issue #2) */
+    .schema .bd { font-family: var(--mono); font-size: .75rem; color: var(--dim); }
+
     .wp-split { grid-template-columns: 1fr; gap: .8rem; }
     .wp-split > div + div { border-left: 0; border-top: 1px solid var(--line);
       padding-left: 0; padding-top: .8rem; }
@@ -452,8 +460,9 @@
         <div class="sub">E3DC <b id="t-pv-e3dc">–</b> · Garage <b id="t-pv-sg">–</b></div></div>
       <div class="card"><h3>Haus</h3><div class="kw" id="t-haus">–</div>
         <div class="sub">Überschuss <b id="t-ueb">–</b></div></div>
-      <div class="card"><h3>Batterie</h3><div class="kw" id="t-batt">–</div>
-        <div class="sub">SoC <b id="t-batt-soc">–</b> <span id="t-sperre"></span></div></div>
+      <div class="card"><h3>Batterie</h3><div class="kw" id="t-batt-soc">–</div>
+        <div class="socbar-t" id="t-batt-bar"><div></div></div>
+        <div class="sub"><b id="t-batt">–</b><span id="t-sperre"></span></div></div>
       <div class="card"><h3>Netz</h3><div class="kw" id="t-netz">–</div>
         <div class="sub" id="t-netz-richtung">–</div></div>
       <div class="card"><h3>Wallbox</h3><div class="kw" id="t-wb">–</div>
@@ -735,7 +744,10 @@ function renderSchema(st) {
     const row = document.createElement("div"); row.className = "row"; row.dataset.k = k;
     const s = nodeState(k, st);
     if (s.dim) row.classList.add("dimmed"); if (s.aktiv) row.classList.add("aktiv");
-    row.innerHTML = `<span class="nm">${ANKER[k].t}</span><span class="dir">${s.dir}</span><span class="vl">${s.val ?? "—"}</span>`;
+    // Badge mitnehmen: auf dem Handy ist das die einzige Stelle, an der z.B.
+    // der Batterie-SoC sichtbar wäre (die Chips im Bild sind dort ausgeblendet).
+    row.innerHTML = `<span class="nm">${ANKER[k].t}</span><span class="bd">${s.badge || ""}</span>`
+      + `<span class="dir">${s.dir}</span><span class="vl">${s.val ?? "—"}</span>`;
     row.addEventListener("click", () => openPanel(k));
     host.appendChild(row);
   }
@@ -918,10 +930,14 @@ function render(st) {
   $("t-pv-sg").textContent = w(st.p_sungrow_w);
   $("t-haus").textContent = w(st.p_haus_w);
   $("t-ueb").textContent = w(st.ueberschuss_w);
+  // Batterie: SoC ist der Hauptwert (Issue #2), Leistung steht darunter
   const pb = st.p_batterie_w || 0;
-  $("t-batt").textContent = w(Math.abs(pb));
-  $("t-batt").className = "kw " + (pb > 50 ? "lime" : pb < -50 ? "gelbc" : "");
   $("t-batt-soc").textContent = pct(st.soc_batterie);
+  $("t-batt-bar").firstElementChild.style.width =
+    (st.soc_batterie == null ? 0 : Math.max(0, Math.min(100, st.soc_batterie))) + "%";
+  $("t-batt-bar").classList.toggle("laedt", pb > 50);
+  $("t-batt").textContent = pb > 50 ? "lädt " + w(pb) : pb < -50 ? "entlädt " + w(Math.abs(pb)) : "Ruhe";
+  $("t-batt").className = pb > 50 ? "lime" : pb < -50 ? "gelbc" : "";
   $("t-sperre").innerHTML = st.entladesperre ? ' · <span class="gelbc">Entladesperre</span>' : "";
   const pn = st.p_netz_w || 0;
   $("t-netz").textContent = w(Math.abs(pn));
