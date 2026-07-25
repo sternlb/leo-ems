@@ -41,6 +41,13 @@ from ..config import RegelConfig
 
 TOLERANZ_K = 0.5   # Sollwert gilt als erreicht/bestätigt innerhalb dieser Spanne
 
+# Lauf-Erkennung fürs Dashboard (Lüfter-Animation). MyVaillant liefert keine
+# Verdichter- oder Ventilatorleistung, deshalb wird aus den beiden Klartext-
+# Sensoren abgeleitet: Heizkreis-Zustand und Warmwasser-Sonderfunktion.
+HK_LAEUFT = {"HEATING", "COOLING", "HEIZEN", "KUEHLEN", "KÜHLEN", "ON", "ACTIVE"}
+WW_RUHT = {"", "NONE", "NULL", "KEINE", "REGULAR", "NORMAL", "NORMALBETRIEB",
+           "STANDBY", "OFF", "AUS", "UNKNOWN", "UNAVAILABLE"}
+
 
 @dataclass
 class HeatPumpCommand:
@@ -260,11 +267,25 @@ class HeatPumpController:
         self._last_write = now
 
     # --- Anzeige (REQ-050/051) ---------------------------------------------
+    @staticmethod
+    def _laeuft(wp: dict) -> bool:
+        """Läuft die Anlage gerade? Nur aus **gelesenen** Werten abgeleitet.
+
+        Bewusst nicht aus `self.ww_boost`/`hk_boost`: im Beobachtungsmodus wird
+        nichts gesendet — dann wäre ein „gewünschter" Boost kein Beleg dafür,
+        dass die Anlage wirklich anläuft. Ein real gestellter Sollwert schlägt
+        eine Runde später ohnehin in diesen Sensoren durch.
+        """
+        if (wp.get("hk_zustand") or "").strip().upper() in HK_LAEUFT:
+            return True
+        return (wp.get("ww_sonderfunktion") or "").strip().upper() not in WW_RUHT
+
     def status(self, wp: dict | None) -> dict:
         """Zweigeteilte Sicht fürs Dashboard: Warmwasser und Heizkreis (Issue #1)."""
         wp = wp or {}
         return {
             "verbunden": bool(wp),
+            "laeuft": self._laeuft(wp),
             "grund": self._grund,
             "frei_w": round(self._frei_w),
             "warmwasser": {

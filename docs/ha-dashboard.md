@@ -46,6 +46,25 @@ enthalten keine Geheimnisse.
    umgekehrt und der SoC fehlte in der Handy-Schemaliste ganz (Issue #2).
    Die Schemaliste führt jetzt bei jeder Zeile die Zusatzangabe mit (Batterie:
    SoC, Netz: Bezug/Einspeisung, Wallbox: Phasen/Strom).
+
+   **Bewegte Szene seit v0.5.0.** Die Ostansicht reagiert auf drei Zustände;
+   die Abläufe stecken komplett im CSS, das JS setzt nur Klassen an `.scene`:
+   - `auto-da` (Fahrzeug an der Wallbox): das linke Torblatt fährt in 0,9 s im
+     Ausschnitt nach oben (`clipPath#clipTorL`), danach rollt der Enyaq in 1,5 s
+     ein Stück heraus — leicht größer und tiefer, also auf den Betrachter zu —
+     und bleibt stehen. Beim Abstecken läuft alles rückwärts.
+   - `pv-an` (E3DC erzeugt, gleiche 50-W-Hysterese wie die Flüsse): das
+     Modulfeld glimmt lime auf, ein Glanzband wandert alle 5,5 s darüber und
+     einzelne Modulecken funkeln. Die Intensität kommt als CSS-Variable
+     `--pv-i` (0,35 bei 50 W → 0,95 ab ~6 kW von 9,23 kWp). Der Effekt ist
+     bewusst auf die Modulflächen geclippt und gedeckelt — Spec 04 §5 verbietet
+     großflächige Dauer-Glows (Einbrennschutz Wand-Tablet).
+   - `wp-an` / `wp-boost`: das Lüfterrad der Wärmepumpe dreht (2,6 s pro
+     Umdrehung, im Überschuss-Boost 1,2 s). Quelle ist das neue Statusfeld
+     `wp.laeuft`, siehe unten.
+
+   Bei `prefers-reduced-motion: reduce` sind alle vier Bewegungen aus; Tor, Auto
+   und PV-Leuchten bleiben als statische Zustände sichtbar.
 2. **Wärmepumpe (v0.4.0, Issue #1):** zweigeteilt in **Warmwasser**
    (Speichertemperatur, Sollwert, Modus, `BOOST`-Badge) und **Heizkreis**
    (Vorlauftemperatur, Raum-Ist/-Soll, Zustand, Außentemperatur,
@@ -76,6 +95,11 @@ enthalten keine Geheimnisse.
   setzt den Modus live in der Regelschleife (vorher nur intern).
 - `GET /api/v1/status` — erweitert um Leistungsbilanz + `phasen_info` (s. o.)
   und seit v0.4.0 um `wp` (Wärmepumpe, zweigeteilt `warmwasser`/`heizkreis`).
+  Seit v0.5.0 enthält `wp` zusätzlich `laeuft` (bool): läuft die Anlage gerade?
+  Abgeleitet in `HeatPumpController._laeuft()` aus `hk_zustand` (HEATING/COOLING)
+  und `ww_sonderfunktion` — MyVaillant liefert keine Verdichter- oder
+  Ventilatorleistung. Bewusst **nicht** aus dem gewünschten Boost: im
+  Beobachtungsmodus wird nichts gesendet, dort dürfte der Lüfter nicht drehen.
 - `GET/PUT /api/v1/config` — die `wp_*`-Parameter aus `RegelConfig`.
 
 ## Lokal testen (ohne Pi)

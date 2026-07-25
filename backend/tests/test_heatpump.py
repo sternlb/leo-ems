@@ -233,6 +233,25 @@ def test_status_ist_zweigeteilt():
     assert hp.status(None)["verbunden"] is False
 
 
+def test_status_laeuft_erkennt_betrieb():
+    """Dashboard dreht den WP-Lüfter nur, wenn die Anlage wirklich läuft."""
+    hp = HeatPumpController(RegelConfig())
+    assert hp.status(SOMMER)["laeuft"] is False                    # Heizkreis STANDBY, keine Sonderfunktion
+    assert hp.status(WINTER)["laeuft"] is True                     # Heizkreis HEATING
+    assert hp.status({**SOMMER, "ww_sonderfunktion": "Cylinder boost"})["laeuft"] is True
+    assert hp.status({**SOMMER, "ww_sonderfunktion": "regular"})["laeuft"] is False
+    assert hp.status(None)["laeuft"] is False
+
+
+def test_status_laeuft_nicht_aus_gewuenschtem_boost():
+    """Im Beobachtungsmodus wird nichts gesendet — der Lüfter darf nicht drehen."""
+    hp = HeatPumpController(RegelConfig())
+    wp = dict(SOMMER)
+    _ticks(hp, wp, 3000, minuten=11, senden=False)
+    assert hp.ww_boost is True                                     # das EMS *möchte* boosten
+    assert hp.status(wp)["laeuft"] is False                        # die Anlage meldet aber Standby
+
+
 # --- Adapter ----------------------------------------------------------------
 def test_zahl_wandelt_ha_leerzustaende():
     assert _zahl("40.0") == 40.0

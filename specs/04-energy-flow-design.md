@@ -166,6 +166,29 @@ X/Tap außerhalb, ESC am Desktop):
 - Keine Dauer-Glow/Pulse-Effekte großflächig (Einbrennschutz Wand-Tablet);
   statische dunkle Flächen dominieren.
 
+**Ergänzung v0.5.0 (Leo, 2026-07-25): Zustandsanimationen im Hintergrund.**
+Die Szene bewegt sich jetzt zusätzlich zu den Flusslinien. Alle drei Abläufe
+hängen an Klassen auf `.scene`, die `updateScene()` aus dem Status setzt —
+die Choreografie selbst steht im CSS, damit sie ohne JS-Timer auskommt.
+
+| Klasse | Auslöser | Ablauf |
+|---|---|---|
+| `auto-da` | `fahrzeugDa(st)` (Enyaq an der Wallbox) | Torblatt fährt 0,9 s im `clipPath` nach oben, danach rollt der Enyaq 1,5 s ein Stück heraus (0,90 → 1,0 Skalierung, −13 px → 0, Ursprung Radaufstandspunkt) und bleibt stehen |
+| `pv-an` | `p_pv_e3dc_w` über der 50-W-Hysterese und E3DC online | Modulfeld glimmt lime auf (6 s Atmen), Glanzband wandert alle 5,5 s darüber, 4 Modulecken funkeln versetzt |
+| `wp-an` (+ `wp-boost`) | `st.wp.laeuft` (bzw. WW-/HK-Boost) | Lüfterrad dreht, 2,6 s/Umdrehung, im Boost 1,2 s |
+
+Zum Einbrennschutz: das PV-Leuchten ist per `clipPath#clipPV` **exakt auf die
+Modulflächen** begrenzt (kein Flächen-Glow über Dach oder Fassade) und in der
+Deckung gekappt (max. 0,55 × `--pv-i`), damit die Module Module bleiben. Die
+Intensität `--pv-i` skaliert 0,35 (50 W) → 0,95 (ab ~6 kW). Bei
+`prefers-reduced-motion` sind alle drei Abläufe aus; die Zustände (Tor offen,
+Auto da, Module hell) bleiben statisch ablesbar.
+
+Das dafür nötige Statusfeld `wp.laeuft` kommt aus `HeatPumpController._laeuft()`
+und wird **nur aus gelesenen Sensoren** abgeleitet (`hk_zustand`,
+`ww_sonderfunktion`) — nicht aus einem gewünschten Boost, der im
+Beobachtungsmodus gar nicht gesendet wird.
+
 ### §6 Higgsfield-Asset-Spezifikation (Phase 3)
 
 - **Referenz:** `docs/referenz/HausAnsichten.pdf` — Bauplan-Ansichten M 1:100
@@ -201,6 +224,9 @@ X/Tap außerhalb, ESC am Desktop):
 | T-EF-6 | E3DC-Adapter getrennt | Warnbanner + Batterie/PV-E3DC offline-gedimmt (Fail-Safe E1) |
 | T-EF-7 | `soc_fahrzeug: null` bei verbundenem Kabel | Enyaq-Chip „SoC —", kein JS-Fehler |
 | T-EF-8 | Asset-Prüfung | Hintergrund-WebP ≤ 500 KB/Bild, gesamt ≤ 1,5 MB, keine externen Requests |
+| T-EF-9 | Fahrzeug steckt an (v0.5.0) | Torblatt fährt hoch (nach 0,9 s auf −104 px), danach rollt der Enyaq heraus und steht nach ~2,4 s |
+| T-EF-10 | PV 4,8 kW vs. 600 W vs. 0 W (v0.5.0) | `--pv-i` ≈ 0,83 / 0,41 / 0 — Leuchten und Schimmer nur auf den Modulflächen |
+| T-EF-11 | `wp.laeuft` true/false (v0.5.0) | Lüfterrad dreht bzw. steht; im Boost 1,2 s statt 2,6 s pro Umdrehung |
 
 ## Offene Punkte
 
@@ -219,3 +245,4 @@ X/Tap außerhalb, ESC am Desktop):
 | 3b. Higgsfield-Exploration | 2–3 Bild-Varianten, Leo wählt | ⏸ zurückgestellt (2026-07-19, Kosten) — der detaillierte SVG-Hintergrund aus 3a ist der Design-Kandidat |
 | 4. Implementierung | Neue Szene in `index.html`, Live-Verdrahtung, Tests | ✅ umgesetzt (2026-07-19, v0.3.0): helles Theme fürs ganze Dashboard, Szene mit Live-Mapping §2 inkl. Hysterese, Panels mit `phasen_info`, Schema-Modus; verifiziert am Preview-Server (T-EF-3/5/6/7) |
 | 5. Validierung | Real auf Pi/Tablet/Handy, T-EF-1/2 mit echten Flüssen, Release v0.3.0 | 🔵 nächster Schritt: Add-on-Update auf dem Pi |
+| 6. Zustandsanimationen | v0.5.0: Torablauf + Enyaq, PV-Leuchten/Schimmer, WP-Lüfter, neue Vaillant-Skizze (+30 %) | ✅ umgesetzt (2026-07-25), T-EF-9/10/11 am Vorschau-Server verifiziert (Desktop 1280×800 + Handy 375×812), 71/71 Tests grün |

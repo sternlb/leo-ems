@@ -113,9 +113,55 @@
   .flow-val { font-family: var(--mono); font-size: 11px; fill: var(--forest); paint-order: stroke; stroke: #FFFFFF; stroke-width: 3px; }
   .cable { fill: none; stroke: var(--lime-ink); stroke-width: 2.5; stroke-linecap: round; }
   .cable.laedt { stroke-dasharray: 2 6; animation: dash 1s linear infinite; }
+
+  /* --- Garage: Tor fährt hoch, Enyaq rollt ein Stück heraus ------------------
+     Ablauf, sobald der Enyaq an der Wallbox hängt (.auto-da): das Torblatt
+     fährt in 0,9 s nach oben aus dem Ausschnitt, danach rollt das Auto aus dem
+     Tor auf den Betrachter zu (leicht größer + tiefer) und bleibt stehen. */
+  #torL_blatt { transition: transform .9s cubic-bezier(.4,0,.2,1); }
+  .auto-da #torL_blatt { transform: translateY(-104px); }
+  #enyaq { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%;
+    transform: translateY(-13px) scale(.90);
+    transition: transform 1.5s cubic-bezier(.22,.85,.3,1) .85s, opacity .5s ease .85s; }
+  .auto-da #enyaq { opacity: 1; transform: none; }
+
+  /* --- PV-Erzeugung: Leuchten + Schimmer über die Module --------------------
+     Spec 04 §5 verbietet großflächige Dauer-Glows (Einbrennschutz Wand-Tablet)
+     — der Effekt bleibt deshalb auf das Modulfeld begrenzt und atmet langsam
+     statt zu blinken. Intensität kommt als --pv-i aus der Erzeugungsleistung. */
+  #pv_module { transition: filter .8s ease; }
+  .pv-an #pv_module { filter: drop-shadow(0 0 4px rgba(163,230,53,.75)); }
+  #pv_glow, #pv_shimmer, .pv-funke { opacity: 0; }
+  .pv-an #pv_glow { animation: pvatmen 6s ease-in-out infinite; }
+  @keyframes pvatmen {   /* gedeckelt: die Module sollen glimmen, nicht zu grünen Kacheln werden */
+    0%, 100% { opacity: calc(var(--pv-i, .5) * .28); }
+    50%      { opacity: calc(var(--pv-i, .5) * .55); }
+  }
+  .pv-an #pv_shimmer { opacity: calc(var(--pv-i, .5) * .7); animation: pvschimmer 5.5s linear infinite; }
+  @keyframes pvschimmer { 0% { transform: translateX(-420px); } 60%, 100% { transform: translateX(420px); } }
+  .pv-an .pv-funke { animation: pvfunkeln 3.4s ease-in-out infinite; }
+  .pv-an .pv-funke:nth-of-type(2) { animation-delay: .9s; }
+  .pv-an .pv-funke:nth-of-type(3) { animation-delay: 1.8s; }
+  .pv-an .pv-funke:nth-of-type(4) { animation-delay: 2.6s; }
+  @keyframes pvfunkeln {
+    0%, 74%, 100% { opacity: 0; }
+    84%           { opacity: calc(var(--pv-i, .5) * 1); }
+  }
+
+  /* --- Wärmepumpe: Lüfterrad dreht, solange die Anlage läuft ---------------- */
+  .wp-fan { transform-box: fill-box; transform-origin: center;
+    animation: wpdreh 2.6s linear infinite; animation-play-state: paused; }
+  .wp-an .wp-fan { animation-play-state: running; }
+  .wp-an.wp-boost .wp-fan { animation-duration: 1.2s; }
+  @keyframes wpdreh { to { transform: rotate(360deg); } }
+
   @media (prefers-reduced-motion: reduce) {
     .flow.on { animation: none; stroke-dasharray: none; opacity: .9; }
     .cable.laedt { animation: none; stroke-dasharray: none; }
+    #torL_blatt, #enyaq { transition: none; }
+    .pv-an #pv_glow { animation: none; opacity: calc(var(--pv-i, .5) * .45); }
+    .pv-an #pv_shimmer, .pv-an .pv-funke { animation: none; opacity: 0; }
+    .wp-fan { animation: none; }
   }
 
   .chip { cursor: pointer; }
@@ -251,6 +297,27 @@
             <linearGradient id="dach" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stop-color="#CDD3CC"/><stop offset="1" stop-color="#BBC3BA"/>
             </linearGradient>
+            <!-- Torausschnitt: das Torblatt fährt hier nach oben heraus -->
+            <clipPath id="clipTorL"><rect x="62" y="366" width="94" height="104"/></clipPath>
+            <!-- Modulfeld: begrenzt Schimmerband und Leuchten exakt auf die Module -->
+            <clipPath id="clipPV">
+              <rect x="500" y="146" width="68" height="30"/><rect x="574" y="146" width="68" height="30"/>
+              <rect x="648" y="146" width="68" height="30"/><rect x="722" y="146" width="68" height="30"/>
+              <rect x="796" y="146" width="68" height="30"/>
+              <rect x="497" y="181" width="68" height="30"/><rect x="571" y="181" width="68" height="30"/>
+              <rect x="645" y="181" width="68" height="30"/><rect x="719" y="181" width="68" height="30"/>
+              <rect x="793" y="181" width="68" height="30"/>
+            </clipPath>
+            <linearGradient id="pvleucht" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#DFFF9E"/><stop offset="1" stop-color="#A3E635"/>
+            </linearGradient>
+            <linearGradient id="pvglanz" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+              <stop offset=".5" stop-color="#FFFFFF" stop-opacity=".95"/>
+              <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+            </linearGradient>
+            <!-- Ein Lüfterblatt, 5x rotiert verwendet (Wärmepumpe) -->
+            <path id="wpblatt" d="M0,0 C3.5,-7.5 9.5,-10.5 12.5,-9 C10.5,-2.5 5,1.5 0,0 Z"/>
           </defs>
           <rect width="960" height="540" fill="url(#sky)"/>
 
@@ -268,8 +335,9 @@
           <rect x="40" y="330" width="240" height="14" fill="url(#dach)" stroke="#9AA69A" stroke-width="1"/>
           <rect x="40" y="344" width="240" height="126" fill="#FFFFFF" stroke="#B9C4B6" stroke-width="1.5"/>
           <rect x="40" y="344" width="240" height="7" fill="#F1F4EF"/>
-          <!-- Tor links (geöffnet, wenn Enyaq verbunden) + Wallbox innen links -->
-          <g id="torL_auf" style="display:none">
+          <!-- Tor links: Garageninneres (immer gezeichnet) + Wallbox innen links.
+               Das Torblatt darüber fährt bei .auto-da nach oben und gibt es frei. -->
+          <g id="torL_auf">
             <rect x="62" y="366" width="94" height="104" fill="#41504A"/>
             <rect x="62" y="366" width="94" height="16" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1"/>
             <line x1="62" y1="374" x2="156" y2="374" stroke="#A7B2A6" stroke-width="1"/>
@@ -279,13 +347,15 @@
               <circle cx="68.5" cy="388" r="2.6" fill="none" stroke="#65A30D" stroke-width="1.3"/>
             </g>
           </g>
-          <!-- Tor links (geschlossen): Sektionaltor mit 4 Paneelen + Griff -->
-          <g id="torL_zu">
-            <rect x="62" y="366" width="94" height="104" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1.5"/>
-            <line x1="62" y1="392" x2="156" y2="392" stroke="#A7B2A6" stroke-width="1"/>
-            <line x1="62" y1="418" x2="156" y2="418" stroke="#A7B2A6" stroke-width="1"/>
-            <line x1="62" y1="444" x2="156" y2="444" stroke="#A7B2A6" stroke-width="1"/>
-            <rect x="102" y="452" width="14" height="4" rx="2" fill="#8A968C"/>
+          <!-- Torblatt links: Sektionaltor mit 4 Paneelen + Griff, im Ausschnitt geführt -->
+          <g clip-path="url(#clipTorL)">
+            <g id="torL_blatt">
+              <rect x="62" y="366" width="94" height="104" fill="#DEE3DC" stroke="#A7B2A6" stroke-width="1.5"/>
+              <line x1="62" y1="392" x2="156" y2="392" stroke="#A7B2A6" stroke-width="1"/>
+              <line x1="62" y1="418" x2="156" y2="418" stroke="#A7B2A6" stroke-width="1"/>
+              <line x1="62" y1="444" x2="156" y2="444" stroke="#A7B2A6" stroke-width="1"/>
+              <rect x="102" y="452" width="14" height="4" rx="2" fill="#8A968C"/>
+            </g>
           </g>
           <!-- Tor rechts (symmetrisch, immer zu) -->
           <g>
@@ -303,9 +373,11 @@
             <line x1="482" y1="160" x2="878" y2="160"/><line x1="477" y1="180" x2="883" y2="180"/>
             <line x1="472" y1="200" x2="888" y2="200"/>
           </g>
-          <!-- PV 2x5 Module auf der Ost-Dachfläche -->
-          <g>
-            <g fill="#2E3D4E" stroke="#8FA0B4" stroke-width="1.2">
+          <!-- PV 2x5 Module auf der Ost-Dachfläche.
+               Bei Erzeugung (.pv-an): Modulfeld glimmt lime auf, ein Glanzband
+               wandert darüber, einzelne Ecken funkeln. -->
+          <g id="pv_feld">
+            <g id="pv_module" fill="#2E3D4E" stroke="#8FA0B4" stroke-width="1.2">
               <rect x="500" y="146" width="68" height="30"/><rect x="574" y="146" width="68" height="30"/>
               <rect x="648" y="146" width="68" height="30"/><rect x="722" y="146" width="68" height="30"/>
               <rect x="796" y="146" width="68" height="30"/>
@@ -325,6 +397,17 @@
               <line x1="668" y1="181" x2="668" y2="211"/><line x1="690" y1="181" x2="690" y2="211"/>
               <line x1="742" y1="181" x2="742" y2="211"/><line x1="764" y1="181" x2="764" y2="211"/>
               <line x1="816" y1="181" x2="816" y2="211"/><line x1="838" y1="181" x2="838" y2="211"/>
+            </g>
+            <!-- Leuchten + Glanzband, beides exakt auf die Modulflächen geclippt -->
+            <g clip-path="url(#clipPV)">
+              <rect id="pv_glow" x="490" y="140" width="384" height="78" fill="url(#pvleucht)"/>
+              <polygon id="pv_shimmer" points="512,138 556,138 522,220 478,220" fill="url(#pvglanz)"/>
+            </g>
+            <g fill="#FFFFFF">
+              <path class="pv-funke" d="M566,150 l2.4,5.6 5.6,2.4 -5.6,2.4 -2.4,5.6 -2.4,-5.6 -5.6,-2.4 5.6,-2.4 Z"/>
+              <path class="pv-funke" d="M716,205 l2,4.6 4.6,2 -4.6,2 -2,4.6 -2,-4.6 -4.6,-2 4.6,-2 Z"/>
+              <path class="pv-funke" d="M792,152 l2.2,5.2 5.2,2.2 -5.2,2.2 -2.2,5.2 -2.2,-5.2 -5.2,-2.2 5.2,-2.2 Z"/>
+              <path class="pv-funke" d="M620,190 l1.8,4.2 4.2,1.8 -4.2,1.8 -1.8,4.2 -1.8,-4.2 -4.2,-1.8 4.2,-1.8 Z"/>
             </g>
           </g>
           <!-- Fassade + Traufschatten + Sockel + Regenfallrohre -->
@@ -387,22 +470,47 @@
             </g>
           </g>
 
-          <!-- Wärmepumpe: Vaillant aroTHERM (grobe Skizze) vor der Fassade, weit links -->
+          <!-- Wärmepumpe: Vaillant aroTHERM plus, Monoblock-Frontansicht nach Leos
+               Skizze (großes Lüftergitter links, glatte Technikblende rechts,
+               abgesetzter Deckel, Bodenkonsole). 30 % größer als v0.3:
+               Korpus 60x50 statt 46x40. Das Lüfterrad dreht bei .wp-an. -->
           <g id="wp_unit">
-            <rect x="496" y="426" width="46" height="40" rx="4" fill="#EDF0EA" stroke="#8A968C" stroke-width="1.5"/>
-            <rect x="500" y="431" width="30" height="30" rx="4" fill="#F7F9F5" stroke="#9AA69A" stroke-width="1"/>
-            <g stroke="#9AA69A" stroke-width="1.2">
-              <line x1="503" y1="437" x2="527" y2="437"/><line x1="503" y1="442" x2="527" y2="442"/>
-              <line x1="503" y1="447" x2="527" y2="447"/><line x1="503" y1="452" x2="527" y2="452"/>
-              <line x1="503" y1="457" x2="527" y2="457"/>
+            <!-- Bodenkonsole mit Schwingungsdämpfern -->
+            <rect x="498" y="458" width="11" height="8" fill="#B7C0B6"/>
+            <rect x="539" y="458" width="11" height="8" fill="#B7C0B6"/>
+            <rect x="489" y="464" width="70" height="6" rx="1" fill="#DEE3DC" stroke="#9AA69A" stroke-width="1"/>
+            <!-- Korpus + abgesetzter Deckel + Technikblende rechts -->
+            <rect x="494" y="414" width="60" height="50" rx="2.5" fill="#F7F9F5" stroke="#8A968C" stroke-width="1.5"/>
+            <rect x="492" y="409" width="64" height="7" rx="2" fill="#DEE3DC" stroke="#8A968C" stroke-width="1.2"/>
+            <rect x="536" y="415" width="17" height="48" fill="#EDF0EA"/>
+            <line x1="536" y1="415" x2="536" y2="463" stroke="#B7C0B6" stroke-width="1"/>
+            <rect x="540" y="422" width="10" height="3" rx="1" fill="#CDD5CB"/>
+            <rect x="540" y="447" width="10" height="12" rx="1" fill="#F7F9F5" stroke="#C4CEC0" stroke-width=".8"/>
+            <!-- Lüfteröffnung: vertiefter Ring, darin das drehende Rad, davor das Gitter -->
+            <circle cx="515" cy="439" r="19.5" fill="#EDF0EA" stroke="#C4CEC0" stroke-width="1"/>
+            <g class="wp-fan" fill="#E1E7DE" stroke="#AEB6AD" stroke-width=".7">
+              <circle cx="515" cy="439" r="16.5" fill="none" stroke="none"/>
+              <g transform="translate(515,439)">
+                <use href="#wpblatt"/>
+                <use href="#wpblatt" transform="rotate(72)"/>
+                <use href="#wpblatt" transform="rotate(144)"/>
+                <use href="#wpblatt" transform="rotate(216)"/>
+                <use href="#wpblatt" transform="rotate(288)"/>
+              </g>
             </g>
-            <circle cx="515" cy="446" r="11" fill="none" stroke="#AEB6AD" stroke-width="1" opacity=".7"/>
-            <rect x="534" y="434" width="6" height="24" rx="1" fill="#DEE3DC" stroke="#9AA69A" stroke-width=".8"/>
-            <rect x="500" y="466" width="8" height="4" fill="#8A968C"/><rect x="530" y="466" width="8" height="4" fill="#8A968C"/>
+            <circle cx="515" cy="439" r="4.5" fill="#CDD5CB" stroke="#9AA69A" stroke-width="1"/>
+            <g fill="none" stroke="#C4CEC0" stroke-width=".8">
+              <circle cx="515" cy="439" r="7"/><circle cx="515" cy="439" r="11"/><circle cx="515" cy="439" r="15"/>
+              <line x1="519" y1="439" x2="533" y2="439"/><line x1="511" y1="439" x2="497" y2="439"/>
+              <line x1="515" y1="435" x2="515" y2="421"/><line x1="515" y1="443" x2="515" y2="457"/>
+              <line x1="517.8" y1="436.2" x2="527.7" y2="426.3"/><line x1="512.2" y1="441.8" x2="502.3" y2="451.7"/>
+              <line x1="512.2" y1="436.2" x2="502.3" y2="426.3"/><line x1="517.8" y1="441.8" x2="527.7" y2="451.7"/>
+            </g>
+            <circle cx="515" cy="439" r="18.5" fill="none" stroke="#9AA69A" stroke-width="1.5"/>
           </g>
 
           <!-- Enyaq frontal im offenen linken Garagentor (nur sichtbar wenn verbunden) -->
-          <g id="enyaq" style="display:none">
+          <g id="enyaq">
             <path id="cable" class="cable" d="M68,398 C66,414 66,430 69,441"/>
             <ellipse cx="109" cy="468" rx="36" ry="4" fill="#2E3B35" opacity=".5"/>
             <path d="M75,470 L75,438 Q75,428 80,424 L84,416 Q86,411 93,411 L125,411 Q132,411 134,416 L138,424 Q143,428 143,438 L143,470 Z"
@@ -712,9 +820,11 @@ function nodeState(k, st) {
     const wp = st.wp;
     if (!wp || !wp.verbunden) return { val: null, aktiv: false, dim: true, dir: "", badge: "offline" };
     const ww = wp.warmwasser || {}, hk = wp.heizkreis || {};
+    const boost = !!(ww.boost || hk.boost), laeuft = !!wp.laeuft;
     return { val: ww.ist_c != null ? Math.round(ww.ist_c) + " °C" : "—",
-      aktiv: !!(ww.boost || hk.boost), dim: !(ww.boost || hk.boost), dir: ww.boost || hk.boost ? "←" : "",
-      badge: ww.boost ? "WW-Boost" : hk.boost ? "Heizkreis +" : (ww.soll_c != null ? "Soll " + Math.round(ww.soll_c) + " °C" : "") };
+      aktiv: laeuft || boost, dim: !(laeuft || boost), dir: boost ? "←" : laeuft ? "←" : "",
+      badge: ww.boost ? "WW-Boost" : hk.boost ? "Heizkreis +" : laeuft ? "läuft"
+        : (ww.soll_c != null ? "Soll " + Math.round(ww.soll_c) + " °C" : "") };
   }
   if (k === "batt") {
     const pb = st.p_batterie_w || 0;
@@ -760,12 +870,24 @@ function updateScene(st) {
   kopf.textContent = st.grund || "—";
   kopf.classList.toggle("warnung", e3dcWeg(st));
   $("st-status").textContent = st.grund || "—";   // Status auch im eingeklappten Toggle-Knopf
-  // Hintergrund-Zustände: Garagentor links + Enyaq + Ladekabel
-  const da = fahrzeugDa(st);
-  $("torL_zu").style.display  = da ? "none" : "";
-  $("torL_auf").style.display = da ? "" : "none";
-  $("enyaq").style.display    = da ? "" : "none";
+
+  // Hintergrund-Zustände. Alles über Klassen an .scene, die Abläufe selbst
+  // stecken im CSS (Tor hoch → Enyaq rollt heraus, PV-Leuchten, WP-Lüfter).
+  const scene = $("scene");
+  scene.classList.toggle("auto-da", fahrzeugDa(st));
   $("cable").setAttribute("class", "cable" + (st.laedt ? " laedt" : ""));
+
+  // PV: Leuchten/Schimmer ab der üblichen 50-W-Schwelle, Intensität nach
+  // Leistung (voll ab ~6 kW von 9,23 kWp — darüber ist optisch nichts gewonnen).
+  const pvW = st.p_pv_e3dc_w || 0;
+  const pvAn = hysterese("pv", pvW) && !e3dcWeg(st);
+  scene.classList.toggle("pv-an", pvAn);
+  scene.style.setProperty("--pv-i", pvAn ? (0.35 + 0.6 * Math.min(1, Math.abs(pvW) / 6000)).toFixed(2) : "0");
+
+  // Wärmepumpe: Lüfter dreht, solange die Anlage läuft; im Überschuss-Boost schneller.
+  const wp = st.wp || {};
+  scene.classList.toggle("wp-an", !!(wp.verbunden && wp.laeuft));
+  scene.classList.toggle("wp-boost", !!((wp.warmwasser || {}).boost || (wp.heizkreis || {}).boost));
   // Chips
   for (const k in ANKER) {
     const s = nodeState(k, st);
