@@ -63,8 +63,27 @@ enthalten keine Geheimnisse.
      Umdrehung, im Überschuss-Boost 1,2 s). Quelle ist das neue Statusfeld
      `wp.laeuft`, siehe unten.
 
-   Bei `prefers-reduced-motion: reduce` sind alle vier Bewegungen aus; Tor, Auto
-   und PV-Leuchten bleiben als statische Zustände sichtbar.
+   **Räumliche Tiefe seit v0.6.0** (Details und Begründung: Spec 04 §5):
+   - **Licht und Schatten** — Querverlauf auf Fassade und Garagenfront,
+     Verlaufsbänder unter der Traufe und am Wandfuß, dunkle Laibungskanten in
+     jeder Öffnung, weiche Schlagschatten auf dem Boden.
+   - **Parallax** — acht Ebenen mit `data-d` (0,12 Netzmast … 0,85 Boden)
+     verschieben sich bei Zeigerbewegung bzw. Tablet-Neigung um bis zu ±9 px,
+     nur waagerecht. Boden und Horizontlinie sind über den Bildrand hinaus
+     gezeichnet, sonst blitzt beim Verschieben der Himmel durch.
+   - **Flüsse als Röhren** — vier Pfade auf derselben Kurve: Schattenkern,
+     Röhrenkörper, weicher Leuchtsaum, laufende Ladungsperlen.
+   - **Tageszeit-Licht** — `sonnenstand()` rechnet lokal (kein Cloud-Call).
+     Schattenrichtung und -länge, Himmelsverlauf, Nachtschleier und die
+     Besonnung der Ostfassade (nur vormittags) folgen der Uhrzeit;
+     Aktualisierung alle 2 Minuten.
+
+   Die KPI-Kacheln unter der Szene bleiben bewusst flach — das
+   Basel-AI-Branding ist scharfkantig, Tiefe gibt es nur in der Szene.
+
+   Bei `prefers-reduced-motion: reduce` sind alle Bewegungen aus (auch Parallax
+   und Leuchtsaum); Tor, Auto, PV-Leuchten und Tageszeit-Licht bleiben als
+   statische Zustände sichtbar.
 2. **Wärmepumpe (v0.4.0, Issue #1):** zweigeteilt in **Warmwasser**
    (Speichertemperatur, Sollwert, Modus, `BOOST`-Badge) und **Heizkreis**
    (Vorlauftemperatur, Raum-Ist/-Soll, Zustand, Außentemperatur,

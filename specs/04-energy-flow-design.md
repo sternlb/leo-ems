@@ -189,6 +189,40 @@ und wird **nur aus gelesenen Sensoren** abgeleitet (`hk_zustand`,
 `ww_sonderfunktion`) — nicht aus einem gewünschten Boost, der im
 Beobachtungsmodus gar nicht gesendet wird.
 
+**Ergänzung v0.6.0 (Leo, 2026-07-25): Tiefe statt Strichzeichnung.** Vier
+Effekte, die aus der flachen Ansicht einen Raum machen — bewusst *ohne*
+WebGL/three.js (das Add-on liefert eine einzige HTML-Datei ohne Build-Schritt
+aus) und ohne isometrische Neuzeichnung (die würde alle Anker aus §1 ungültig
+machen). Die Kacheln unter der Szene bleiben auf Leos Entscheidung flach —
+das Basel-AI-Branding ist bewusst scharfkantig.
+
+1. **Plastik durch Licht und Schatten.** Fassade und Garagenfront bekommen
+   einen Querverlauf (`#fassade`), unter der Traufe und am Wandfuß liegen
+   Verlaufsbänder (`#traufe`, `#wandfuss`), jede Fenster- und Türöffnung eine
+   dunkle Laibungskante oben und links. Auf dem Boden liegen weich gezeichnete
+   Schlagschatten (`#schatten`, `feGaussianBlur`), deren Pfade `updateLicht()`
+   aus dem Sonnenstand baut.
+2. **Parallax-Tiefe.** Acht Ebenen im Hintergrund-SVG tragen ihre Tiefe als
+   `data-d` (0,12 Netzmast … 0,85 Boden). Zeigerbewegung über der Szene bzw.
+   `deviceorientation` am Tablet verschiebt sie um bis zu ±9 px — **nur
+   waagerecht**, damit unten nie eine Lücke aufreißt; Boden und Horizontlinie
+   sind dafür über den Bildrand hinaus gezeichnet.
+3. **Flüsse als Röhren.** Statt einer Punktlinie liegen vier Pfade auf
+   derselben Kurve: Schattenkern (dunkel, 7,5 px), Röhrenkörper (Flussfarbe,
+   5 px), weicher Leuchtsaum (8 px, `blur(2.5px)`) und die laufenden
+   Ladungsperlen (3,2 px). Alle vier teilen Zustand und Tempoklasse.
+4. **Tageszeit-Licht (EF-023, jetzt umgesetzt).** `sonnenstand()` rechnet rein
+   lokal — Sonnenauf-/-untergang als Jahresmittel, Azimut Nordost → Süd →
+   Nordwest. Weil links im Bild Norden liegt und der Blick nach Westen auf die
+   **Ost**fassade geht, folgt daraus dreierlei: die Schattenrichtung kippt über
+   den Tag (morgens nach rechts, mittags nach links), die Schattenlänge wächst
+   bei tiefem Stand, und die Ostfassade ist **nur vormittags** besonnt
+   (`--fassade-licht`, ab Mittag null). Der Himmelsverlauf schaltet zwischen
+   Nacht / Dämmerung / Tag, ein Nachtschleier kühlt die ganze Szene ab, je
+   tiefer die Sonne steht. Bewusst **helle Nachtfarben** (#B4C3D3 → #9FB2C4)
+   statt eines echten Nachthimmels: das Dashboard ist für die HA-Einbettung
+   auf die helle Palette festgelegt, und die weißen Chips müssen lesbar bleiben.
+
 ### §6 Higgsfield-Asset-Spezifikation (Phase 3)
 
 - **Referenz:** `docs/referenz/HausAnsichten.pdf` — Bauplan-Ansichten M 1:100
@@ -227,6 +261,9 @@ Beobachtungsmodus gar nicht gesendet wird.
 | T-EF-9 | Fahrzeug steckt an (v0.5.0) | Torblatt fährt hoch (nach 0,9 s auf −104 px), danach rollt der Enyaq heraus und steht nach ~2,4 s |
 | T-EF-10 | PV 4,8 kW vs. 600 W vs. 0 W (v0.5.0) | `--pv-i` ≈ 0,83 / 0,41 / 0 — Leuchten und Schimmer nur auf den Modulflächen |
 | T-EF-11 | `wp.laeuft` true/false (v0.5.0) | Lüfterrad dreht bzw. steht; im Boost 1,2 s statt 2,6 s pro Umdrehung |
+| T-EF-12 | Zeiger an den linken/rechten Rand der Szene (v0.6.0) | Ebenen verschieben sich gestaffelt (Boden ±6,9 px, Netzmast ±1,0 px), an keinem Bildrand entsteht eine Lücke; `pointerleave` stellt alles zurück |
+| T-EF-13 | Uhrzeit 6:30 / 9:00 / 15:00 / 23:00 (v0.6.0) | Schatten lang nach rechts / kurz / nach links / keine; Ostfassade nur vormittags besonnt; Himmel Dämmerung → Tag → Tag → Nacht |
+| T-EF-14 | `prefers-reduced-motion` mit den v0.5/0.6-Effekten | kein Parallax, kein Torablauf, kein Schimmer, kein Lüfter — Tor-, Auto- und PV-Zustand bleiben statisch ablesbar |
 
 ## Offene Punkte
 
@@ -246,3 +283,4 @@ Beobachtungsmodus gar nicht gesendet wird.
 | 4. Implementierung | Neue Szene in `index.html`, Live-Verdrahtung, Tests | ✅ umgesetzt (2026-07-19, v0.3.0): helles Theme fürs ganze Dashboard, Szene mit Live-Mapping §2 inkl. Hysterese, Panels mit `phasen_info`, Schema-Modus; verifiziert am Preview-Server (T-EF-3/5/6/7) |
 | 5. Validierung | Real auf Pi/Tablet/Handy, T-EF-1/2 mit echten Flüssen, Release v0.3.0 | 🔵 nächster Schritt: Add-on-Update auf dem Pi |
 | 6. Zustandsanimationen | v0.5.0: Torablauf + Enyaq, PV-Leuchten/Schimmer, WP-Lüfter, neue Vaillant-Skizze (+30 %) | ✅ umgesetzt (2026-07-25), T-EF-9/10/11 am Vorschau-Server verifiziert (Desktop 1280×800 + Handy 375×812), 71/71 Tests grün |
+| 7. Tiefe / „3D" | v0.6.0: Licht & Schatten, Parallax, Röhren-Flüsse, Tageszeit-Licht (Auswahl Leo, Kacheln bleiben flach) | ✅ umgesetzt (2026-07-25), T-EF-12/13/14 am Vorschau-Server verifiziert |

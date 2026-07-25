@@ -106,9 +106,18 @@
     border-radius: var(--r); padding: .3em .6em; max-width: 70%; }
   .kopf.warnung { border-color: var(--rot); color: var(--rot); }
 
-  .flow { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1 9; opacity: 0; }
+  /* Flüsse als Röhre: vier gestapelte Pfade auf derselben Kurve — Schattenkern,
+     Röhrenkörper, weicher Leuchtsaum und die laufenden Ladungsperlen obendrauf. */
+  .flow-basis, .flow-rohr, .flow-saum { fill: none; stroke-linecap: round; opacity: 0; }
+  .flow-basis { stroke: #2E3B35; stroke-width: 7.5; }
+  .flow-rohr  { stroke-width: 5; }
+  .flow-saum  { stroke-width: 8; stroke-dasharray: 1 9; filter: blur(2.5px); }
+  .flow-basis.on { opacity: .09; } .flow-rohr.on { opacity: .26; } .flow-saum.on { opacity: .5; }
+  .flow { fill: none; stroke-width: 3.2; stroke-linecap: round; stroke-dasharray: 1 9; opacity: 0; }
   .flow.on { opacity: 1; animation: dash 1.2s linear infinite; }
-  .flow.on.mid { animation-duration: .8s; } .flow.on.fast { animation-duration: .5s; }
+  .flow.on.mid, .flow-saum.on.mid { animation-duration: .8s; }
+  .flow.on.fast, .flow-saum.on.fast { animation-duration: .5s; }
+  .flow-saum.on { animation: dash 1.2s linear infinite; }
   @keyframes dash { to { stroke-dashoffset: -10; } }
   .flow-val { font-family: var(--mono); font-size: 11px; fill: var(--forest); paint-order: stroke; stroke: #FFFFFF; stroke-width: 3px; }
   .cable { fill: none; stroke: var(--lime-ink); stroke-width: 2.5; stroke-linecap: round; }
@@ -148,6 +157,15 @@
     84%           { opacity: calc(var(--pv-i, .5) * 1); }
   }
 
+  /* --- Tiefe: Parallax-Ebenen + Sonnenlicht auf den Ostflächen --------------
+     Jede .lyr trägt ihre Tiefe als data-d (0 = Horizont, 1 = ganz vorn); das
+     JS setzt daraus den transform. Nur waagerecht, damit unten nie eine Lücke
+     aufreißt. Die Federung macht das CSS. */
+  .lyr { transition: transform .45s cubic-bezier(.22,.7,.3,1); }
+  /* Vormittags steht die Sonne im Osten und trifft genau diese Flächen */
+  .ostlicht { opacity: var(--fassade-licht, 0); transition: opacity 2s linear; }
+  #schatten, #nachtschleier { transition: opacity 2s linear; }
+
   /* --- Wärmepumpe: Lüfterrad dreht, solange die Anlage läuft ---------------- */
   .wp-fan { transform-box: fill-box; transform-origin: center;
     animation: wpdreh 2.6s linear infinite; animation-play-state: paused; }
@@ -159,6 +177,8 @@
     .flow.on { animation: none; stroke-dasharray: none; opacity: .9; }
     .cable.laedt { animation: none; stroke-dasharray: none; }
     #torL_blatt, #enyaq { transition: none; }
+    .lyr { transition: none; transform: none !important; }   /* kein Parallax */
+    .flow-saum.on { animation: none; stroke-dasharray: none; opacity: .3; }
     .pv-an #pv_glow { animation: none; opacity: calc(var(--pv-i, .5) * .45); }
     .pv-an #pv_shimmer, .pv-an .pv-funke { animation: none; opacity: 0; }
     .wp-fan { animation: none; }
@@ -318,23 +338,54 @@
             </linearGradient>
             <!-- Ein Lüfterblatt, 5x rotiert verwendet (Wärmepumpe) -->
             <path id="wpblatt" d="M0,0 C3.5,-7.5 9.5,-10.5 12.5,-9 C10.5,-2.5 5,1.5 0,0 Z"/>
+            <!-- Plastik: weiche Schlagschatten, Wandfuß-Verschattung, Fassadenverlauf -->
+            <filter id="weich" x="-20%" y="-60%" width="140%" height="260%">
+              <feGaussianBlur stdDeviation="3.5"/>
+            </filter>
+            <linearGradient id="wandfuss" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#2E3B35" stop-opacity="0"/>
+              <stop offset="1" stop-color="#2E3B35" stop-opacity=".16"/>
+            </linearGradient>
+            <linearGradient id="fassade" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EDF1EA"/>
+            </linearGradient>
+            <linearGradient id="traufe" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#2E3B35" stop-opacity=".18"/>
+              <stop offset="1" stop-color="#2E3B35" stop-opacity="0"/>
+            </linearGradient>
+            <!-- Tageszeit: warmes Sonnenlicht auf den ostseitigen Flächen -->
+            <linearGradient id="sonnenlicht" x1="0" y1="0" x2="0" y2="1">
+              <stop id="sl-o" offset="0" stop-color="#FFD9A0" stop-opacity=".9"/>
+              <stop id="sl-u" offset="1" stop-color="#FFC97A" stop-opacity=".35"/>
+            </linearGradient>
           </defs>
           <rect width="960" height="540" fill="url(#sky)"/>
 
           <!-- Boden + Einfahrt (gepflastert, nur vor der Garage) -->
-          <rect y="470" width="960" height="70" fill="#E9EEE6"/>
-          <line x1="0" y1="470" x2="960" y2="470" stroke="#C4CEc0" stroke-width="1.5"/>
-          <rect x="30" y="470" width="260" height="70" fill="#E2E8DE"/>
-          <g stroke="#CDD6C8" stroke-width="1">
-            <line x1="30" y1="492" x2="290" y2="492"/><line x1="30" y1="514" x2="290" y2="514"/>
-            <line x1="110" y1="470" x2="104" y2="540"/><line x1="200" y1="470" x2="194" y2="540"/>
-            <line x1="288" y1="470" x2="282" y2="540"/>
+          <g class="lyr" data-d=".85">
+            <!-- über den Bildrand hinaus gezeichnet: die Ebene wandert beim Parallax
+                 bis zu 8 px zur Seite, sonst blitzt dort der Himmel durch -->
+            <rect x="-20" y="470" width="1000" height="70" fill="#E9EEE6"/>
+            <line x1="-20" y1="470" x2="980" y2="470" stroke="#C4CEc0" stroke-width="1.5"/>
+            <rect x="30" y="470" width="260" height="70" fill="#E2E8DE"/>
+            <g stroke="#CDD6C8" stroke-width="1">
+              <line x1="30" y1="492" x2="290" y2="492"/><line x1="30" y1="514" x2="290" y2="514"/>
+              <line x1="110" y1="470" x2="104" y2="540"/><line x1="200" y1="470" x2="194" y2="540"/>
+              <line x1="288" y1="470" x2="282" y2="540"/>
+            </g>
           </g>
 
+          <!-- Schlagschatten auf dem Boden. Die Pfade baut updateLicht() aus dem
+               Sonnenstand — Richtung und Länge folgen der Tageszeit. -->
+          <g class="lyr" data-d=".55"><g id="schatten" fill="#2E3B35" filter="url(#weich)" opacity=".14"></g></g>
+
           <!-- Garage (freistehend, 6 m x 3 m, Flachdach ohne Überstand) -->
+          <g class="lyr" data-d=".70">
           <rect x="40" y="330" width="240" height="14" fill="url(#dach)" stroke="#9AA69A" stroke-width="1"/>
-          <rect x="40" y="344" width="240" height="126" fill="#FFFFFF" stroke="#B9C4B6" stroke-width="1.5"/>
-          <rect x="40" y="344" width="240" height="7" fill="#F1F4EF"/>
+          <rect x="40" y="344" width="240" height="126" fill="url(#fassade)" stroke="#B9C4B6" stroke-width="1.5"/>
+          <rect x="40" y="344" width="240" height="9" fill="url(#traufe)"/>
+          <rect x="40" y="452" width="240" height="18" fill="url(#wandfuss)"/>
+          <rect class="ostlicht" x="40" y="344" width="240" height="126" fill="url(#sonnenlicht)"/>
           <!-- Tor links: Garageninneres (immer gezeichnet) + Wallbox innen links.
                Das Torblatt darüber fährt bei .auto-da nach oben und gibt es frei. -->
           <g id="torL_auf">
@@ -365,8 +416,10 @@
             <line x1="164" y1="444" x2="258" y2="444" stroke="#A7B2A6" stroke-width="1"/>
             <rect x="204" y="452" width="14" height="4" rx="2" fill="#8A968C"/>
           </g>
+          </g>
 
           <!-- Haus (Ostansicht nach Bauplan, Traufseite ~10 m) -->
+          <g class="lyr" data-d=".28">
           <polygon points="488,138 872,138 892,222 468,222" fill="url(#dach)" stroke="#9AA69A" stroke-width="1.5"/>
           <line x1="488" y1="141" x2="872" y2="141" stroke="#9AA69A" stroke-width="2"/>
           <g stroke="#AEB6AD" stroke-width=".8" opacity=".8">
@@ -411,8 +464,10 @@
             </g>
           </g>
           <!-- Fassade + Traufschatten + Sockel + Regenfallrohre -->
-          <rect x="480" y="222" width="400" height="248" fill="#FFFFFF" stroke="#B9C4B6" stroke-width="1.5"/>
-          <rect x="480" y="222" width="400" height="8" fill="#F1F4EF"/>
+          <rect x="480" y="222" width="400" height="248" fill="url(#fassade)" stroke="#B9C4B6" stroke-width="1.5"/>
+          <rect x="480" y="222" width="400" height="14" fill="url(#traufe)"/>
+          <rect x="480" y="446" width="400" height="24" fill="url(#wandfuss)"/>
+          <rect class="ostlicht" x="480" y="222" width="400" height="248" fill="url(#sonnenlicht)"/>
           <rect x="480" y="462" width="400" height="8" fill="#E4E9E1"/>
           <line x1="474" y1="222" x2="474" y2="470" stroke="#AEB6AD" stroke-width="3"/>
           <line x1="886" y1="222" x2="886" y2="470" stroke="#AEB6AD" stroke-width="3"/>
@@ -434,9 +489,20 @@
             <rect x="742" y="464" width="48" height="6" fill="#CDD5CB" stroke="#AEB6AD" stroke-width="1"/>
             <rect x="830" y="374" width="10" height="10" fill="#EDF0EA" stroke="#A7B2A6" stroke-width="1"/>
           </g>
+          <!-- Laibungen: dunkle Kante oben/links in jeder Öffnung — lässt Fenster
+               und Tür in der Fassade zurückspringen statt aufgeklebt zu wirken -->
+          <g fill="#2E3B35" opacity=".22">
+            <rect x="566" y="246" width="46" height="3"/><rect x="566" y="246" width="2.5" height="56"/>
+            <rect x="644" y="246" width="25" height="3"/><rect x="644" y="246" width="2.5" height="56"/>
+            <rect x="760" y="246" width="24" height="3"/><rect x="760" y="246" width="2.5" height="56"/>
+            <rect x="643" y="368" width="24" height="3"/><rect x="643" y="368" width="2.5" height="94"/>
+            <rect x="729" y="368" width="17" height="3"/><rect x="729" y="368" width="2.5" height="94"/>
+            <rect x="748" y="368" width="36" height="3"/><rect x="748" y="368" width="2.5" height="96"/>
+          </g>
+          </g>
 
           <!-- Terrassenüberdachung (endet ~1 m vor der Garage, Pfosten mit Dachüberstand) -->
-          <g id="terrasse">
+          <g class="lyr" data-d=".50"><g id="terrasse">
             <rect x="322" y="464" width="158" height="6" fill="#E5DFD0" stroke="#C9C2AE" stroke-width="1"/>
             <g stroke="#C9C2AE" stroke-width=".8">
               <line x1="350" y1="464" x2="350" y2="470"/><line x1="382" y1="464" x2="382" y2="470"/>
@@ -468,13 +534,13 @@
                 <circle cx="352" cy="364" r="2.6"/><circle cx="351" cy="369" r="2"/>
               </g>
             </g>
-          </g>
+          </g></g>
 
           <!-- Wärmepumpe: Vaillant aroTHERM plus, Monoblock-Frontansicht nach Leos
                Skizze (großes Lüftergitter links, glatte Technikblende rechts,
                abgesetzter Deckel, Bodenkonsole). 30 % größer als v0.3:
                Korpus 60x50 statt 46x40. Das Lüfterrad dreht bei .wp-an. -->
-          <g id="wp_unit">
+          <g class="lyr" data-d=".42"><g id="wp_unit">
             <!-- Bodenkonsole mit Schwingungsdämpfern -->
             <rect x="498" y="458" width="11" height="8" fill="#B7C0B6"/>
             <rect x="539" y="458" width="11" height="8" fill="#B7C0B6"/>
@@ -507,10 +573,10 @@
               <line x1="512.2" y1="436.2" x2="502.3" y2="426.3"/><line x1="517.8" y1="441.8" x2="527.7" y2="451.7"/>
             </g>
             <circle cx="515" cy="439" r="18.5" fill="none" stroke="#9AA69A" stroke-width="1.5"/>
-          </g>
+          </g></g>
 
           <!-- Enyaq frontal im offenen linken Garagentor (nur sichtbar wenn verbunden) -->
-          <g id="enyaq">
+          <g class="lyr" data-d=".70"><g id="enyaq">
             <path id="cable" class="cable" d="M68,398 C66,414 66,430 69,441"/>
             <ellipse cx="109" cy="468" rx="36" ry="4" fill="#2E3B35" opacity=".5"/>
             <path d="M75,470 L75,438 Q75,428 80,424 L84,416 Q86,411 93,411 L125,411 Q132,411 134,416 L138,424 Q143,428 143,438 L143,470 Z"
@@ -533,10 +599,10 @@
             <rect x="77" y="461" width="10" height="9" rx="2" fill="#3F4A44"/>
             <rect x="131" y="461" width="10" height="9" rx="2" fill="#3F4A44"/>
             <rect x="65" y="441" width="7" height="7" rx="1" fill="#65A30D"/>
-          </g>
+          </g></g>
 
           <!-- Netzanschluss rechts: Mast mit Traversen, Isolatoren + Leitungen -->
-          <g>
+          <g class="lyr" data-d=".12">
             <line x1="926" y1="470" x2="926" y2="248" stroke="#8A968C" stroke-width="4"/>
             <line x1="900" y1="268" x2="952" y2="268" stroke="#8A968C" stroke-width="3"/>
             <line x1="906" y1="292" x2="946" y2="292" stroke="#8A968C" stroke-width="3"/>
@@ -550,11 +616,15 @@
           </g>
 
           <!-- Bepflanzung -->
-          <g>
+          <g class="lyr" data-d=".18">
             <ellipse cx="906" cy="462" rx="16" ry="10" fill="#DDE7D3" stroke="#B9C9AB" stroke-width="1"/>
             <ellipse cx="890" cy="466" rx="11" ry="7" fill="#D3E0C7" stroke="#B9C9AB" stroke-width="1"/>
             <ellipse cx="20" cy="464" rx="18" ry="11" fill="#DDE7D3" stroke="#B9C9AB" stroke-width="1"/>
           </g>
+
+          <!-- Kühler Nachtschleier über die ganze Szene: legt sich mit sinkender
+               Sonne über alles, damit nicht nur der Himmel Abend wird. -->
+          <rect id="nachtschleier" width="960" height="540" fill="#3A5570" opacity="0" pointer-events="none"/>
         </svg>
 
         <div class="kopf" id="kopf">—</div>
@@ -785,13 +855,23 @@ function e3dcWeg(st) {
   return st.state === "abgeschaltet" || st.soc_batterie == null;
 }
 
+// Vier Pfade pro Fluss, alle auf derselben Kurve: Schattenkern, Röhrenkörper,
+// weicher Leuchtsaum, laufende Perlen. Zusammen liest sich der Fluss als Röhre
+// mit Volumen statt als flache Punktlinie.
+const ROHR_LAGEN = ["basis", "rohr", "saum", "perlen"];
+
 function buildScenes() {
   const ov = $("ov");
-  // Flusslinien zuerst (unter den Chips), Quadratische Kurve zum Haus-Hub
+  // Flusslinien zuerst (unter den Chips), quadratische Kurve zum Haus-Hub
   for (const id of FLOW_IDS) {
     const a = ANKER[id], b = ANKER.haus;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 24;
-    SREF["f_" + id] = sEl("path", { class: "flow", d: `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}` }, ov);
+    const d = `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`;
+    for (const lage of ROHR_LAGEN) {
+      const klasse = lage === "perlen" ? "flow" : "flow-" + lage;
+      SREF[lage + "_" + id] = sEl("path", { class: klasse, d }, ov);
+    }
+    SREF["f_" + id] = SREF["perlen_" + id];
     SREF["a_" + id] = sEl("text", { class: "flow-val", x: mx, y: my + 16, "text-anchor": "middle" }, ov);
   }
   // Knoten-Chips
@@ -910,11 +990,101 @@ function updateScene(st) {
   for (const id in fluesse) {
     const f = fluesse[id];
     const on = hysterese(id, f.v) && !(off && (id === "pv" || id === "batt"));
-    SREF["f_" + id].setAttribute("class", "flow" + (on ? " on " + flussSpeed(f.v) : ""));
-    SREF["f_" + id].setAttribute("stroke", f.farbe);
+    const tempo = on ? " on " + flussSpeed(f.v) : "";
+    for (const lage of ROHR_LAGEN) {
+      const el = SREF[lage + "_" + id];
+      el.setAttribute("class", (lage === "perlen" ? "flow" : "flow-" + lage) + tempo);
+      // Der Schattenkern bleibt dunkel, alles andere trägt die Flussfarbe
+      if (lage !== "basis") el.setAttribute("stroke", f.farbe);
+    }
     SREF["a_" + id].textContent = on ? fmtFluss(f.v) : "";
   }
   renderSchema(st);
+}
+
+// ---------- Tiefe: Parallax-Ebenen ------------------------------------------
+// Die Ebenen im Hintergrund-SVG tragen ihre Tiefe als data-d. Zeiger- oder
+// Neigungsbewegung verschiebt sie unterschiedlich weit — nur waagerecht, damit
+// am unteren Bildrand nie eine Lücke aufreißt.
+const PARALLAX_MAX = 9;   // px in viewBox-Einheiten bei voller Auslenkung
+const lagen = [];
+let parallaxAus = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function parallax(anteil) {   // anteil: -1 (links) … +1 (rechts)
+  if (parallaxAus) return;
+  const dx = Math.max(-1, Math.min(1, anteil)) * PARALLAX_MAX;
+  for (const l of lagen) l.el.style.transform = `translateX(${(dx * l.d).toFixed(2)}px)`;
+}
+
+function parallaxInit() {
+  for (const el of document.querySelectorAll(".scene .bg .lyr"))
+    lagen.push({ el, d: parseFloat(el.dataset.d) || 0 });
+  const szene = $("scene");
+  szene.addEventListener("pointermove", e => {
+    const r = szene.getBoundingClientRect();
+    parallax((e.clientX - r.left) / r.width * 2 - 1);
+  });
+  szene.addEventListener("pointerleave", () => parallax(0));
+  // Wand-Tablet/Handy: Neigung statt Zeiger. gamma = Querneigung in Grad.
+  addEventListener("deviceorientation", e => {
+    if (e.gamma != null) parallax(e.gamma / 25);
+  }, { passive: true });
+}
+
+// ---------- Tageszeit: Sonnenstand, Schatten, Himmel -------------------------
+// Grobes Bahnmodell, rein lokal gerechnet (kein Cloud-Call). Blickrichtung ist
+// die Ostfassade, links im Bild liegt Norden, rechts Süden. Die Sonne wandert
+// von Nordost über Süd nach Nordwest — deshalb liegt sie morgens hinter dem
+// Betrachter (Fassade voll besonnt) und ab Mittag dahinter nicht mehr.
+const SCHATTEN_KOERPER = [
+  { x1: 40,  x2: 280, h: 12 },   // Garage
+  { x1: 468, x2: 892, h: 13 },   // Haus
+  { x1: 489, x2: 559, h: 6 },    // Wärmepumpe
+  { x1: 322, x2: 480, h: 5 },    // Terrasse
+  { x1: 918, x2: 934, h: 4 },    // Netzmast
+];
+const HIMMEL = {
+  nacht:      ["#B4C3D3", "#9FB2C4"],
+  daemmerung: ["#FBE7D2", "#F2D2C4"],
+  tag:        ["#FFFFFF", "#F1F6EF"],
+};
+
+function sonnenstand(jetzt) {
+  const h = jetzt.getHours() + jetzt.getMinutes() / 60;
+  // Jahresmittel für Süddeutschland — für die Stimmung genau genug
+  const auf = 6.3, unter = 20.3;
+  const t = (h - auf) / (unter - auf);
+  if (t <= 0 || t >= 1) return { phase: "nacht", hoehe: 0, bildX: 0, ost: 0 };
+  const hoehe = Math.sin(Math.PI * t);              // 0 → 1 → 0
+  const az = (60 + 240 * t) * Math.PI / 180;        // Nordost → Süd → Nordwest
+  return {
+    phase: hoehe < 0.25 ? "daemmerung" : "tag",
+    hoehe,
+    bildX: -Math.cos(az),                           // −1 = links (Nord), +1 = rechts (Süd)
+    ost: Math.max(0, Math.sin(az)),                 // 1 = Sonne im Rücken, Ostfassade voll besonnt
+  };
+}
+
+function updateLicht(jetzt) {
+  const s = sonnenstand(jetzt);
+  const szene = $("scene");
+  // Schattenrichtung ist der Sonne entgegengesetzt, die Länge wächst bei tiefem Stand
+  const dx = s.phase === "nacht" ? 0
+    : Math.max(-40, Math.min(40, -s.bildX * 13 / Math.max(s.hoehe, 0.22)));
+  $("schatten").innerHTML = "";
+  if (s.phase !== "nacht") {
+    for (const k of SCHATTEN_KOERPER) {
+      sEl("path", { d: `M${k.x1},470 L${k.x2},470 L${k.x2 + dx},${470 + k.h} L${k.x1 + dx},${470 + k.h} Z` },
+        $("schatten"));
+    }
+  }
+  $("schatten").setAttribute("opacity", (0.06 + 0.16 * s.hoehe).toFixed(3));
+  szene.style.setProperty("--fassade-licht", (s.ost * s.hoehe * 0.55).toFixed(3));
+  const [o, u] = HIMMEL[s.phase];
+  $("sky").children[0].setAttribute("stop-color", o);
+  $("sky").children[1].setAttribute("stop-color", u);
+  // Nachtschleier: kühlt die ganze Szene ab, je tiefer die Sonne steht
+  $("nachtschleier").setAttribute("opacity", (0.14 * (1 - s.hoehe)).toFixed(3));
 }
 
 // ---------- Wärmepumpe (Issue #1) -------------------------------------------
@@ -1226,6 +1396,8 @@ $("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = f
 
 (async () => {
   buildScenes();
+  parallaxInit();
+  updateLicht(new Date());
   try { const h = await api("api/v1/health"); $("f-ver").textContent = "Leo-EMS v" + h.version; } catch {}
   await poll();
   try { await ladeConfig(); if (lastStatus) $("c-limit").value = lastStatus.fahrzeug_limit_soc ?? 80; } catch {}
@@ -1234,6 +1406,7 @@ $("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = f
   setInterval(poll, 5000);
   setInterval(ladeHistorie, 30000);
   setInterval(renderPhasen, 1000);   // Countdown zwischen den Polls lokal weiterzählen
+  setInterval(() => updateLicht(new Date()), 120000);   // Sonnenstand alle 2 min nachziehen
 })();
 </script>
 </body>
