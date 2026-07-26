@@ -1,0 +1,5 @@
+# Shell-Skripte immer mit LF auschecken. Auf Leos Windows-PC würde Git sonst
+# CRLF schreiben — und ein Shebang mit \r ("/usr/bin/with-contenv\r") lässt den
+# Add-on-Container beim Start scheitern.
+*.sh text eol=lf
+Dockerfile text eol=lf
