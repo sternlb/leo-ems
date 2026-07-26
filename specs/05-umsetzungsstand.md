@@ -14,13 +14,17 @@ Legende Abdeckung: **T** = automatisierter Test · **L** = am Live-System verifi
 
 | | Must (26) | Should (13) | Gesamt (39) |
 |---|---|---|---|
-| ✅ umgesetzt | 20 | 6 | 26 |
-| 🔵 teilweise | 4 | 1 | 5 |
-| ⚪ offen | 2 | 6 | 8 |
+| ✅ umgesetzt | 20 | 5 | **25** |
+| 🔵 teilweise | 4 | 4 | **8** |
+| ⚪ offen | 2 | 4 | **6** |
 
-86 automatisierte Tests. **31 der 39 Requirements sind durch Tests, Live-Nachweis
-oder beides abgedeckt**; 8 haben (noch) keinen Nachweis, davon 6 aus Stufe 3
-(dynamischer Tarif) und Sungrow, die real noch nicht existieren.
+86 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test,
+Live-Verifikation oder beides). Ohne jeden Nachweis sind nur REQ-008, 022, 023,
+030 und 031 — vier davon gehören zu Ausbaustufe 3, die es real noch nicht gibt.
+
+Die Anforderungsliste selbst führt denselben Stand in der Spalte *Umsetzung* mit:
+[01-requirements.md](01-requirements.md). Dort steht das **Was**, hier das **Womit
+bewiesen**.
 
 ---
 
