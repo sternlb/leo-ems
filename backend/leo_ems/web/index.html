@@ -119,6 +119,9 @@
   .flow.on.fast, .flow-saum.on.fast { animation-duration: .5s; }
   .flow-saum.on { animation: dash 1.2s linear infinite; }
   @keyframes dash { to { stroke-dashoffset: -10; } }
+  /* Richtungspfeil auf der Kurvenmitte — nur wenn die Perlen stillstehen
+     (EF-031), sonst zeigt die Laufrichtung die Flussrichtung schon an. */
+  .flow-pfeil { opacity: 0; stroke: #FFFFFF; stroke-width: 1.4; paint-order: stroke; }
   .flow-val { font-family: var(--mono); font-size: 11px; fill: var(--forest); paint-order: stroke; stroke: #FFFFFF; stroke-width: 3px; }
   .cable { fill: none; stroke: var(--lime-ink); stroke-width: 2.5; stroke-linecap: round; }
   .cable.laedt { stroke-dasharray: 2 6; animation: dash 1s linear infinite; }
@@ -179,6 +182,7 @@
     #torL_blatt, #enyaq { transition: none; }
     .lyr { transition: none; transform: none !important; }   /* kein Parallax */
     .flow-saum.on { animation: none; stroke-dasharray: none; opacity: .3; }
+    .flow-pfeil.on { opacity: .95; }
     .pv-an #pv_glow { animation: none; opacity: calc(var(--pv-i, .5) * .45); }
     .pv-an #pv_shimmer, .pv-an .pv-funke { animation: none; opacity: 0; }
     .wp-fan { animation: none; }
@@ -860,19 +864,61 @@ function e3dcWeg(st) {
 // mit Volumen statt als flache Punktlinie.
 const ROHR_LAGEN = ["basis", "rohr", "saum", "perlen"];
 
+// Ein Fluss ist eine quadratische Kurve von der Quelle zur Senke. Die Richtung
+// steckt in der Kurve selbst und nicht in der Animation — dadurch laufen Perlen,
+// Leuchtsaum und Richtungspfeil ohne Sonderfall gemeinsam richtig herum.
+// Rückgabe zusätzlich: Punkt + Tangentenwinkel für den Wert (Kurvenmitte) und
+// für den Pfeil (etwas dahinter, sonst verdeckt ihn der Wert samt weißem Rand).
+function bogen(a, b, seite = 0, hebung = 24) {
+  const cx = (a.x + b.x) / 2 + seite, cy = (a.y + b.y) / 2 - hebung;
+  const punkt = t => ({
+    x: (1-t)*(1-t)*a.x + 2*(1-t)*t*cx + t*t*b.x,
+    y: (1-t)*(1-t)*a.y + 2*(1-t)*t*cy + t*t*b.y,
+    winkel: Math.atan2((1-t)*(cy-a.y) + t*(b.y-cy), (1-t)*(cx-a.x) + t*(b.x-cx)) * 180 / Math.PI,
+  });
+  return { d: `M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}`, wert: punkt(.5), pfeil: punkt(.68) };
+}
+
+// Quelle → Senke je Fluss (Spec 04 EF-003). Vorzeichen aus der API:
+// p_netz_w > 0 = Bezug, p_batterie_w > 0 = laden.
+function flussWeg(id, st) {
+  const A = ANKER;
+  if (id === "pv")      return bogen(A.pv, A.haus);
+  if (id === "sungrow") return bogen(A.sungrow, A.haus);
+  if (id === "netz")    return (st.p_netz_w || 0) >= 0 ? bogen(A.netz, A.haus) : bogen(A.haus, A.netz);
+  if (id === "wallbox") return bogen(A.haus, A.wallbox);   // die Wallbox ist immer Verbraucher
+  // Batterie: beim Laden zeigt der Fluss die Quelle — PV direkt in den Speicher,
+  // sonst aus dem Hausnetz (z. B. Netzladung). Entladen geht immer ins Haus.
+  // Der PV-Bogen weicht nach links aus, sonst liefe er quer durch den Haus-Chip.
+  const pb = st.p_batterie_w || 0;
+  if (pb > 0) return hysterese("pv", st.p_pv_e3dc_w) && !e3dcWeg(st)
+    ? bogen(A.pv, A.batt, -80) : bogen(A.haus, A.batt);
+  return bogen(A.batt, A.haus);
+}
+
+// Kurve, Wertposition und Pfeil eines Flusses auf den aktuellen Weg setzen
+function setzeFlussWeg(id, st) {
+  const w = flussWeg(id, st);
+  for (const lage of ROHR_LAGEN) SREF[lage + "_" + id].setAttribute("d", w.d);
+  const a = SREF["a_" + id];
+  a.setAttribute("x", w.wert.x.toFixed(1));
+  a.setAttribute("y", (w.wert.y + 13).toFixed(1));   // Wert unter der Linie
+  SREF["p_" + id].setAttribute("transform",
+    `translate(${w.pfeil.x.toFixed(1)},${w.pfeil.y.toFixed(1)}) rotate(${w.pfeil.winkel.toFixed(1)})`);
+}
+
 function buildScenes() {
   const ov = $("ov");
-  // Flusslinien zuerst (unter den Chips), quadratische Kurve zum Haus-Hub
+  // Flusslinien zuerst (unter den Chips); die Kurve selbst setzt updateScene,
+  // weil sie von der Flussrichtung abhängt.
   for (const id of FLOW_IDS) {
-    const a = ANKER[id], b = ANKER.haus;
-    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 24;
-    const d = `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`;
     for (const lage of ROHR_LAGEN) {
       const klasse = lage === "perlen" ? "flow" : "flow-" + lage;
-      SREF[lage + "_" + id] = sEl("path", { class: klasse, d }, ov);
+      SREF[lage + "_" + id] = sEl("path", { class: klasse }, ov);
     }
     SREF["f_" + id] = SREF["perlen_" + id];
-    SREF["a_" + id] = sEl("text", { class: "flow-val", x: mx, y: my + 16, "text-anchor": "middle" }, ov);
+    SREF["p_" + id] = sEl("path", { class: "flow-pfeil", d: "M-5,-6 L7,0 L-5,6 Z" }, ov);
+    SREF["a_" + id] = sEl("text", { class: "flow-val", "text-anchor": "middle" }, ov);
   }
   // Knoten-Chips
   for (const k in ANKER) {
@@ -991,12 +1037,15 @@ function updateScene(st) {
     const f = fluesse[id];
     const on = hysterese(id, f.v) && !(off && (id === "pv" || id === "batt"));
     const tempo = on ? " on " + flussSpeed(f.v) : "";
+    setzeFlussWeg(id, st);   // Richtung kann mit jedem Tick kippen (laden/entladen, Bezug/Einspeisung)
     for (const lage of ROHR_LAGEN) {
       const el = SREF[lage + "_" + id];
       el.setAttribute("class", (lage === "perlen" ? "flow" : "flow-" + lage) + tempo);
       // Der Schattenkern bleibt dunkel, alles andere trägt die Flussfarbe
       if (lage !== "basis") el.setAttribute("stroke", f.farbe);
     }
+    SREF["p_" + id].setAttribute("class", "flow-pfeil" + (on ? " on" : ""));
+    SREF["p_" + id].setAttribute("fill", f.farbe);
     SREF["a_" + id].textContent = on ? fmtFluss(f.v) : "";
   }
   renderSchema(st);

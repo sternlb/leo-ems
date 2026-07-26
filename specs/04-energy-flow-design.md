@@ -111,7 +111,7 @@ Die Szene besteht aus zwei Ebenen:
 | `p_pv_e3dc_w` | Fluss PV-E3DC → Haus | aktiv ab Schwelle, Wert am Fluss |
 | `p_sungrow_w` | Fluss PV-Sungrow → Haus | bis Inbetriebnahme immer 0 → Knoten gedimmt „geplant" (EF-005) |
 | `p_netz_w` | Fluss Netz ↔ Haus | > +50 W: Bezug (rot, Richtung → Haus); < −50 W: Einspeisung (grau, Richtung → Netz); dazwischen inaktiv |
-| `p_batterie_w` | Fluss Batterie ↔ Haus | Vorzeichen bestimmt Richtung (laden/entladen), gelb |
+| `p_batterie_w` | Fluss an der Batterie | Vorzeichen bestimmt **Verlauf und Richtung** (§2.1), gelb |
 | `soc_batterie` | SoC-Füllbalken im Batterie-Chip | 0–100 %, numerisch daneben |
 | `p_wallbox_w` | Fluss Haus → Wallbox | lime, Wert am Fluss |
 | `laedt`, `phasen`, `strom_a` | Wallbox-Chip | Badge „1p/3p · x A" nur wenn `laedt` |
@@ -125,6 +125,28 @@ Die Szene besteht aus zwei Ebenen:
 **Wertformat:** Flüsse ≥ 1000 W als `x,y kW` (eine Nachkommastelle), 50–999 W
 als `xxx W`, darunter gilt der Fluss als inaktiv (keine Linie, kein Wert) —
 50-W-Schwelle mit Hysterese gegen Flackern.
+
+#### §2.1 Flussverlauf und Richtung (v0.6.1)
+
+Jeder Fluss ist eine Kurve **von der Quelle zur Senke** — die Richtung steckt in
+der Kurve selbst, nicht in der Animation. Perlen, Leuchtsaum und Richtungspfeil
+laufen dadurch zwangsläufig richtig herum (EF-003). Quelle und Senke je nach
+Vorzeichen:
+
+| Fluss | Bedingung | Verlauf |
+|---|---|---|
+| PV E3DC / PV Sungrow | immer | Anlage → Haus |
+| Wallbox | immer | Haus → Wallbox (die Wallbox ist reiner Verbraucher) |
+| Netz | `p_netz_w` ≥ 0 (Bezug) | Netz → Haus |
+| Netz | `p_netz_w` < 0 (Einspeisung) | Haus → Netz |
+| Batterie | `p_batterie_w` > 0 **und** PV läuft | **PV → Batterie** (der Strom nimmt den Weg, den er real nimmt) |
+| Batterie | `p_batterie_w` > 0 **ohne** PV | Haus → Batterie (z. B. Netzladung) |
+| Batterie | `p_batterie_w` < 0 | Batterie → Haus (entladen) |
+
+Der Bogen PV → Batterie weicht nach links aus, sonst liefe er quer durch den
+Haus-Chip. Bei `prefers-reduced-motion` sitzt auf der Kurvenmitte ein
+Richtungspfeil in der Flussfarbe (EF-031) — ohne laufende Perlen wäre die
+Richtung sonst nicht ablesbar.
 
 ### §3 Knoten-Zustände
 
@@ -264,6 +286,9 @@ das Basel-AI-Branding ist bewusst scharfkantig.
 | T-EF-12 | Zeiger an den linken/rechten Rand der Szene (v0.6.0) | Ebenen verschieben sich gestaffelt (Boden ±6,9 px, Netzmast ±1,0 px), an keinem Bildrand entsteht eine Lücke; `pointerleave` stellt alles zurück |
 | T-EF-13 | Uhrzeit 6:30 / 9:00 / 15:00 / 23:00 (v0.6.0) | Schatten lang nach rechts / kurz / nach links / keine; Ostfassade nur vormittags besonnt; Himmel Dämmerung → Tag → Tag → Nacht |
 | T-EF-14 | `prefers-reduced-motion` mit den v0.5/0.6-Effekten | kein Parallax, kein Torablauf, kein Schimmer, kein Lüfter — Tor-, Auto- und PV-Zustand bleiben statisch ablesbar |
+| T-EF-15 | Batterie lädt 600 W bei PV 3,2 kW (v0.6.1) | gelber Fluss **PV → Batterie** (nicht durch den Haus-Chip), Perlen laufen zur Batterie |
+| T-EF-16 | Batterie entlädt −1,8 kW, Netzbezug 400 W (v0.6.1) | gelber Fluss **Batterie → Haus**, roter Fluss **Netz → Haus**, beide Perlenrichtungen zum Haus |
+| T-EF-17 | Batterie lädt 1,5 kW ohne PV (v0.6.1) | gelber Fluss **Haus → Batterie** (Netzladung) |
 
 ## Offene Punkte
 
@@ -284,3 +309,4 @@ das Basel-AI-Branding ist bewusst scharfkantig.
 | 5. Validierung | Real auf Pi/Tablet/Handy, T-EF-1/2 mit echten Flüssen, Release v0.3.0 | 🔵 nächster Schritt: Add-on-Update auf dem Pi |
 | 6. Zustandsanimationen | v0.5.0: Torablauf + Enyaq, PV-Leuchten/Schimmer, WP-Lüfter, neue Vaillant-Skizze (+30 %) | ✅ umgesetzt (2026-07-25), T-EF-9/10/11 am Vorschau-Server verifiziert (Desktop 1280×800 + Handy 375×812), 71/71 Tests grün |
 | 7. Tiefe / „3D" | v0.6.0: Licht & Schatten, Parallax, Röhren-Flüsse, Tageszeit-Licht (Auswahl Leo, Kacheln bleiben flach) | ✅ umgesetzt (2026-07-25), T-EF-12/13/14 am Vorschau-Server verifiziert |
+| 8. Flussrichtung | v0.6.1: Verlauf Quelle → Senke statt fester Kurve zum Haus (§2.1), PV → Batterie beim Laden, Richtungspfeil bei reduzierter Bewegung | ✅ umgesetzt (2026-07-26), T-EF-15/16/17 am Vorschau-Server verifiziert |
