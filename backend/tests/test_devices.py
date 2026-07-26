@@ -7,7 +7,7 @@ import pytest
 
 from leo_ems.devices.factory import build_adapters
 from leo_ems.devices.forecast import ForecastSimulator
-from leo_ems.devices.skoda import SkodaSimulator
+from leo_ems.devices.skoda import SkodaAdapter, SkodaSimulator
 from leo_ems.devices.sungrow import SungrowStub
 from leo_ems.devices.vaillant import HA_KANDIDATEN, VaillantAdapter
 
@@ -107,3 +107,43 @@ def test_vaillant_explizite_basis_url_wird_nicht_gesucht():
     """Mit gesetzter ha_base_url (Entwicklung am PC) wird nichts durchprobiert."""
     adapter = VaillantAdapter(base_url="http://192.168.178.150:8123/api/", token="tok")
     assert asyncio.run(adapter._basis()) == "http://192.168.178.150:8123/api"
+
+
+def test_vaillant_token_herkunft_nennt_quelle_ohne_geheimnis(monkeypatch):
+    """Die Diagnose muss sagen, WOHER der Token kommt — aber nie, wie er lautet."""
+    monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
+    monkeypatch.setenv("HASSIO_TOKEN", "alter-name-123")
+    adapter = VaillantAdapter()
+    assert adapter.token == "alter-name-123"          # alter Name wird noch akzeptiert
+    herkunft = adapter.token_herkunft()
+    assert "HASSIO_TOKEN" in herkunft and "alter-name-123" not in herkunft
+
+    monkeypatch.delenv("HASSIO_TOKEN")
+    leer = VaillantAdapter()
+    assert leer.token == "" and "kein Token" in leer.token_herkunft()
+
+
+# --- Škoda: myskoda hat das SoC-Feld umbenannt (v0.6.2) -------------------------
+
+
+class _Batterie:
+    def __init__(self, **felder):
+        for name, wert in felder.items():
+            setattr(self, name, wert)
+
+
+def test_skoda_liest_soc_unter_beiden_feldnamen():
+    """Neuer und alter (vertippter) myskoda-Feldname — beide müssen gehen."""
+    assert SkodaAdapter._soc(_Batterie(state_of_charge_in_percent=63)) == 63.0
+    assert SkodaAdapter._soc(_Batterie(state_of_charged_in_percent=41)) == 41.0
+
+
+def test_skoda_unbekanntes_soc_feld_wird_als_ausfall_gemeldet():
+    """Kein bekanntes Feld → E3 (Betrieb unverändert), aber mit Klartext-Grund.
+
+    Bis v0.6.1 flog hier eine AttributeError, die die Regelschleife stumm
+    geschluckt hat — deshalb war `soc_fahrzeug` seit dem Go-live immer null.
+    """
+    with pytest.raises(ConnectionError) as fehler:
+        SkodaAdapter._soc(_Batterie(irgendwas=1))
+    assert "keinen SoC" in str(fehler.value)

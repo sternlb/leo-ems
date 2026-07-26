@@ -1,5 +1,5 @@
 name: Leo-EMS
-version: "0.6.2"
+version: "0.6.3"
 slug: leo_ems
 description: Energy Management System — koordiniert E3DC, go-e Wallbox, Enyaq und Vaillant WP
 url: https://github.com/sternlb/leo-ems
@@ -28,6 +28,10 @@ map:
 # über die HA-REST-API gelesen/gestellt (devices/vaillant.py) — dafür braucht das
 # Add-on den SUPERVISOR_TOKEN mit Core-API-Recht.
 homeassistant_api: true
+# Der Weg dorthin läuft über den Supervisor-Proxy (/core/api), also über die
+# Supervisor-API. Ohne dieses Recht kam in v0.6.2 gar kein Token in der
+# Add-on-Umgebung an und alle vier Zugangswege antworteten mit HTTP 401.
+hassio_api: true
 options:
   e3dc_host: ""
   e3dc_user: ""

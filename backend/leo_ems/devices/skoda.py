@@ -35,10 +35,29 @@ class SkodaAdapter(DeviceAdapter):
             if self._vin is None:
                 self._vin = (await self._client.list_vehicle_vins())[0]
 
+    # myskoda hat den Tippfehler im Feldnamen irgendwann korrigiert. Erst gefunden,
+    # als die Lesefehler sichtbar wurden (v0.6.2): der Adapter lief seit dem
+    # Go-live in eine AttributeError, deshalb war `soc_fahrzeug` immer null.
+    SOC_FELDER = ("state_of_charge_in_percent", "state_of_charged_in_percent")
+
+    @classmethod
+    def _soc(cls, batterie) -> float:
+        for feld in cls.SOC_FELDER:
+            wert = getattr(batterie, feld, None)
+            if wert is not None:
+                return float(wert)
+        raise ConnectionError(
+            f"myskoda liefert keinen SoC — keines der Felder {cls.SOC_FELDER} vorhanden"
+        )
+
     async def read(self) -> dict:  # pragma: no cover — echte Cloud
         await self._ensure()
         info = await self._client.get_charging(self._vin)
-        soc = info.status.battery.state_of_charged_in_percent
+        status = getattr(info, "status", None)
+        if status is None or getattr(status, "battery", None) is None:
+            # Fahrzeug schläft → kein Batteriestatus. E3: Betrieb unverändert.
+            raise ConnectionError("Škoda-Cloud ohne Batteriestatus (Fahrzeug schläft)")
+        soc = self._soc(status.battery)
         self._last = datetime.now()
         return {"soc_pct": float(soc)}
 

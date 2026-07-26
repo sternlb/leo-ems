@@ -60,6 +60,19 @@ SUPERVISOR_CORE_URL = HA_KANDIDATEN[1]
 ZUGANG_BACKOFF_S = 60.0
 PROBE_TIMEOUT_S = 3.0
 
+# Der Supervisor legt seinen Add-on-Token in die Umgebung. `SUPERVISOR_TOKEN` ist
+# der aktuelle Name, `HASSIO_TOKEN` der alte — beide werden gesetzt, aber nicht in
+# jeder HAOS-Generation beide. Reihenfolge = Vorrang.
+TOKEN_ENV = ("SUPERVISOR_TOKEN", "HASSIO_TOKEN")
+
+
+def _token_aus_umgebung() -> str:
+    for name in TOKEN_ENV:
+        wert = os.environ.get(name)
+        if wert:
+            return wert
+    return ""
+
 # Steuer-Entities der MyVaillant-Integration (über die Add-on-Optionen änderbar).
 WW_ENTITY = "water_heater.home_domestic_hot_water_0"
 ZONE_ENTITY = "climate.home_zone_zone_1_circuit_0_climate"
@@ -115,7 +128,7 @@ class VaillantAdapter(DeviceAdapter):
         # Explizit konfiguriert (Entwicklung am PC) → genau diese Adresse, sonst suchen
         self._kandidaten = (base_url.rstrip("/"),) if base_url else HA_KANDIDATEN
         self.base_url: str | None = self._kandidaten[0] if base_url else None
-        self.token = token or os.environ.get("SUPERVISOR_TOKEN", "")
+        self.token = token or _token_aus_umgebung()
         self.ww_entity = ww_entity
         self.zone_entity = zone_entity
         self.schreibzugriffe = 0          # Zähler fürs Protokoll (REQ-014)
@@ -126,6 +139,14 @@ class VaillantAdapter(DeviceAdapter):
         self._cache: dict | None = None
         self._session = None
         self._suche_bis: datetime | None = None  # Backoff nach fehlgeschlagener Suche
+
+    def token_herkunft(self) -> str:
+        """Woher der Token kommt — für Fehlermeldung und Diagnose, nie der Token selbst."""
+        if not self.token:
+            vorhanden = [n for n in TOKEN_ENV if os.environ.get(n)]
+            return f"kein Token (Umgebung: {vorhanden or 'keine der ' + str(TOKEN_ENV)})"
+        quelle = next((n for n in TOKEN_ENV if os.environ.get(n) == self.token), "Option ha_token")
+        return f"Token aus {quelle}, {len(self.token)} Zeichen"
 
     # --- HTTP ---------------------------------------------------------------
     async def _session_holen(self):
@@ -171,9 +192,13 @@ class VaillantAdapter(DeviceAdapter):
             wege.append(f"{kandidat} → HTTP {status}")
 
         # Ohne Token sieht jeder Weg wie „401" aus — das ist die häufigere Ursache
-        # als eine falsche Adresse, deshalb steht sie zuerst im Klartext.
-        hinweis = "SUPERVISOR_TOKEN fehlt" if not self.token else "Token vorhanden"
-        self.letzter_fehler = f"kein Zugang zu Home Assistant ({hinweis}): " + ", ".join(wege)
+        # als eine falsche Adresse, deshalb steht sie zuerst im Klartext. Welche
+        # Token-Quellen es überhaupt gab, gehört dazu: sonst ist nicht zu
+        # unterscheiden, ob der Supervisor keinen Token liefert oder ob er
+        # abgelehnt wird.
+        self.letzter_fehler = (
+            f"kein Zugang zu Home Assistant ({self.token_herkunft()}): " + ", ".join(wege)
+        )
         self._suche_bis = datetime.now() + timedelta(seconds=ZUGANG_BACKOFF_S)
         print(f"[leo-ems] Wärmepumpe: {self.letzter_fehler}", flush=True)
         raise ConnectionError(self.letzter_fehler)
