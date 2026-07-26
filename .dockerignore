@@ -8,3 +8,5 @@ backend/spikes/
 **/__pycache__/
 **/*.pyc
 data/
+# Lokales Entwicklungs-Datenverzeichnis (API-Token, SQLite) — gehört nie ins Image
+backend/data/

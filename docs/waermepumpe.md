@@ -60,6 +60,29 @@ Add-on-Optionen änderbar, die Lese-Sensoren stehen in `devices/vaillant.py`.
 **Leeres Feld `vaillant_ww_entity` = WP nicht angebunden.** Dann wird der
 Adapter gar nicht gebaut und das Dashboard zeigt „keine Verbindung".
 
+## Warum die WP bis v0.6.4 gar nicht ankam
+
+Der Adapter war fertig, die Entities stimmten, die Optionen stimmten — und
+trotzdem kam auf **jedem** Zugangsweg HTTP 401. Ursache lag eine Ebene tiefer:
+Die HA-Basis-Images starten über **s6-overlay**, und s6 führt das `CMD` mit einer
+*bereinigten Umgebung* aus. Das Add-on startete direkt `python -m leo_ems.main`,
+der Prozess sah deshalb weder die `ENV`-Zeilen aus dem Dockerfile noch die
+Variablen des Supervisors — nachgewiesen über `/api/v1/diag/umgebung`, das genau
+vier Variablen fand: `PATH`, `PWD`, `OLDPWD`, `SHLVL`.
+
+Zwei Folgen, dieselbe Wurzel:
+
+1. **Kein `SUPERVISOR_TOKEN`** → kein Zugang zur HA-API → WP dauerhaft „nicht
+   verbunden".
+2. **Kein `LEO_EMS_DATA_DIR`** → Daten landeten unter `/app/data` *im Container*
+   statt im persistenten `/data`. Bei **jedem Add-on-Update** waren damit
+   API-Token, Regel-Konfiguration (inklusive `read_only`, also der
+   Scharfschaltung) und die Beobachtungs-Datenbank verloren.
+
+Der Fix ist der dokumentierte Add-on-Weg: Start über `run.sh` mit
+`#!/usr/bin/with-contenv bashio` (v0.6.5). Die Begründung steht im Skript selbst,
+damit sie beim nächsten Dockerfile-Umbau nicht wieder verloren geht.
+
 ## Wenn keine Werte kommen
 
 Die Fail-Safe-Matrix verlangt, dass ein Lesefehler den Ladebetrieb nicht anhält

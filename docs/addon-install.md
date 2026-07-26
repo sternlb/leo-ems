@@ -1,6 +1,8 @@
 # Add-on-Installation auf Home Assistant
 
-Das EMS läuft als **Home-Assistant-Add-on aus einem registrierten Add-on-Repository** (seit 2026-07-23; vorher lokales Add-on, siehe „Historie" unten) — ein Docker-Container auf HAOS, wie EVCC/Zigbee2MQTT. Das Add-on-Manifest (`config.yaml`, `build.yaml`, `Dockerfile`, `repository.yaml`) liegt in der **Repo-Wurzel**, damit der Build-Kontext `backend/` erreicht und das Repo zugleich als Single-Add-on-Repository gültig ist.
+Das EMS läuft als **Home-Assistant-Add-on aus einem registrierten Add-on-Repository** (seit 2026-07-23; vorher lokales Add-on, siehe „Historie" unten) — ein Docker-Container auf HAOS, wie EVCC/Zigbee2MQTT. Das Add-on-Manifest (`config.yaml`, `build.yaml`, `Dockerfile`, `run.sh`, `repository.yaml`) liegt in der **Repo-Wurzel**, damit der Build-Kontext `backend/` erreicht und das Repo zugleich als Single-Add-on-Repository gültig ist.
+
+> **Start immer über `run.sh`** (`CMD ["/run.sh"]`, Shebang `#!/usr/bin/with-contenv bashio`). Die HA-Basis-Images starten über s6-overlay, das das `CMD` mit **bereinigter Umgebung** ausführt — ein direktes `CMD ["python", …]` sieht weder die `ENV`-Zeilen des Dockerfiles noch den `SUPERVISOR_TOKEN`. Bis v0.6.4 war genau das der Fall: die Wärmepumpe kam nicht an die HA-API, und `/data` wurde nie benutzt (Token, Konfiguration und Beobachtungsdaten waren nach jedem Update weg). Details: [waermepumpe.md](waermepumpe.md).
 
 ## Zielsystem (verifiziert 2026-07-12)
 

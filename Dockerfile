@@ -11,4 +11,11 @@ RUN pip install --no-cache-dir .[devices]
 ENV LEO_EMS_DATA_DIR=/data
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "-m", "leo_ems.main"]
+# Start über run.sh statt direkt über python: s6-overlay (in den HA-Basis-Images)
+# führt das CMD mit bereinigter Umgebung aus, deshalb muss `with-contenv` davor —
+# sonst fehlen dem Prozess die ENV-Zeilen oben UND der SUPERVISOR_TOKEN. Die
+# Begründung im Detail steht in run.sh (Fehlerbild bis v0.6.4).
+COPY run.sh /run.sh
+RUN chmod a+x /run.sh
+
+CMD ["/run.sh"]
