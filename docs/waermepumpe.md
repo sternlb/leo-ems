@@ -17,12 +17,29 @@ zweites Anfrage-Budget), sondern geht über die HA-REST-API:
 | Lesen | `GET /api/states/<entity>` gegen die lokale HA-Instanz — billig, Poll-Takt 60 s statt der 10 s der Regelschleife |
 | Schreiben | `POST /api/services/water_heater/set_temperature` bzw. `climate/set_temperature` — geht über die Cloud, deshalb gedrosselt |
 
-Zugang im Add-on: Supervisor-Proxy `http://172.30.32.2/core/api` mit dem
-`SUPERVISOR_TOKEN`. Dafür steht `homeassistant_api: true` in der `config.yaml`.
-Die feste IP statt des Namens `supervisor`, weil das Add-on im
-`host_network`-Modus läuft und dort keine Docker-DNS hat. Für den Betrieb
-außerhalb des Add-ons (Entwicklung am PC) lassen sich `ha_base_url` und
-`ha_token` (Long-Lived Token) als Optionen setzen.
+Zugang im Add-on: der `SUPERVISOR_TOKEN`, dafür steht `homeassistant_api: true`
+in der `config.yaml`. Welcher **Weg** zur HA-API führt, hängt vom Netzmodus ab —
+und Leo-EMS läuft mit `host_network: true`, wo es keine Docker-DNS gibt. Seit
+v0.6.2 wird deshalb gesucht statt geraten: beim ersten Lesen probiert der Adapter
+die bekannten Wege der Reihe nach (`HA_KANDIDATEN` in `devices/vaillant.py`) und
+merkt sich den, der mit HTTP 200 antwortet.
+
+| # | Weg | funktioniert wenn |
+|---|---|---|
+| 1 | `http://supervisor/core/api` | Bridge-Netz (Docker-DNS löst `supervisor` auf) |
+| 2 | `http://172.30.32.2/core/api` | derselbe Proxy per IP, auch ohne DNS |
+| 3 | `http://127.0.0.1:8123/api` | `host_network` — Core-Port 8123 liegt auf dem Host |
+| 4 | `http://homeassistant:8123/api` | Bridge-Netz, Core direkt |
+
+Der gefundene Weg steht im Add-on-Log (`Wärmepumpe: HA-API über …`). Klappt
+keiner, nennt der Fehler **jeden** Versuch mit Status bzw. Fehlerart — 401 heißt
+„Weg richtig, Token abgelehnt", ein Verbindungsfehler heißt „Adresse gibt es hier
+nicht". Nach einem Fehlschlag wird 60 s nicht erneut gesucht, damit die
+10-s-Regelschleife nicht an vier Zeitüberschreitungen hängt.
+
+Für den Betrieb außerhalb des Add-ons (Entwicklung am PC) lassen sich
+`ha_base_url` und `ha_token` (Long-Lived Token) als Optionen setzen — dann wird
+nichts durchprobiert, sondern genau diese Adresse benutzt.
 
 ## Entities
 
@@ -42,6 +59,21 @@ Add-on-Optionen änderbar, die Lese-Sensoren stehen in `devices/vaillant.py`.
 
 **Leeres Feld `vaillant_ww_entity` = WP nicht angebunden.** Dann wird der
 Adapter gar nicht gebaut und das Dashboard zeigt „keine Verbindung".
+
+## Wenn keine Werte kommen
+
+Die Fail-Safe-Matrix verlangt, dass ein Lesefehler den Ladebetrieb nicht anhält
+(E7) — bis v0.6.1 war er deshalb aber auch **nirgends sichtbar**: `_safe_read` in
+der Regelschleife hat jede Ausnahme verschluckt, „WP nicht verbunden" sah im
+Dashboard genauso aus wie „WP gar nicht konfiguriert". Seit v0.6.2 gilt:
+
+- `GET /api/v1/diag/devices` liest **jeden** Adapter einmal aktiv und liefert
+  Werte oder Fehler im Klartext — der erste Griff bei „Gerät XY zeigt nichts".
+- `status.geraete` nennt pro Adapter `ok`, `fehler`, `seit` und `letzte_lesung`;
+  `status.wp.fehler` steht zusätzlich unter der WP-Kachel im Dashboard.
+- Ausfall und Rückkehr landen im Protokoll (`gerät_<name>`) und im Add-on-Log —
+  bei Wechsel sofort, danach höchstens stündlich, damit 6 Ticks/min das
+  Protokoll nicht zumüllen.
 
 ## Regelverhalten
 

@@ -143,3 +143,37 @@ def test_waermepumpe_ausfall_stoert_das_laden_nicht(tmp_path):
     assert goe.charging                       # Laden läuft trotz WP-Ausfall
     assert wp.commands == []
     assert loop.status()["wp"]["verbunden"] is False
+
+
+def test_lesefehler_steht_im_status_und_im_protokoll(tmp_path):
+    """T-WP-1 (v0.6.2): ein ausgefallenes Gerät nennt den Grund, statt nur zu fehlen.
+
+    Bis v0.6.1 hat `_safe_read` jede Ausnahme verschluckt — die nicht angebundene
+    Wärmepumpe sah im Dashboard genauso aus wie eine gar nicht konfigurierte.
+    """
+    cfg = RegelConfig(read_only=False)
+    store = Store(tmp_path / "test.db")
+    e3dc = E3dcSimulator(p_netz_w=-3000, p_batterie_w=0, soc_pct=60)
+    wp = VaillantSimulator()
+    wp.available = False
+    loop = ControlLoop(cfg, SafetyGuard(cfg), store, {"e3dc": e3dc, "vaillant": wp})
+
+    asyncio.run(loop.tick(T0))
+    st = loop.status()
+    assert "nicht erreichbar" in st["wp"]["fehler"]
+    assert st["geraete"]["vaillant"]["ok"] is False
+    assert st["geraete"]["e3dc"]["ok"] is True
+    assert st["geraete"]["e3dc"]["letzte_lesung"] is not None
+    # Der Ausfall steht auch im Protokoll (REQ-062) — genau einmal, nicht je Tick
+    for i in range(1, 30):
+        asyncio.run(loop.tick(T0 + timedelta(seconds=i * 10)))
+    meldungen = [d for d in store.recent_decisions(500) if "vaillant" in str(d)]
+    assert len(meldungen) == 1
+
+    # Kommt das Gerät zurück, verschwindet der Fehler und die Rückkehr wird gemeldet
+    wp.available = True
+    asyncio.run(loop.tick(T0 + timedelta(seconds=300)))
+    st = loop.status()
+    assert st["wp"]["verbunden"] is True and st["wp"]["fehler"] is None
+    assert st["geraete"]["vaillant"]["ok"] is True
+    assert len([d for d in store.recent_decisions(500) if "vaillant" in str(d)]) == 2

@@ -28,6 +28,9 @@ from ..store import Store
 
 E3DC_MAX_ALTER = timedelta(seconds=60)   # Fail-Safe E1 (Spec §7)
 BATT_ENTLADE_SCHWELLE_W = -200           # Entladung Richtung Haus (Spec §5.1)
+# Ein dauerhaft ausgefallenes Gerät soll das Protokoll nicht zumüllen (6 Ticks/min),
+# darin aber auch nicht verschwinden: melden bei Wechsel und danach stündlich.
+GERAET_MELDE_INTERVALL = timedelta(minutes=60)
 
 
 class ControlLoop:
@@ -42,6 +45,7 @@ class ControlLoop:
         self.vehicle_limit_soc = 80          # fahrzeugseitiges Limit (Baseline)
         self._ueberschuss_fenster: list[float] = []  # gleitender Mittelwert über 3 (Spec §2)
         self._last_read: dict[str, datetime] = {}    # letzte erfolgreiche Lesung je Adapter (Tick-Zeit)
+        self._geraete: dict[str, dict] = {}          # Lese-Gesundheit je Adapter (Diagnose)
         self._sperre_hw_gesetzt = False
         self._last_status: dict = {"state": "start", "grund": "Regelschleife initialisiert"}
         self.running = False
@@ -68,7 +72,7 @@ class ControlLoop:
 
         # 2) Fail-Safe E1: E3DC frisch? Frische an der Tick-Zeit gemessen (Leo, 2026-07-12)
         e3dc = self.adapters.get("e3dc")
-        e_data = await self._safe_read(e3dc)
+        e_data = await self._safe_read(e3dc, "e3dc")
         if e_data is not None:
             self._last_read["e3dc"] = now
         letzter = self._last_read.get("e3dc")
@@ -81,16 +85,16 @@ class ControlLoop:
             return
 
         goe = self.adapters.get("goe")
-        goe_data = await self._safe_read(goe)
+        goe_data = await self._safe_read(goe, "goe")
 
         # 3) Sungrow (E5): bei Ausfall Werte = 0 und weiter
         p_sungrow = 0.0
-        sg = await self._safe_read(self.adapters.get("sungrow"))
+        sg = await self._safe_read(self.adapters.get("sungrow"), "sungrow")
         if sg is not None:
             p_sungrow = sg.get("power_w", 0.0)
 
         # 4) Fahrzeug-SoC (E3): bei Ausfall unverändert (letzter Wert / Schätzung)
-        sk = await self._safe_read(self.adapters.get("skoda"))
+        sk = await self._safe_read(self.adapters.get("skoda"), "skoda")
         soc_v = sk.get("soc_pct") if sk else (goe_data.get("soc_pct") if goe_data else None)
 
         # 5) Überschuss (Spec §2) mit gleitendem Mittelwert über 3 Messungen
@@ -113,7 +117,7 @@ class ControlLoop:
 
         # 7b) Wärmepumpe (Stufe 2, REQ-010/011). Vorrang Auto (Leo, 2026-07-25):
         #     die WP sieht nur, was nach der Wallbox-Zuteilung übrig bleibt.
-        wp_data = await self._safe_read(self.adapters.get("vaillant"))
+        wp_data = await self._safe_read(self.adapters.get("vaillant"), "vaillant")
         ev_zuteilung_w = cmd.current_a * VOLT * cmd.phases if cmd.charging else 0
         wp_cmd = self.heatpump.update(now, frei_w=surplus - ev_zuteilung_w, wp=wp_data)
         await self._sende_wp(now, wp_cmd)
@@ -154,7 +158,13 @@ class ControlLoop:
             # Entprellungs-/Sperr-Transparenz der 1p/3p-Umschaltung (Spec §4.2)
             "phasen_info": self.controller.phase_diagnose(now, surplus),
             # Wärmepumpe, zweigeteilt Warmwasser/Heizkreis (REQ-051, Issue #1)
-            "wp": self.heatpump.status(wp_data),
+            "wp": {
+                **self.heatpump.status(wp_data),
+                # „nicht verbunden" allein hilft bei der Suche nicht weiter (v0.6.2)
+                "fehler": (self._geraete.get("vaillant") or {}).get("fehler"),
+            },
+            # Lese-Gesundheit aller Geräte (Diagnose, /api/v1/diag/devices)
+            "geraete": self.geraete_status(),
         }
         self.store.log_decision(
             now, grund,
@@ -231,13 +241,64 @@ class ControlLoop:
         self._ueberschuss_fenster = self._ueberschuss_fenster[-3:]
         return sum(self._ueberschuss_fenster) / len(self._ueberschuss_fenster)
 
-    async def _safe_read(self, adapter) -> dict | None:
+    # --- Lese-Gesundheit der Geräte (Diagnose) ------------------------------
+    def geraete_status(self) -> dict:
+        """Pro Adapter: liest er, seit wann, und woran es sonst hakt.
+
+        Die Fail-Safe-Matrix verlangt, dass ein Lesefehler den Betrieb nicht
+        anhält — bis v0.6.1 war er deshalb aber auch nirgends sichtbar. Genau das
+        hat die nicht angebundene Wärmepumpe so lange versteckt (v0.6.2).
+        """
+        return {
+            name: {
+                "ok": z["ok"],
+                "fehler": z["fehler"],
+                "seit": z["seit"].isoformat(timespec="seconds") if z["seit"] else None,
+                "letzte_lesung": (
+                    z["letzte_lesung"].isoformat(timespec="seconds") if z["letzte_lesung"] else None
+                ),
+            }
+            for name, z in sorted(self._geraete.items())
+        }
+
+    def _geraet(self, name: str) -> dict:
+        return self._geraete.setdefault(
+            name, {"ok": True, "fehler": None, "seit": None, "letzte_lesung": None, "gemeldet": None}
+        )
+
+    def _melden(self, z: dict, now: datetime, name: str, text: str) -> None:
+        """Nur bei Wechsel oder nach GERAET_MELDE_INTERVALL — sonst schweigen."""
+        letzte = z["gemeldet"]
+        if letzte is not None and now - letzte < GERAET_MELDE_INTERVALL:
+            return
+        z["gemeldet"] = now
+        print(f"[leo-ems] {name}: {text}", flush=True)
+        self.store.log_decision(now, f"gerät_{name}", {}, "-", text)
+
+    async def _safe_read(self, adapter, name: str | None = None) -> dict | None:
         if adapter is None:
             return None
+        name = name or getattr(adapter, "name", "gerät")
+        z = self._geraet(name)
+        now = datetime.now()
         try:
-            return await adapter.read()
-        except Exception:
+            daten = await adapter.read()
+        except Exception as exc:
+            text = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+            if z["ok"] or z["fehler"] != text:
+                z["seit"], z["gemeldet"] = now, None       # neuer Fehler → sofort melden
+            z["ok"], z["fehler"] = False, text
+            self._melden(z, now, name, f"liest nicht — {text}")
             return None
+
+        if not z["ok"]:
+            z["seit"], z["gemeldet"] = now, None
+            z["ok"], z["fehler"] = True, None
+            self._melden(z, now, name, "liest wieder")
+        # Teil-Ausfälle meldet der Adapter selbst (z. B. einzelne HA-Entities)
+        z["fehler"] = getattr(adapter, "letzter_fehler", None)
+        z["letzte_lesung"] = now
+        return daten
 
     async def _safe_cmd(self, coro_func, *args) -> None:
         try:

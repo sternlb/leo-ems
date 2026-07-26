@@ -102,6 +102,25 @@ def create_app(
             return status_provider()
         return {"hinweis": "Regelschleife noch nicht aktiv (Phase 4 in Arbeit)", "version": __version__}
 
+    # --- Geräte-Diagnose ---------------------------------------------------------
+    @app.get("/api/v1/diag/devices", dependencies=[auth])
+    async def diag_devices():
+        """Jeden Adapter einmal aktiv lesen und im Klartext berichten, was passiert.
+
+        Für die Frage „warum zeigt Gerät XY keine Werte?": die Regelschleife muss
+        Lesefehler schlucken (Fail-Safe-Matrix, Spec §7) — hier stehen sie im
+        Klartext, inklusive der Wege, die der Vaillant-Adapter probiert hat.
+        """
+        if control is None:
+            raise HTTPException(status_code=503, detail="Regelschleife nicht aktiv")
+        proben: dict = {}
+        for name, adapter in sorted(control.adapters.items()):
+            try:
+                proben[name] = {"ok": True, "werte": await adapter.read()}
+            except Exception as exc:
+                proben[name] = {"ok": False, "fehler": f"{type(exc).__name__}: {exc}"}
+        return {"probe": proben, "laufend": control.geraete_status()}
+
     # --- Lademodus + Fahrzeug-Limit (REQ-071) -----------------------------------
     @app.put("/api/v1/mode", dependencies=[auth])
     async def mode_put(update: ModeIn):

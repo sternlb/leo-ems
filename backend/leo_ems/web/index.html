@@ -1144,9 +1144,12 @@ const grad = (v, n = 1) => v == null ? "–" : v.toFixed(n).replace(".", ",") + 
 function wpPanel(st) {
   const wp = st.wp;
   if (!wp || !wp.verbunden) {
+    // Der Grund steht seit v0.6.2 im Status — ohne ihn war „keine Verbindung"
+    // nicht von „gar nicht konfiguriert" zu unterscheiden.
     return `<h3>Wärmepumpe</h3><p class="note">Keine Verbindung zur Wärmepumpe.
       Die Werte kommen über Home Assistant aus der MyVaillant-Integration —
-      siehe docs/systems/vaillant.md.</p>`;
+      siehe docs/systems/vaillant.md.</p>
+      ${wp && wp.fehler ? `<p class="note"><strong>Grund:</strong> ${wp.fehler}</p>` : ""}`;
   }
   const ww = wp.warmwasser, hk = wp.heizkreis;
   return `<h3>Wärmepumpe — Warmwasser</h3>
@@ -1185,6 +1188,7 @@ function renderWp(st) {
 
   $("wp-grund").textContent = leer
     ? "Keine Verbindung zur Wärmepumpe — es werden keine Sollwerte gestellt."
+      + (wp && wp.fehler ? " " + wp.fehler : "")
     : wp.grund;
 }
 
