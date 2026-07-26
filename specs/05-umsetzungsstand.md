@@ -48,7 +48,7 @@ gelöscht wurden (siehe REQ-073). Erst danach ist REQ-008 verantwortbar.
 | REQ-010 Warmwasser vorziehen | ✅ | `planner/heatpump.py` | **T** 11 Tests (Entprellung, Mindestlaufzeit, Selbstabschaltung, Zieltemperatur) · **L** seit v0.6.5 |
 | REQ-011 Heizkreis anheben | 🔵 umgesetzt, Heizperiode noch nicht erlebt | `heatpump.py` | **T** 4 Tests (Sommer/Winter, Obergrenze, Rückstellung) · **L erst ab Herbst** |
 | REQ-012 Komfortgrenzen | ✅ | `heatpump.py`, `config.py` | **T** `test_ww_komfortgrenze_hebt_rueckstellwert_an`, `test_heizkreis_respektiert_komfort_obergrenze` |
-| REQ-013 Steuerweg MyVaillant über HA | ✅ *(erst seit v0.6.5 funktionsfähig)* | `devices/vaillant.py` | **T** 5 Tests (Zugangssuche, Token-Herkunft) · **L** Live-Werte im Status |
+| REQ-013 Steuerweg MyVaillant über HA | 🔵 **Lesen ✅, Schreiben unbestätigt** | `devices/vaillant.py` | **T** 5 Tests (Zugangssuche, Token-Herkunft) · **L** Lesen live; `set_temperature` ging fehlerfrei durch, der Sollwert blieb aber auf 45 °C (Betriebsart `Auto`) |
 | REQ-014 Cloud-Ratenlimit | ✅ | `heatpump.py` | **T** `test_cloud_gap_bremst_wiederholungen`, `test_bestaetigter_sollwert_wird_nicht_nachgeschrieben` |
 
 **Offen in B:** der MyVaillant-**Praxistest** (offene Frage 3 aus Runde 3) — reichen
@@ -142,8 +142,10 @@ Ergänzend zur Laufzeit: `GET /api/v1/diag/devices` (jeder Adapter aktiv gelesen
 
 1. **REQ-041 verdrahten** — Forecast in `plane_garantieladung()`. Größte inhaltliche
    Lücke der Stufe 1 und eine der drei Neuerungen gegenüber EVCC.
-2. **MyVaillant-Praxistest** (Runde 3, Frage 3) — jetzt erstmals möglich. Braucht
-   `read_only: false` und eine Sonnenperiode.
+2. **MyVaillant-Schreibweg klären** (Runde 3, Frage 3) — erster echter Boost am
+   2026-07-26 lief fehlerfrei durch, ohne dass der Sollwert folgte. Vermutung:
+   Betriebsart `Auto` blockt den Sollwert, es müsste vorher `set_operation_mode`.
+   Das ändert Leos Heizungsprogramm → seine Entscheidung, kein Alleingang.
 3. **REQ-052 Kennzahlen** — Autarkie und PV-Anteil gegen die Baseline 2025. Läuft
    jetzt auf persistenten Daten, also ab heute sinnvoll messbar.
 4. **REQ-061 Wallbox-Override** — „bis Abstecken oder 24 h" fehlt komplett.

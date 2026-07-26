@@ -161,6 +161,17 @@ EMS nicht mehr nach. Wer in der MyVaillant-App von Hand etwas ändert, wird nich
 
 ## Offen
 
+- **Schreibweg noch nicht bestätigt (Befund 2026-07-26, v0.6.5).** Lesen
+  funktioniert vollständig. Der erste echte Boost hat `water_heater.set_temperature`
+  mit 60 °C ausgelöst, der Aufruf ging ohne Fehler durch (kein `cmd_fehler` im
+  Protokoll, keine MyVaillant-Fehler im HA-Log) — der Sollwert stand danach
+  aber weiter auf 45 °C, auch nach mehreren Minuten. Verdacht: In der
+  Betriebsart **`Auto`** (Zeitprogramm) übernimmt MyVaillant den Sollwert nicht;
+  vermutlich muss vorher `set_operation_mode` auf Tag-/Manuell-Betrieb gehen.
+  Das ist ein **Eingriff in Leos Heizungsprogramm** und deshalb bewusst nicht
+  auf Verdacht umgesetzt. Genau die offene Frage 3 aus Requirements-Runde 3.
+  Das EMS verhält sich dabei korrekt: der Sollwert bleibt „gewünscht" und wird
+  höchstens alle `wp_cloud_min_gap_s` (15 min) erneut versucht.
 - REQ-011 im Praxistest: Wie schnell reagiert die Anlage auf
   Sollwertänderungen (Latenz Cloud → Gerät)? Die Werte für Entprellung und
   Mindestlaufzeit sind Schätzungen und in der ersten Heizperiode zu prüfen.
