@@ -9,6 +9,7 @@ bereits durch die Home-Assistant-Anmeldung geschützt → kein Token nötig.
 from __future__ import annotations
 
 import hmac
+import os
 from dataclasses import asdict
 from datetime import datetime, time
 from pathlib import Path
@@ -20,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .. import __version__
-from ..config import RegelConfig, save_config
+from ..config import DATA_DIR, TOKEN_FILE, RegelConfig, save_config
 from ..planner.rules import ChargingRule
 from ..store import Store
 
@@ -120,6 +121,32 @@ def create_app(
             except Exception as exc:
                 proben[name] = {"ok": False, "fehler": f"{type(exc).__name__}: {exc}"}
         return {"probe": proben, "laufend": control.geraete_status()}
+
+    @app.get("/api/v1/diag/umgebung", dependencies=[auth])
+    async def diag_umgebung():
+        """Laufumgebung des Add-ons — Datenverzeichnis und Umgebungs-Variablen.
+
+        Beantwortet die zwei Fragen, die sich beim WP-Zugang gestellt haben:
+        liefert der Supervisor überhaupt einen Token, und ist `/data` wirklich
+        das persistente Volume? Es werden nur **Namen** von Variablen
+        zurückgegeben, nie Werte — dort stehen Zugangsdaten drin.
+        """
+        return {
+            "version": __version__,
+            "data_dir": str(DATA_DIR.resolve()),
+            "data_dir_ist_mountpoint": os.path.ismount(str(DATA_DIR)),
+            "data_dir_inhalt": sorted(p.name for p in DATA_DIR.glob("*")) if DATA_DIR.exists() else [],
+            "token_datei": {
+                "pfad": str(TOKEN_FILE),
+                "vorhanden": TOKEN_FILE.exists(),
+                # Gleiches Alter wie der Prozess = bei jedem Start neu → /data ist nicht persistent
+                "geaendert": (
+                    datetime.fromtimestamp(TOKEN_FILE.stat().st_mtime).isoformat(timespec="seconds")
+                    if TOKEN_FILE.exists() else None
+                ),
+            },
+            "umgebung": sorted(os.environ),
+        }
 
     # --- Lademodus + Fahrzeug-Limit (REQ-071) -----------------------------------
     @app.put("/api/v1/mode", dependencies=[auth])
