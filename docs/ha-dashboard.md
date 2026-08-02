@@ -87,7 +87,11 @@ enthalten keine Geheimnisse.
 2. **Wärmepumpe (v0.4.0, Issue #1):** zweigeteilt in **Warmwasser**
    (Speichertemperatur, Sollwert, Modus, `BOOST`-Badge) und **Heizkreis**
    (Vorlauftemperatur, Raum-Ist/-Soll, Zustand, Außentemperatur,
-   `ANHEBUNG`-Badge). Darunter der Klartext-Grund der Überschuss-Steuerung.
+   `ANHEBUNG`-Badge). Seit v0.7.0 hat jeder Absatz einen eigenen
+   **AN/AUS-Schalter** in der Überschrift (`wp_ww_aktiv` / `wp_hk_aktiv` per
+   `PUT /api/v1/config`): eine abgeschaltete Funktion bleibt ablesbar, tritt
+   aber gedimmt zurück, und ihre Schwellwerte in den Einstellungen werden
+   mit ausgegraut. Darunter der Klartext-Grund der Überschuss-Steuerung.
    Quelle ist `status.wp` aus `planner/heatpump.py`; ohne Verbindung steht dort
    „keine Verbindung zur Wärmepumpe" und es wird nichts gestellt (Fail-Safe E7).
 3. **Ladestatus:** Zustand + Klartext-Grund (REQ-050), Garantieladungs-Badge.

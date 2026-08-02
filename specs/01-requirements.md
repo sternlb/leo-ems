@@ -22,12 +22,12 @@ Konventionen:
 | 🔵 teilweise | 4 | 4 | **8** |
 | ⚪ offen | 2 | 4 | **6** |
 
-86 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test, Live-Verifikation oder beides). Ohne jeden Nachweis sind nur REQ-008, 022, 023, 030 und 031 — vier davon gehören zu Ausbaustufe 3 (dynamischer Tarif), die es real noch nicht gibt.
+92 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test, Live-Verifikation oder beides). Ohne jeden Nachweis sind nur REQ-008, 022, 023, 030 und 031 — vier davon gehören zu Ausbaustufe 3 (dynamischer Tarif), die es real noch nicht gibt.
 
 **Die vier Punkte, die den größten Unterschied machen würden:**
 
 1. **REQ-041 (Must)** — der Forecast.Solar-Adapter ist fertig **und wird von der Regelschleife nie gelesen**. Die Zielladung plant ohne Prognose, obwohl das laut `docs/evcc-baseline.md` eine der drei Neuerungen gegenüber EVCC sein sollte. Größte inhaltliche Lücke der Stufe 1.
-2. **REQ-013 (Should)** — WP-**Lesen** läuft seit v0.6.5 vollständig, das **Schreiben** ist unbestätigt: `set_temperature` geht fehlerfrei durch, der Sollwert folgt nicht (Verdacht Betriebsart `Auto`).
+2. ~~**REQ-013 (Should)** — Schreibweg unbestätigt~~ → **erledigt am 2026-08-02:** die HA-Historie belegt echte Sollwert-Zyklen (45↔57/60) in Betriebsart `Auto`, der Speicher folgt. Kein `set_operation_mode` nötig, das Zeitprogramm bleibt unangetastet.
 3. **REQ-061 (Must)** — Nutzer-Override „bis Abstecken oder 24 h" ist für die Wallbox gar nicht implementiert.
 4. **REQ-052 (Should)** — Kennzahlen gegen die Baseline 2025 fehlen. Erst seit v0.6.5 überhaupt messbar, weil die Beobachtungsdaten vorher bei jedem Update gelöscht wurden.
 
@@ -52,10 +52,10 @@ Konventionen:
 
 | ID | Anforderung | MoSCoW | Umsetzung |
 |---|---|---|---|
-| REQ-010 | Das EMS soll bei anhaltendem PV-Überschuss die Warmwasserbereitung der Vaillant WP vorziehen (Boost/Sollwert-Anhebung mittags statt abends). | Should | ✅ 11 Tests; Entscheidung läuft live (Boost wird ausgelöst) |
-| REQ-011 | Das EMS soll bei PV-Überschuss die Heizkreis-Solltemperatur moderat anheben können (thermische Speicherung im Gebäude/Puffer). | Should | 🔵 umgesetzt + 4 Tests, **Heizperiode noch nicht erlebt** |
+| REQ-010 | Das EMS soll bei anhaltendem PV-Überschuss die Warmwasserbereitung der Vaillant WP vorziehen (Boost/Sollwert-Anhebung mittags statt abends). | Should | ✅ 11 Tests; **live bestätigt** (Boost-Zyklen 29.07.–01.08.2026, Speicher folgt). Getrennt abschaltbar (Issue #1), Boost-Ziel 57 °C |
+| REQ-011 | Das EMS soll bei PV-Überschuss die Heizkreis-Solltemperatur moderat anheben können (thermische Speicherung im Gebäude/Puffer). | Should | 🔵 umgesetzt + 4 Tests, per Default **abgeschaltet** (Issue #1), Heizperiode noch nicht erlebt |
 | REQ-012 | Das EMS darf Komfortgrenzen nie verletzen (Warmwasser-Mindesttemperatur, Raumtemperatur-Korridor); Grenzen sind konfigurierbar. | Should | ✅ getestet |
-| REQ-013 | Das EMS soll die WP über die **MyVaillant-Cloud** ansteuern (Vaillant-Internetmodul hängt am eBUS). Ein lokaler eBUS-Direktzugang (z.B. ebusd, zusätzliche Hardware nötig) bleibt als spätere Option offen, ist aber kein Requirement. | Should | 🔵 **Lesen ✅ (seit v0.6.5), Schreiben unbestätigt** — Aufruf geht durch, Sollwert folgt nicht |
+| REQ-013 | Das EMS soll die WP über die **MyVaillant-Cloud** ansteuern (Vaillant-Internetmodul hängt am eBUS). Ein lokaler eBUS-Direktzugang (z.B. ebusd, zusätzliche Hardware nötig) bleibt als spätere Option offen, ist aber kein Requirement. | Should | ✅ **Lesen und Schreiben bestätigt** (2026-08-02): Sollwert-Zyklen 45↔57/60 in Betriebsart `Auto`, ohne Eingriff ins Zeitprogramm |
 | REQ-014 | Das EMS muss die Ratenlimits der MyVaillant-Cloud respektieren (Anfrage-Budget, keine Dauerschleifen) und mit Cloud-Latenz/Aussetzern robust umgehen. | Should | ✅ getestet (15-min-Gap, kein Nachschreiben nach Bestätigung) |
 
 ## C — Batterie-Management (E3DC)
@@ -148,7 +148,7 @@ Konventionen:
 
 1. ~~**70 %-Regel Neuanlage**~~ ✅ Beantwortet (2026-07-12, Elektriker Waldemar): Arbeitsannahme — **der Wechselrichter kümmert sich selbst darum**. In REQ-043 dokumentiert, bei Sungrow-Inbetriebnahme verifizieren.
 2. ~~**UI-Entscheidung**~~ ✅ Entschieden (2026-07-12): **eigenständige App, funktioniert komplett im Heim-LAN** (REQ-074).
-3. **MyVaillant-Steuerbarkeit:** Reichen die per Cloud verfügbaren Stellgrößen (WW-Boost, Sollwerte) praktisch aus? → **Teilantwort 2026-07-26 (v0.6.5):** Lesen funktioniert vollständig (Speicher-/Vorlauf-/Außentemperatur, Betriebsarten, COP). Beim **Schreiben** hat der erste echte Boost `water_heater.set_temperature` mit 60 °C ausgelöst — der Aufruf ging fehlerfrei durch (kein Fehler im EMS-Protokoll, keiner im HA-Log), der Sollwert stand danach aber weiter auf 45 °C. Verdacht: In der Betriebsart **`Auto`** (Zeitprogramm) übernimmt MyVaillant den Sollwert nicht, es müsste vorher `set_operation_mode` auf Tag-/Manuell-Betrieb. Das ist ein **Eingriff in Leos Heizungsprogramm** und deshalb bewusst nicht auf Verdacht umgesetzt. → Entscheidung Leo.
+3. ~~**MyVaillant-Steuerbarkeit:**~~ ✅ **Beantwortet 2026-08-02: ja, sie reichen — und ohne Eingriff ins Zeitprogramm.** Lesen läuft seit v0.6.5 vollständig. Der Verdacht vom 26.07., MyVaillant übernehme in der Betriebsart `Auto` keine Sollwerte (und man müsste erst per `set_operation_mode` in den Tag-/Manuell-Betrieb, also in Leos Heizungsprogramm eingreifen), ist **widerlegt**: die HA-Historie von `sensor.home_domestic_hot_water_0_setpoint` zeigt seit dem 29.07. durchgehend echte Zyklen 45 ↔ 57/60 °C, allein am 31.07. fünf Stück, und die Speichertemperatur folgt (08:15–08:52: 48,5 → 56,5 °C). Der Einzelfall vom 26.07. war eine verschluckte Cloud-Übernahme — genau dafür wiederholt das EMS am Cloud-Gap. **Nebenbefund:** die Anlage kommt real nur auf ~57,5 °C, das Boost-Ziel steht deshalb seit v0.7.0 auf 57 statt 60 °C.
 4. ~~**Migrations-Baseline**~~ ✅ Erledigt (2026-07-12): siehe [docs/evcc-baseline.md](../docs/evcc-baseline.md) — EVCC läuft als **Add-on** (nicht HACS), Site-Parameter, Loadpoint „Garage", Vehicle und Statistik-Baseline (99,4 % Solaranteil 30d) dokumentiert. Rest-Todo dort: `evcc.yaml`/Zugangsdaten vor der Ablösung sichern.
 
 ## Priorisierung (MoSCoW) — Ergebnis vom 2026-07-12
@@ -164,7 +164,7 @@ Die Musts bilden zusammen **Ausbaustufe 1: den EVCC-Ersatz** — Überschusslade
 | Stufe | Inhalt | Requirements | Voraussetzung | Stand 2026-07-26 |
 |---|---|---|---|---|
 | **1 — EVCC-Ersatz** | EV-Überschussladen, Batterie-Grundsteuerung, Prognose, Dashboard, Sicherheit, UI | alle Musts (REQ-001–008, 020/021/024, 032, 040–042, 050/051, 060–064, 070/071/073/074) | EVCC-Baseline dokumentieren (Fragen Runde 3) | 🔵 20 von 26 Musts fertig; offen: Forecast verdrahten (041), Wallbox-Override (061), Sungrow (042), EVCC-Ablösung (007/008), eigenständige App (074) |
-| **2 — Wärmepumpe** | WW-Vorziehen, Heizkreis-Anhebung, Komfortgrenzen, Cloud-Robustheit | REQ-010–014 (Should) | MyVaillant-Praxistest bestanden | 🔵 Logik vollständig und getestet, Anbindung seit v0.6.5 live; **Schreibweg klären**, Heizkreis erst in der Heizperiode belegbar |
+| **2 — Wärmepumpe** | WW-Vorziehen, Heizkreis-Anhebung, Komfortgrenzen, Cloud-Robustheit | REQ-010–014 (Should) | MyVaillant-Praxistest bestanden | 🔵 **Warmwasser fertig und live bestätigt** (Schreibweg belegt 2026-08-02, getrennt schaltbar seit v0.7.0); Heizkreis umgesetzt, aber abgeschaltet — belegbar erst in der Heizperiode |
 | **3 — Dynamischer Tarif** | Preis-Adapter, Lastverschiebung in Billigstunden, Batterie-Netzladen, Feinsteuerung | REQ-022/023, 030/031, 043, 052/053, 072 (Should) | Tarifvertrag abgeschlossen | ⚪ nicht begonnen (außer 043/072, die nicht tarifgebunden sind) |
 
 *(REQ-052/053/072 sind nicht tarifgebunden und können vorgezogen werden, sobald Stufe 1 stabil läuft. REQ-042 (Sungrow) ist Must, aber erst nach der Installation Ende 2026 real testbar — bis dahin gegen simulierte Werte entwickeln.)*

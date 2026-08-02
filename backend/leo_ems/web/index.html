@@ -48,9 +48,14 @@
   /* Wärmepumpe: zwei Absätze nebeneinander — Warmwasser | Heizkreis (Issue #1) */
   .wp-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
   .wp-split > div + div { border-left: 1px solid var(--line); padding-left: 1.1rem; }
-  .wp-split h3 { display: flex; align-items: center; gap: .5rem; }
+  .wp-split h3 { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  /* Abgeschaltete Funktion: die Werte bleiben ablesbar, treten aber zurück
+     (Issue #1 — Leo will die Temperaturen auch dann sehen). */
+  .wp-off .kw, .wp-off .sub { opacity: .4; }
   .wp-grund { margin-top: .9rem; padding-top: .7rem; border-top: 1px solid var(--line);
     font-size: .85rem; color: var(--dim); line-height: 1.5; }
+  /* Die zugehörigen Schwellwerte in den Einstellungen folgen dem Schalter */
+  .f.aus { opacity: .45; }
 
   section { margin-top: 1.4rem; }
   section > h2 { font-family: var(--disp); font-size: 1.05rem; margin-bottom: .6rem; border-left: 3px solid var(--lime); padding-left: .5rem; }
@@ -262,6 +267,8 @@
     .modes button { font-size: .85rem; }
     .del { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
     .wtag.switch { padding: .35em .55em; font-size: .75rem; }
+    /* WP-Schalter sind Bedienelemente, keine Badges — volles Touch-Ziel (Issue #1) */
+    .wp-split .badge.switch { min-height: 44px; display: inline-flex; align-items: center; padding: 0 .9em; }
 
     /* Protokoll: umbrechen statt seitlich scrollen */
     .hist { white-space: normal; overflow-x: visible; line-height: 1.7; }
@@ -657,14 +664,18 @@
     <h2>Wärmepumpe</h2>
     <div class="card">
       <div class="wp-split">
-        <div>
-          <h3>Warmwasser <span class="badge on hidden" id="wp-ww-boost">BOOST</span></h3>
+        <div id="wp-ww-box">
+          <h3>Warmwasser
+            <span class="badge switch" id="wp-ww-schalter" title="Überschuss-Nutzung Warmwasser ein-/ausschalten">–</span>
+            <span class="badge on hidden" id="wp-ww-boost">BOOST</span></h3>
           <div class="kw" id="wp-ww-ist">–</div>
           <div class="sub">Sollwert <b id="wp-ww-soll">–</b> · Modus <b id="wp-ww-modus">–</b></div>
           <div class="sub" id="wp-ww-sonder"></div>
         </div>
-        <div>
-          <h3>Heizkreis <span class="badge on hidden" id="wp-hk-boost">ANHEBUNG</span></h3>
+        <div id="wp-hk-box">
+          <h3>Heizkreis
+            <span class="badge switch" id="wp-hk-schalter" title="Heizkreis-Anhebung ein-/ausschalten">–</span>
+            <span class="badge on hidden" id="wp-hk-boost">ANHEBUNG</span></h3>
           <div class="kw" id="wp-hk-vorlauf">–</div>
           <div class="sub">Raum <b id="wp-hk-raum">–</b> · Soll <b id="wp-hk-raum-soll">–</b></div>
           <div class="sub">Zustand <b id="wp-hk-zustand">–</b> · außen <b id="wp-aussen">–</b></div>
@@ -740,8 +751,10 @@
         <label class="f"><span>Anhebung nur unter (°C außen)</span><input type="number" id="c-wp_hk_max_aussen_c" min="-10" max="25" step="1"></label>
       </div>
       <div class="sub" style="margin-top:.7rem">
-        Der Abstand zwischen An- und Aus-Schwelle sollte mindestens so groß sein wie
-        der WP-Verbrauch im Boost (~2 kW) — sonst schaltet der Boost sich selbst ab.
+        Warmwasser und Heizkreis werden oben in der Wärmepumpen-Kachel einzeln
+        ein- und ausgeschaltet; ausgegraute Felder gehören zu einer abgeschalteten
+        Funktion. Der Abstand zwischen An- und Aus-Schwelle sollte mindestens so groß
+        sein wie der WP-Verbrauch im Boost (~2 kW) — sonst schaltet der Boost sich selbst ab.
       </div>
     </div>
   </section>
@@ -1152,12 +1165,15 @@ function wpPanel(st) {
       ${wp && wp.fehler ? `<p class="note"><strong>Grund:</strong> ${wp.fehler}</p>` : ""}`;
   }
   const ww = wp.warmwasser, hk = wp.heizkreis;
-  return `<h3>Wärmepumpe — Warmwasser</h3>
+  // „(aus)" hinter der Überschrift: sonst sieht ein abgeschalteter Zweig im
+  // Panel genauso aus wie einer, der nur gerade keinen Überschuss hat (Issue #1)
+  const aus = a => a === false ? " <span class=\"badge\">AUS</span>" : "";
+  return `<h3>Wärmepumpe — Warmwasser${aus(ww.aktiv)}</h3>
     <dl><dt>Speicher</dt><dd>${grad(ww.ist_c, 0)}</dd>
     <dt>Sollwert</dt><dd>${grad(ww.soll_c, 0)}${ww.boost ? " (Boost)" : ""}</dd>
     <dt>Modus</dt><dd>${ww.modus || "–"}</dd>
     ${ww.sonderfunktion ? `<dt>Sonderfunktion</dt><dd>${ww.sonderfunktion}</dd>` : ""}</dl>
-    <h3 style="margin-top:.9rem">Heizkreis</h3>
+    <h3 style="margin-top:.9rem">Heizkreis${aus(hk.aktiv)}</h3>
     <dl><dt>Vorlauf</dt><dd>${grad(hk.vorlauf_c)}</dd>
     <dt>Raum</dt><dd>${grad(hk.raum_ist_c)} / Soll ${hk.raum_soll_c ? grad(hk.raum_soll_c) : "–"}</dd>
     <dt>Zustand</dt><dd>${hk.zustand || "–"} · ${hk.modus || "–"}</dd>
@@ -1165,10 +1181,38 @@ function wpPanel(st) {
     <p class="note">${wp.grund}</p>`;
 }
 
+// Warmwasser und Heizkreis sind getrennt schaltbar (Issue #1). Der Schalter
+// schreibt direkt in die Konfiguration — dieselbe Wirkung wie das Feld in den
+// Einstellungen, nur dort, wo man hinschaut.
+function schalter(el, an) {
+  el.textContent = an === false ? "AUS" : an ? "AN" : "–";
+  el.classList.toggle("on", an === true);
+}
+
+async function schalte(feld, an) {
+  await api("api/v1/config", { method: "PUT", body: JSON.stringify({ [feld]: an }) });
+  await ladeConfig();
+  poll();                                  // Status sofort nachziehen
+}
+
+$("wp-ww-schalter").onclick = () => schalte("wp_ww_aktiv", !(cfgCache && cfgCache.wp_ww_aktiv));
+$("wp-hk-schalter").onclick = () => schalte("wp_hk_aktiv", !(cfgCache && cfgCache.wp_hk_aktiv));
+
 function renderWp(st) {
   const wp = st.wp;
   const leer = !wp || !wp.verbunden;
-  const ww = leer ? {} : wp.warmwasser, hk = leer ? {} : wp.heizkreis;
+  const ww = (wp && wp.warmwasser) || {}, hk = (wp && wp.heizkreis) || {};
+
+  // Die Schalterstellung kommt aus der Konfiguration, nicht aus dem Gerät: sie
+  // gilt auch, wenn die WP gerade nicht erreichbar ist — und der Status hinkt
+  // nach dem Klick bis zu einem Regeltakt (10 s) hinterher, der Schalter würde
+  // sonst kurz zurückspringen.
+  const wwAn = cfgCache ? cfgCache.wp_ww_aktiv : ww.aktiv;
+  const hkAn = cfgCache ? cfgCache.wp_hk_aktiv : hk.aktiv;
+  schalter($("wp-ww-schalter"), wwAn);
+  schalter($("wp-hk-schalter"), hkAn);
+  $("wp-ww-box").classList.toggle("wp-off", wwAn === false);
+  $("wp-hk-box").classList.toggle("wp-off", hkAn === false);
 
   $("wp-ww-ist").textContent = grad(ww.ist_c, 0);
   $("wp-ww-soll").textContent = grad(ww.soll_c, 0);
@@ -1339,6 +1383,15 @@ async function ladeConfig() {
   cfgCache = await api("api/v1/config");
   for (const f of CFG_FELDER) $("c-" + f).value = cfgCache[f];
   $("toggle-ro").textContent = cfgCache.read_only ? "Scharf schalten" : "In Beobachtung wechseln";
+  // Schwellwerte einer abgeschalteten Funktion bleiben editierbar, treten aber
+  // zurück — sonst sucht man den Fehler in den Zahlen statt im Schalter (Issue #1).
+  for (const f of CFG_FELDER) {
+    const aktiv = f.startsWith("wp_ww_") ? cfgCache.wp_ww_aktiv
+                : f.startsWith("wp_hk_") ? cfgCache.wp_hk_aktiv : true;
+    $("c-" + f).parentElement.classList.toggle("aus", !aktiv);
+  }
+  schalter($("wp-ww-schalter"), cfgCache.wp_ww_aktiv);
+  schalter($("wp-hk-schalter"), cfgCache.wp_hk_aktiv);
 }
 
 $("save").onclick = async () => {

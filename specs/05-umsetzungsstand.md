@@ -49,15 +49,16 @@ gelöscht wurden (siehe REQ-073). Erst danach ist REQ-008 verantwortbar.
 
 | ID | Umsetzung | Code | Nachweis |
 |---|---|---|---|
-| REQ-010 Warmwasser vorziehen | ✅ | `planner/heatpump.py` | **T** 11 Tests (Entprellung, Mindestlaufzeit, Selbstabschaltung, Zieltemperatur) · **L** seit v0.6.5 |
-| REQ-011 Heizkreis anheben | 🔵 umgesetzt, Heizperiode noch nicht erlebt | `heatpump.py` | **T** 4 Tests (Sommer/Winter, Obergrenze, Rückstellung) · **L erst ab Herbst** |
+| REQ-010 Warmwasser vorziehen | ✅ | `planner/heatpump.py` | **T** 11 Tests (Entprellung, Mindestlaufzeit, Selbstabschaltung, Zieltemperatur) · **L** live, Boost-Zyklen 29.07.–01.08.2026 |
+| REQ-011 Heizkreis anheben | 🔵 umgesetzt, per Default **aus** (Issue #1) | `heatpump.py` | **T** 4 Tests (Sommer/Winter, Obergrenze, Rückstellung) · **L erst ab Herbst** |
 | REQ-012 Komfortgrenzen | ✅ | `heatpump.py`, `config.py` | **T** `test_ww_komfortgrenze_hebt_rueckstellwert_an`, `test_heizkreis_respektiert_komfort_obergrenze` |
-| REQ-013 Steuerweg MyVaillant über HA | 🔵 **Lesen ✅, Schreiben unbestätigt** | `devices/vaillant.py` | **T** 5 Tests (Zugangssuche, Token-Herkunft) · **L** Lesen live; `set_temperature` ging fehlerfrei durch, der Sollwert blieb aber auf 45 °C (Betriebsart `Auto`) |
+| REQ-013 Steuerweg MyVaillant über HA | ✅ **Lesen und Schreiben bestätigt** | `devices/vaillant.py` | **T** 5 Tests (Zugangssuche, Token-Herkunft) · **L** HA-Historie `…_setpoint`: 45↔57/60 in Betriebsart `Auto`, Speicher folgt (31.07.: 48,5 → 56,5 °C) |
 | REQ-014 Cloud-Ratenlimit | ✅ | `heatpump.py` | **T** `test_cloud_gap_bremst_wiederholungen`, `test_bestaetigter_sollwert_wird_nicht_nachgeschrieben` |
+| Issue #1 getrennt schaltbar | ✅ | `config.py`, `heatpump.py`, `web/index.html` | **T** 6 Tests (Start unterdrückt, sofortige Rückstellung, Unabhängigkeit, Defaults, Status) · **L** am Vorschau-Server verifiziert |
 
-**Offen in B:** der MyVaillant-**Praxistest** (offene Frage 3 aus Runde 3) — reichen
-die Cloud-Stellgrößen, und wie lange braucht die Anlage? War bis v0.6.5 technisch
-unmöglich, weil kein Zugang zur HA-API bestand. Voraussetzung: `read_only: false`.
+**Offen in B:** der Heizkreis-Praxistest steht noch aus — er beginnt frühestens
+mit der Heizperiode und erst, wenn Leo `wp_hk_aktiv` einschaltet. Die
+Warmwasser-Seite ist im Realbetrieb bestätigt (siehe REQ-010/013).
 
 ## C — Batterie-Management (E3DC)
 

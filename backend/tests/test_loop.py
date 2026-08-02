@@ -106,7 +106,7 @@ def test_waermepumpe_bekommt_ueberschuss_nach_wallbox(tmp_path):
     for i in range(1, 70):
         asyncio.run(loop.tick(T0 + timedelta(seconds=i * 10)))
     assert loop.heatpump.ww_boost is True
-    assert ("ww_soll", 60.0) in wp.commands
+    assert ("ww_soll", 57.0) in wp.commands
 
     # Jetzt lädt das Auto — die WP bekommt nur noch, was danach übrig ist
     st = loop.status()

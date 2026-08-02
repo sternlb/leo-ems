@@ -12,6 +12,11 @@ from leo_ems.planner import HeatPumpController
 
 T0 = datetime(2026, 7, 25, 12, 0)
 
+# Der Heizkreis ist per Default AUS (Issue #1) — die Heizkreis-Tests schalten
+# ihn ausdrücklich ein, damit sie prüfen, was sie prüfen wollen.
+def _cfg(**kw) -> RegelConfig:
+    return RegelConfig(**{"wp_hk_aktiv": True, **kw})
+
 # Sommer-Messbild: WW 40/45 °C, Heizkreis im Standby, 30 °C draußen
 SOMMER = {
     "ww_ist_c": 40.0, "ww_soll_c": 45.0, "ww_modus": "Auto", "ww_sonderfunktion": None,
@@ -44,7 +49,7 @@ def test_ww_boost_startet_erst_nach_entprellung():
     _ticks(hp, wp, 3000, minuten=5)
     assert hp.ww_boost is False and wp["ww_soll_c"] == 45.0
     _ticks(hp, wp, 3000, minuten=6, start=T0 + timedelta(minutes=5))
-    assert hp.ww_boost is True and wp["ww_soll_c"] == 60.0
+    assert hp.ww_boost is True and wp["ww_soll_c"] == 57.0
 
 
 def test_ww_boost_startet_nicht_unter_der_schwelle():
@@ -79,7 +84,7 @@ def test_ww_boost_haelt_mindestlaufzeit_durch():
     assert hp.ww_boost is True
     _ticks(hp, wp, 0, minuten=10, start=T0 + timedelta(minutes=11))
     assert hp.ww_boost is True          # Mindestlaufzeit 30 min läuft noch
-    assert wp["ww_soll_c"] == 60.0
+    assert wp["ww_soll_c"] == 57.0
 
 
 def test_ww_boost_schaltet_sich_nicht_selbst_ab():
@@ -110,11 +115,12 @@ def test_zu_schmales_band_fuehrt_nicht_zum_schaltzyklus():
 
 
 def test_ww_boost_endet_bei_erreichter_temperatur():
+    """Boost-Ziel 57 °C: die Anlage kommt real nur bis ~57,5 °C (belegt 31.07.2026)."""
     hp = HeatPumpController(RegelConfig())
     wp = dict(SOMMER)
     _ticks(hp, wp, 3000, minuten=11)
     assert hp.ww_boost is True
-    wp["ww_ist_c"] = 60.0
+    wp["ww_ist_c"] = 57.0
     # Zurückstellen ist sofort entschieden, das Schreiben wartet aufs Cloud-Gap
     erster = hp.update(T0 + timedelta(minutes=11), frei_w=3000, wp=wp)
     assert hp.ww_boost is False and "erreicht" in erster.grund
@@ -135,7 +141,7 @@ def test_ww_komfortgrenze_hebt_rueckstellwert_an():
     hp = HeatPumpController(cfg)
     wp = dict(SOMMER)
     _ticks(hp, wp, 3000, minuten=11)
-    wp["ww_ist_c"] = 60.0
+    wp["ww_ist_c"] = 57.0
     _ticks(hp, wp, 3000, minuten=17, start=T0 + timedelta(minutes=11))
     assert wp["ww_soll_c"] == 50.0
 
@@ -143,14 +149,14 @@ def test_ww_komfortgrenze_hebt_rueckstellwert_an():
 # --- Heizkreis (REQ-011/012) ------------------------------------------------
 def test_heizkreis_im_sommer_unberuehrt():
     """Kein Sollwert im Zeitprogramm + 30 °C draußen → nichts anheben."""
-    hp = HeatPumpController(RegelConfig())
+    hp = HeatPumpController(_cfg())
     wp = dict(SOMMER)
     _ticks(hp, wp, 8000, minuten=60)
     assert hp.hk_boost is False and wp["raum_soll_c"] == 0.0
 
 
 def test_heizkreis_anhebung_im_winter():
-    hp = HeatPumpController(RegelConfig())
+    hp = HeatPumpController(_cfg())
     wp = {**WINTER, "ww_ist_c": 61.0}   # Warmwasser schon warm → Heizkreis ist dran
     _ticks(hp, wp, 3000, minuten=11)
     assert hp.hk_boost is True
@@ -158,14 +164,14 @@ def test_heizkreis_anhebung_im_winter():
 
 
 def test_heizkreis_respektiert_komfort_obergrenze():
-    hp = HeatPumpController(RegelConfig(wp_hk_max_raum_c=22.0))
+    hp = HeatPumpController(_cfg(wp_hk_max_raum_c=22.0))
     wp = {**WINTER, "ww_ist_c": 61.0, "raum_soll_c": 21.0}
     _ticks(hp, wp, 3000, minuten=11)
     assert wp["raum_soll_c"] == 22.0    # gekappt statt 21,0 + 1,5 K
 
 
 def test_heizkreis_stellt_auf_basiswert_zurueck():
-    hp = HeatPumpController(RegelConfig())
+    hp = HeatPumpController(_cfg())
     wp = {**WINTER, "ww_ist_c": 61.0}
     _ticks(hp, wp, 3000, minuten=11)
     assert hp.hk_boost is True
@@ -177,11 +183,82 @@ def test_heizkreis_stellt_auf_basiswert_zurueck():
 
 def test_warmwasser_hat_vorrang_vor_heizkreis():
     """Die WP kann nur eines zur Zeit — bei laufendem WW-Boost keine Anhebung."""
-    hp = HeatPumpController(RegelConfig())
+    hp = HeatPumpController(_cfg())
     wp = dict(WINTER)                    # WW kalt (40 °C) → WW-Boost gewinnt
     _ticks(hp, wp, 6000, minuten=11)
     assert hp.ww_boost is True and hp.hk_boost is False
     assert wp["raum_soll_c"] == 21.0
+
+
+# --- Getrennt schaltbar (Issue #1) ------------------------------------------
+def test_warmwasser_abgeschaltet_startet_keinen_boost():
+    hp = HeatPumpController(RegelConfig(wp_ww_aktiv=False))
+    wp = dict(SOMMER)
+    letzte = _ticks(hp, wp, 8000, minuten=60)
+    assert hp.ww_boost is False and wp["ww_soll_c"] == 45.0
+    assert "abgeschaltet" in letzte.grund
+
+
+def test_warmwasser_abschalten_stellt_laufenden_boost_sofort_zurueck():
+    """Ein Ausschalter, der erst nach der Mindestlaufzeit wirkt, ist keiner.
+
+    Zusätzlich muss die Rückstellung am Cloud-Gap vorbei: sonst stünde der
+    Speicher nach dem Klick noch bis zu 15 min auf Boost-Temperatur.
+    """
+    cfg = RegelConfig()
+    hp = HeatPumpController(cfg)
+    wp = dict(SOMMER)
+    _ticks(hp, wp, 3000, minuten=11)
+    assert hp.ww_boost is True and wp["ww_soll_c"] == 57.0
+
+    cfg.wp_ww_aktiv = False                        # Leo klickt den Schalter
+    t = T0 + timedelta(minutes=11)                 # mitten in der Mindestlaufzeit
+    cmd = hp.update(t, frei_w=3000, wp=wp)
+    assert hp.ww_boost is False
+    assert cmd.ww_soll_c == 45.0                   # sofort, nicht erst in 15 min
+    assert "abgeschaltet" in cmd.grund
+
+
+def test_heizkreis_abschalten_stellt_auf_basiswert_zurueck():
+    cfg = _cfg()
+    hp = HeatPumpController(cfg)
+    wp = {**WINTER, "ww_ist_c": 61.0}
+    _ticks(hp, wp, 3000, minuten=11)
+    assert hp.hk_boost is True and wp["raum_soll_c"] == 22.5
+
+    cfg.wp_hk_aktiv = False
+    cmd = hp.update(T0 + timedelta(minutes=11), frei_w=3000, wp=wp)
+    assert hp.hk_boost is False and cmd.raum_soll_c == 21.0
+
+
+def test_funktionen_schalten_sich_nicht_gegenseitig_ab():
+    """Getrennte Optionen: Warmwasser läuft weiter, auch ohne Heizkreis."""
+    hp = HeatPumpController(RegelConfig(wp_ww_aktiv=True, wp_hk_aktiv=False))
+    wp = dict(WINTER)
+    _ticks(hp, wp, 6000, minuten=11)
+    assert hp.ww_boost is True
+    assert hp.hk_boost is False and wp["raum_soll_c"] == 21.0
+
+    hp2 = HeatPumpController(RegelConfig(wp_ww_aktiv=False, wp_hk_aktiv=True))
+    wp2 = {**WINTER, "ww_ist_c": 40.0}
+    _ticks(hp2, wp2, 6000, minuten=11)
+    assert hp2.ww_boost is False and wp2["ww_soll_c"] == 45.0
+    assert hp2.hk_boost is True and wp2["raum_soll_c"] == 22.5   # WW-Vorrang greift nicht
+
+
+def test_default_ist_warmwasser_an_heizkreis_aus():
+    """Leos Festlegung (Issue #1): Warmwasser jetzt, Heizung später."""
+    cfg = RegelConfig()
+    assert cfg.wp_ww_aktiv is True and cfg.wp_hk_aktiv is False
+
+
+def test_status_meldet_schalterstellung_auch_ohne_verbindung():
+    """Das Dashboard zeigt die Schalter auch, wenn die WP gerade nicht antwortet."""
+    hp = HeatPumpController(RegelConfig(wp_ww_aktiv=True, wp_hk_aktiv=False))
+    st = hp.status(SOMMER)
+    assert st["warmwasser"]["aktiv"] is True and st["heizkreis"]["aktiv"] is False
+    ohne = hp.status(None)
+    assert ohne["warmwasser"]["aktiv"] is True and ohne["heizkreis"]["aktiv"] is False
 
 
 # --- Cloud-Ratenlimit + Vorrang Auto ---------------------------------------
@@ -205,10 +282,10 @@ def test_bestaetigter_sollwert_wird_nicht_nachgeschrieben():
     hp = HeatPumpController(RegelConfig())
     wp = dict(SOMMER)
     _ticks(hp, wp, 3000, minuten=11)
-    assert wp["ww_soll_c"] == 60.0
-    wp["ww_soll_c"] = 55.0               # Leo stellt in der MyVaillant-App von Hand nach
+    assert wp["ww_soll_c"] == 57.0
+    wp["ww_soll_c"] = 52.0               # Leo stellt in der MyVaillant-App von Hand nach
     letzte = _ticks(hp, wp, 3000, minuten=30, start=T0 + timedelta(minutes=11))
-    assert letzte.ww_soll_c is None and wp["ww_soll_c"] == 55.0
+    assert letzte.ww_soll_c is None and wp["ww_soll_c"] == 52.0
 
 
 def test_ohne_verbindung_keine_befehle():

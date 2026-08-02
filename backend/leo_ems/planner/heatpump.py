@@ -7,6 +7,12 @@ Zwei Überschuss-Hebel auf dieselbe Vaillant-Anlage:
   2. **Heizkreis anheben** (REQ-011): Raum-Sollwert um Δ anheben — nur in der
      Heizperiode und nur, wenn das Zeitprogramm überhaupt einen Sollwert hat.
 
+Beide Hebel sind **getrennt schaltbar** (`wp_ww_aktiv` / `wp_hk_aktiv`,
+Issue #1): Leo will Warmwasser jetzt nutzen, den Heizkreis erst mit dem
+dynamischen Tarif. Eine abgeschaltete Funktion wird nicht bewertet — ein
+laufender Boost wird sofort zurückgestellt, **ohne** auf die Mindestlaufzeit zu
+warten. Ein Ausschalter, der erst in 20 Minuten wirkt, ist keiner.
+
 Festlegungen von Leo (2026-07-25):
   - **Vorrang Auto.** Der Controller sieht nur den Überschuss, der nach der
     Wallbox-Zuteilung übrig ist — das Ladeverhalten ändert sich dadurch nicht.
@@ -70,6 +76,11 @@ class HeatPumpController:
         self._seit: dict[str, datetime] = {}
         self._start: dict[str, datetime] = {}
         self._last_write: datetime | None = None
+        # Rückstellungen, die nicht auf das Cloud-Gap warten sollen (Issue #1):
+        # das Abschalten einer Funktion ist eine Handlung von Leo, keine
+        # Regelentscheidung — sie darf nicht bis zu 15 min in der Warteschlange
+        # liegen. Gilt nur für den einen Aufruf, danach greift das Gap wieder.
+        self._eilig: set[str] = set()
         self._grund = "Wärmepumpe noch nicht bewertet"
         self._frei_w = 0.0
 
@@ -124,6 +135,17 @@ class HeatPumpController:
         ist = wp.get("ww_ist_c")
         boost_c = self.cfg.wp_ww_boost_c
         normal_c = self._ww_untergrenze()
+
+        # Funktion abgeschaltet (Issue #1): laufenden Boost sofort zurückstellen,
+        # ohne Mindestlaufzeit. Danach wird Warmwasser gar nicht mehr bewertet.
+        if not self.cfg.wp_ww_aktiv:
+            self._seit.pop("ww_an", None)
+            if self.ww_boost:
+                self._eilig.add("ww")
+                return self._ww_beenden(
+                    normal_c, f"Warmwasser abgeschaltet — zurück auf {normal_c:.0f} °C")
+            return "Warmwasser: Überschussnutzung abgeschaltet"
+
         an = self.cfg.wp_ww_an_w
         aus = self._aus_schwelle(an, self.cfg.wp_ww_aus_w)
 
@@ -173,6 +195,15 @@ class HeatPumpController:
     def _hk_entscheiden(self, now: datetime, frei: float, wp: dict) -> str:
         aussen = wp.get("aussen_c")
         basis_ist = wp.get("raum_soll_c")
+
+        # Funktion abgeschaltet (Issue #1) — wie beim Warmwasser: sofort zurück
+        # auf den Wert, der vor der Anhebung stand.
+        if not self.cfg.wp_hk_aktiv:
+            self._seit.pop("hk_an", None)
+            if self.hk_boost:
+                self._eilig.add("hk")
+                return self._hk_beenden("Heizkreis abgeschaltet — zurück auf den Basiswert")
+            return "Heizkreis: Anhebung abgeschaltet"
 
         # Heizperiode: draußen kalt genug UND das Zeitprogramm hat einen Sollwert.
         # Im Sommer liefert die Anlage 0 °C — dann gäbe es nichts anzuheben.
@@ -245,16 +276,20 @@ class HeatPumpController:
         if ziel_ww is not None:
             if ist_ww is not None and abs(ist_ww - ziel_ww) <= TOLERANZ_K:
                 self._ziel["ww"] = None       # von der Cloud bestätigt
-            elif gap_ok:
+                self._eilig.discard("ww")
+            elif gap_ok or "ww" in self._eilig:
                 cmd.ww_soll_c = ziel_ww
+                self._eilig.discard("ww")     # ein Versuch am Gap vorbei, dann normal
                 gap_ok = False                # pro Tick nur ein Cloud-Aufruf
 
         ziel_hk, ist_hk = self._ziel["hk"], wp.get("raum_soll_c")
         if ziel_hk is not None:
             if ist_hk is not None and abs(ist_hk - ziel_hk) <= TOLERANZ_K:
                 self._ziel["hk"] = None
-            elif gap_ok:
+                self._eilig.discard("hk")
+            elif gap_ok or "hk" in self._eilig:
                 cmd.raum_soll_c = ziel_hk
+                self._eilig.discard("hk")
 
         return cmd
 
@@ -289,6 +324,7 @@ class HeatPumpController:
             "grund": self._grund,
             "frei_w": round(self._frei_w),
             "warmwasser": {
+                "aktiv": self.cfg.wp_ww_aktiv,
                 "ist_c": wp.get("ww_ist_c"),
                 "soll_c": wp.get("ww_soll_c"),
                 "modus": wp.get("ww_modus"),
@@ -299,6 +335,7 @@ class HeatPumpController:
                 "offen_c": self._ziel["ww"],
             },
             "heizkreis": {
+                "aktiv": self.cfg.wp_hk_aktiv,
                 "vorlauf_c": wp.get("hk_vorlauf_c"),
                 "vorlauf_soll_c": wp.get("hk_vorlauf_soll_c"),
                 "zustand": wp.get("hk_zustand"),

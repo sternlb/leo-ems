@@ -49,9 +49,20 @@ class RegelConfig:
     # --- Wärmepumpe, Stufe 2 (REQ-010–014, planner/heatpump.py) --------------
     # Schwellen konservativ nach Leos Festlegung 2026-07-25: an ab 2,5 kW,
     # zurück unter 0,5 kW — bezogen auf den Überschuss NACH der Wallbox.
+    #
+    # Warmwasser und Heizkreis sind zwei getrennt schaltbare Funktionen auf
+    # derselben Anlage (Issue #1). Default: Warmwasser an — das will Leo im
+    # Sommer 2026 nutzen; Heizkreis aus — der wird erst mit dem dynamischen
+    # Tarif interessant (Stufe 3) und greift ohnehin erst in der Heizperiode.
+    wp_ww_aktiv: bool = True           # Warmwasser-Überschussnutzung (Issue #1)
+    wp_hk_aktiv: bool = False          # Heizkreis-Anhebung (Issue #1)
     wp_ww_an_w: int = 2500             # Warmwasser-Boost startet ab
     wp_ww_aus_w: int = 500             # darunter zurück auf Normal
-    wp_ww_boost_c: float = 60.0        # Boost-Sollwert Warmwasser (Issue #1)
+    # 57 statt der ursprünglich geplanten 60 °C: die Anlage kommt bei
+    # Warmwasser real nur auf ~57,5 °C (belegt am 31.07.2026, fünf Boosts).
+    # Mit 60 wurde die Abbruchbedingung „Ziel erreicht" nie wahr und jeder
+    # Boost lief stumpf bis zum Wegfall des Überschusses weiter.
+    wp_ww_boost_c: float = 57.0        # Boost-Sollwert Warmwasser (Issue #1)
     wp_ww_normal_c: float = 45.0       # Rückstellwert (Issue #1)
     wp_hk_an_w: int = 2500             # Heizkreis-Anhebung startet ab
     wp_hk_aus_w: int = 500

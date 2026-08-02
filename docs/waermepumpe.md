@@ -109,18 +109,47 @@ Festlegungen von Leo, 2026-07-25:
 - **Warmwasser vor Heizkreis.** Die WP kann nur eines zur Zeit; läuft der
   WW-Boost, wird der Heizkreis nicht zusätzlich angehoben.
 
+### Getrennt schaltbar (Issue #1, v0.7.0)
+
+Warmwasser und Heizkreis sind **zwei getrennte Funktionen auf derselben
+Anlage** und werden unabhängig voneinander ein- und ausgeschaltet:
+`wp_ww_aktiv` (Default **an**) und `wp_hk_aktiv` (Default **aus** — die
+Heizkreis-Anhebung wird erst mit dem dynamischen Tarif interessant).
+
+Bedient wird das direkt in der Wärmepumpen-Kachel des Dashboards: je ein
+AN/AUS-Schalter in der Überschrift, der `PUT /api/v1/config` schreibt. Eine
+abgeschaltete Funktion bleibt sichtbar und ablesbar, tritt aber optisch zurück;
+in den Einstellungen werden ihre Schwellwerte mit ausgegraut.
+
+Zwei Festlegungen dahinter:
+
+- **Ausschalten wirkt sofort.** Ein laufender Boost wird zurückgestellt, ohne
+  die Mindestlaufzeit abzuwarten — und die Rückstellung geht am Cloud-Gap
+  vorbei. Ein Ausschalter, der erst in 15 Minuten wirkt, ist keiner.
+- **Der Schalter steht in der Konfiguration, nicht am Gerät.** Er ist deshalb
+  auch dann gültig und bedienbar, wenn die WP gerade nicht erreichbar ist.
+
 ### Warmwasser (REQ-010)
 
 1. Überschuss ≥ `wp_ww_an_w` (2500 W) **10 min am Stück** → Sollwert auf
-   `wp_ww_boost_c` (60 °C).
+   `wp_ww_boost_c` (57 °C).
 2. Zurück auf `wp_ww_normal_c` (45 °C), sobald
-   - der Speicher die 60 °C erreicht hat (sofort), **oder**
+   - der Speicher die 57 °C erreicht hat (sofort), **oder**
    - der Überschuss 5 min unter `wp_ww_aus_w` liegt **und** die Mindestlaufzeit
      von 30 min um ist (REQ-064).
 3. Eine gesetzte harte Komfortgrenze (`hard_limit_ww_min_temp`, REQ-012) sticht
    den Rückstellwert — es wird nie darunter gestellt.
 
+**Warum 57 und nicht 60 °C.** Ursprünglich war das Boost-Ziel 60 °C. Die
+Betriebsdaten vom 31.07.2026 (fünf echte Boosts) zeigen: der Speicher kommt bei
+Warmwasserbereitung real auf **~57,5 °C** und bleibt dort stehen. Mit dem Ziel
+60 wurde die Abbruchbedingung „Ziel erreicht" nie wahr, jeder Boost lief stumpf
+weiter bis der Überschuss wegbrach. Mit 57 greift sie.
+
 ### Heizkreis (REQ-011)
+
+Per Default **abgeschaltet** (`wp_hk_aktiv`, siehe oben) — Leo will die
+Heizungs-Anhebung erst mit dem dynamischen Tarif nutzen. Eingeschaltet gilt:
 
 Nur in der Heizperiode: Außentemperatur ≤ `wp_hk_max_aussen_c` (15 °C) **und**
 das Zeitprogramm hat überhaupt einen Sollwert (im Sommer liefert die Anlage
@@ -159,19 +188,27 @@ EMS nicht mehr nach. Wer in der MyVaillant-App von Hand etwas ändert, wird nich
 - Fällt der E3DC aus (E1), bricht der Tick vorher ab — die WP wird dann gar
   nicht bewertet, weil ohne E3DC keine Überschussdaten vorliegen.
 
+## Der Schreibweg funktioniert (bestätigt 2026-08-02)
+
+Nach dem ersten Boost am 26.07.2026 stand der Verdacht im Raum, MyVaillant
+übernehme in der Betriebsart `Auto` gar keinen Sollwert — der Aufruf ging
+fehlerfrei durch, der Sollwert blieb aber auf 45 °C. Daraus wurde die Frage, ob
+das EMS vorher per `set_operation_mode` in den Tag-/Manuell-Betrieb schalten
+muss, also in Leos Heizungsprogramm eingreifen.
+
+**Muss es nicht.** Die HA-Historie von `sensor.home_domestic_hot_water_0_setpoint`
+zeigt seit dem 29.07. durchgehend echte Boost-Zyklen, alle in Betriebsart
+`Auto` — allein am 31.07. fünfmal 45 → 57/60 → 45, und die Speichertemperatur
+folgt (48,5 → 56,5 °C zwischen 08:15 und 08:52). Der Befund vom 26.07. war
+eine einzelne verzögerte oder verschluckte Cloud-Übernahme, kein systematisches
+Verhalten. Genau dafür ist die Wiederholung am Cloud-Gap da.
+
+Bleibt richtig: das EMS schreibt nur bei Zustandswechsel, wiederholt höchstens
+alle `wp_cloud_min_gap_s`, und `set_operation_mode` wird **nicht** benutzt —
+das Zeitprogramm bleibt unangetastet.
+
 ## Offen
 
-- **Schreibweg noch nicht bestätigt (Befund 2026-07-26, v0.6.5).** Lesen
-  funktioniert vollständig. Der erste echte Boost hat `water_heater.set_temperature`
-  mit 60 °C ausgelöst, der Aufruf ging ohne Fehler durch (kein `cmd_fehler` im
-  Protokoll, keine MyVaillant-Fehler im HA-Log) — der Sollwert stand danach
-  aber weiter auf 45 °C, auch nach mehreren Minuten. Verdacht: In der
-  Betriebsart **`Auto`** (Zeitprogramm) übernimmt MyVaillant den Sollwert nicht;
-  vermutlich muss vorher `set_operation_mode` auf Tag-/Manuell-Betrieb gehen.
-  Das ist ein **Eingriff in Leos Heizungsprogramm** und deshalb bewusst nicht
-  auf Verdacht umgesetzt. Genau die offene Frage 3 aus Requirements-Runde 3.
-  Das EMS verhält sich dabei korrekt: der Sollwert bleibt „gewünscht" und wird
-  höchstens alle `wp_cloud_min_gap_s` (15 min) erneut versucht.
 - REQ-011 im Praxistest: Wie schnell reagiert die Anlage auf
   Sollwertänderungen (Latenz Cloud → Gerät)? Die Werte für Entprellung und
   Mindestlaufzeit sind Schätzungen und in der ersten Heizperiode zu prüfen.
