@@ -1265,8 +1265,12 @@ function openPanel(k) {
     wp: wpPanel(st),
     haus: `<h3>Hausverbrauch</h3>
       <dl><dt>aktuell</dt><dd>${fmtFluss(st.p_haus_w) ?? "0 W"}</dd>
-      <dt>Überschuss</dt><dd>${fmtFluss(st.ueberschuss_w) ?? "0 W"}</dd></dl>
-      <p class="note">Bilanz: PV + Netzbezug − Batterieladung − Wallbox. Enthält die Wärmepumpe, solange sie nicht separat gemessen wird.</p>`,
+      <dt>Überschuss gemessen</dt><dd>${fmtFluss(st.ueberschuss_w) ?? "0 W"}</dd>
+      ${st.wp_boost_w > 0 ? `<dt>davon WP-Boost</dt><dd>+ ${fmtFluss(st.wp_boost_w)} zurückgerechnet</dd>
+      <dt>verteilbar</dt><dd>${fmtFluss(st.verteilbar_w) ?? "0 W"}</dd>` : ""}
+      ${st.ev_zuteilung_w > 0 ? `<dt>an die Wallbox</dt><dd>${fmtFluss(st.ev_zuteilung_w)}</dd>` : ""}</dl>
+      <p class="note">Bilanz: PV + Netzbezug − Batterieladung − Wallbox. Enthält die Wärmepumpe, solange sie nicht separat gemessen wird.
+      ${st.wp_boost_w > 0 ? "Ihr geschätzter Verbrauch wird für die Verteilung zurückgerechnet — sonst entschiede darüber, wer zuerst angelaufen ist." : ""}</p>`,
     netz: `<h3>Netz</h3>
       <dl><dt>aktuell</dt><dd>${(st.p_netz_w || 0) > 50 ? "Bezug " + fmtFluss(st.p_netz_w) : (st.p_netz_w || 0) < -50 ? "Einspeisung " + fmtFluss(st.p_netz_w) : "ausgeglichen"}</dd></dl>`,
   };
@@ -1318,7 +1322,10 @@ function render(st) {
   $("t-pv-e3dc").textContent = w(st.p_pv_e3dc_w);
   $("t-pv-sg").textContent = w(st.p_sungrow_w);
   $("t-haus").textContent = w(st.p_haus_w);
-  $("t-ueb").textContent = w(st.ueberschuss_w);
+  // Verteilbarer statt gemessener Überschuss (Issue #6): läuft ein WP-Boost,
+  // steckt dessen Verbrauch im Hausverbrauch und drückt den Messwert. Die Kachel
+  // zeigt, worüber gerade entschieden wird — die Aufteilung steht im Panel.
+  $("t-ueb").textContent = w(st.verteilbar_w != null ? st.verteilbar_w : st.ueberschuss_w);
   // Batterie: SoC ist der Hauptwert (Issue #2), Leistung steht darunter
   const pb = st.p_batterie_w || 0;
   $("t-batt-soc").textContent = pct(st.soc_batterie);

@@ -60,15 +60,21 @@ Default-Modus: **Nur-PV** (Baseline). Umschaltung über App (§9) und HA; Wechse
 Zustände: `FREI` (kein Fahrzeug) → `VERBUNDEN` (wartet auf Freigabe) → `LADEN_1P` / `LADEN_3P` → `PAUSIERT` (Hysterese/kein Überschuss) → `BEENDET` (Ziel/Limit erreicht).
 
 Hysterese (Baseline-Werte, konfigurierbar):
-- **Einschalten:** P_überschuss ≥ 6 A × 230 V ≈ 1,4 kW ununterbrochen für **60 s** (`enableDelay`)
-- **Ausschalten:** P_überschuss < Minimum ununterbrochen für **180 s** (`disableDelay`)
+- **Einschalten:** P_überschuss ≥ 6 A × 230 V ≈ 1,4 kW ununterbrochen für **60 s** (`enableDelay`) — gestartet wird immer 1-phasig.
+- **Ausschalten:** P_überschuss < **Minimum der aktuellen Phasenzahl** ununterbrochen für **180 s** (`disableDelay`).
 - Stromvorgabe: `I = floor(P_überschuss / (230 V × Phasenzahl))`, begrenzt auf 6–16 A, Nachführung je Regelintervall.
+
+**Phasenabhängiges Minimum** ⚡ *korrigiert mit Issue #7 (v0.8.0)*: `P_min(n) = 6 A × 230 V × n` — 1-phasig ≈ 1,38 kW, **3-phasig ≈ 4,14 kW**. Bis v0.7.0 wurde die Ausschaltbedingung gegen das 1p-Minimum geprüft, auch während 3-phasig geladen wurde: die Bedingung wurde in einem Band von 2,76 kW nie wahr, die Ladung lief weiter und holte sich die Differenz aus dem Netz. Je Tick wird deshalb **zuerst die Phasenzahl nachgeführt** (§4.2) und erst danach gegen `P_min(n)` geprüft.
 
 ### 4.2 Phasenumschaltung 1↔3 (REQ-002, REQ-064)
 
-- **1p → 3p:** P_überschuss ≥ **4,2 kW** für 60 s (3 × 6 A × 230 V + Reserve)
-- **3p → 1p:** P_überschuss < **4,0 kW** für 180 s
-- **Mindestabstand zwischen Umschaltungen: 10 min** (⚙ Festlegung; Fahrzeug- und Schützschonung), Umschaltung nur mit kurzer Ladepause gemäß go-e-API-Vorgabe.
+Die Umschaltung ist **bewusst asymmetrisch** (Leo, Issue #7). Hochschalten ist eine Optimierung — Warten kostet nichts. Der Rückfall auf 1p ist Schadensbegrenzung — jede Sekunde unter dem 3p-Minimum kostet Netzstrom.
+
+- **1p → 3p:** P_überschuss ≥ **4,2 kW** für 60 s (3 × 6 A × 230 V + Reserve), **zusätzlich Mindestabstand 10 min** seit der letzten Umschaltung (⚙ Festlegung; Fahrzeug- und Schützschonung).
+- **3p → 1p:** P_überschuss < **4,14 kW** (= `P_min(3)`) für **60 s**, **ohne** Mindestabstand.
+- Die Rückfall-Schwelle liegt per Definition auf `P_min(3)` und nie darunter — läge sie tiefer, gäbe es ein Band, in dem der Rückfall noch nicht greift, die Leistung aber schon nicht mehr reicht.
+- Umschaltung nur mit kurzer Ladepause gemäß go-e-API-Vorgabe.
+- Nach dem Rückfall läuft der Mindestabstand neu — der Weg zurück auf 3p ist damit frühestens 10 min später möglich (genau Leos Formulierung in Issue #7: „dann sollte der Entprell-Timer loslaufen und gucken, wann er wieder auf dreiphasig wechseln darf").
 
 ### 4.3 Zielladung & Garantie-SoC (REQ-003/004) ⚡ *neu*
 

@@ -1,6 +1,6 @@
 # 05 — Umsetzungsstand & Testabdeckung
 
-**Stand:** 2026-07-26 (v0.6.5) · **Grundlage:** [01-requirements.md](01-requirements.md)
+**Stand:** 2026-08-02 (v0.8.0) · **Grundlage:** [01-requirements.md](01-requirements.md)
 
 Diese Datei ist die Brücke zwischen Anforderung und Beweis: pro Requirement, was
 umgesetzt ist, wo es im Code steht und **welcher Test es hält**. Sie ersetzt keine
@@ -18,7 +18,7 @@ Legende Abdeckung: **T** = automatisierter Test · **L** = am Live-System verifi
 | 🔵 teilweise | 4 | 4 | **8** |
 | ⚪ offen | 2 | 4 | **6** |
 
-86 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test,
+100 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test,
 Live-Verifikation oder beides). Ohne jeden Nachweis sind nur REQ-008, 022, 023,
 030 und 031 — vier davon gehören zu Ausbaustufe 3, die es real noch nicht gibt.
 
@@ -33,7 +33,7 @@ bewiesen**.
 | ID | Umsetzung | Code | Nachweis |
 |---|---|---|---|
 | REQ-001 Überschuss berechnen | ✅ | `planner/surplus.py` | **T** `test_surplus.py` (4 Tests, inkl. Abnahmekriterium Spec §2) · **L** |
-| REQ-002 Ladeleistung + 1p/3p | ✅ | `planner/charge_control.py` | **T** `test_t1_ueberschussfolge`, `test_t2_phasenwechsel` (wörtlich nach Spec) · **L** |
+| REQ-002 Ladeleistung + 1p/3p | ✅ *(Netzbezug-Fehler behoben in v0.8.0)* | `planner/charge_control.py` | **T** `test_t1_ueberschussfolge`, `test_t2_phasenwechsel` (wörtlich nach Spec), `test_3p_unter_minimum_zieht_keinen_dauernetzbezug`, `test_pause_erst_wenn_auch_1p_nicht_mehr_traegt`, `test_hochschalten_wartet_weiter_auf_die_sperre` · **L** |
 | REQ-003 Zielladung auf Abfahrtszeit | ✅ | `planner/rules.py` | **T** `test_rules.py` (6 Tests, inkl. T3-Mehrfachregel) |
 | REQ-004 Mindest-SoC garantieren | ✅ | `planner/rules.py` | **T** `test_garantie_uebersteuert_aus`, `test_garantie_uebersteuert_aus_modus` |
 | REQ-005 Lademodi | ✅ | `charge_control.py`, `PUT /api/v1/mode` | **T** `test_modus_aus_kein_laden`, `test_modus_schnell_max_sofort`, `test_pv_min_laedt_immer_mindestens`, `test_api::test_mode_put` |
@@ -55,6 +55,8 @@ gelöscht wurden (siehe REQ-073). Erst danach ist REQ-008 verantwortbar.
 | REQ-013 Steuerweg MyVaillant über HA | ✅ **Lesen und Schreiben bestätigt** | `devices/vaillant.py` | **T** 5 Tests (Zugangssuche, Token-Herkunft) · **L** HA-Historie `…_setpoint`: 45↔57/60 in Betriebsart `Auto`, Speicher folgt (31.07.: 48,5 → 56,5 °C) |
 | REQ-014 Cloud-Ratenlimit | ✅ | `heatpump.py` | **T** `test_cloud_gap_bremst_wiederholungen`, `test_bestaetigter_sollwert_wird_nicht_nachgeschrieben` |
 | Issue #1 getrennt schaltbar | ✅ | `config.py`, `heatpump.py`, `web/index.html` | **T** 6 Tests (Start unterdrückt, sofortige Rückstellung, Unabhängigkeit, Defaults, Status) · **L** am Vorschau-Server verifiziert |
+| Issue #6 Vorrang Wallbox vor WP | ✅ | `core/loop.py` (Schritt 7), `heatpump.py` (`leistung_w`) | **T** `test_auto_startet_auch_wenn_die_waermepumpe_schon_laeuft`, `test_ww_boost_weicht_dem_auto_ohne_mindestlaufzeit`, `test_ohne_ladendes_auto_gilt_die_mindestlaufzeit_weiter`, `test_leistung_w_zaehlt_nur_einen_wirklich_laufenden_boost` · **L offen** |
+| Issue #7 Netzbezug beim Zuschalten | ✅ | `charge_control.py`, `config.py` | **T** 4 Tests (3p-Minimum, Rückfall ohne Sperre, Pause, Diagnose) · **L offen** |
 
 **Offen in B:** der Heizkreis-Praxistest steht noch aus — er beginnt frühestens
 mit der Heizperiode und erst, wenn Leo `wp_hk_aktiv` einschaltet. Die

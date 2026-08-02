@@ -103,11 +103,52 @@ Dashboard genauso aus wie „WP gar nicht konfiguriert". Seit v0.6.2 gilt:
 Festlegungen von Leo, 2026-07-25:
 
 - **Vorrang Auto.** Der HeatPumpController sieht nur den Überschuss, der nach
-  der Wallbox-Zuteilung übrig ist (`surplus − Strom × 230 V × Phasen`). Am
+  der Wallbox-Zuteilung übrig ist (`verteilbar − Strom × 230 V × Phasen`). Am
   Ladeverhalten ändert sich dadurch nichts — das WP-Vorziehen ist reiner Zusatz.
 - **Konservative Schwellen:** Boost an ab 2,5 kW, zurück unter 0,5 kW.
 - **Warmwasser vor Heizkreis.** Die WP kann nur eines zur Zeit; läuft der
   WW-Boost, wird der Heizkreis nicht zusätzlich angehoben.
+
+### Der Vorrang gilt auch rückwirkend (Issue #6, v0.8.0)
+
+„Vorrang Auto" stimmte bis v0.7.0 nur, solange die WP noch **nicht** lief.
+Danach entschied faktisch, wer zuerst angelaufen war — Leos Fehlerbild vom
+31.07.: *„Wärmepumpe läuft auf Warmwasser, Wallbox wird nicht priorisiert, Auto
+wird nicht geladen."*
+
+**Warum:** Die WP hat keinen Leistungsmesswert (nur Energiezähler, siehe oben).
+Ihr Verbrauch steckt damit im Hausverbrauch und drückt den gemessenen
+Überschuss um rund `wp_leistung_w` (2 kW). Die Wallbox rechnete gegen diesen
+gedrückten Wert und kam nicht mehr über ihre Einschaltschwelle von 1,38 kW —
+obwohl die Leistung physisch da war, nur eben in der WP.
+
+**Wie es jetzt läuft** (`ControlLoop.tick`, Schritt 7):
+
+```
+verteilbar   = gemessener Überschuss + Leistung eines LAUFENDEN WP-Boosts
+Wallbox      entscheidet gegen `verteilbar`
+Wärmepumpe   bekommt `verteilbar − EV-Zuteilung`
+```
+
+Zwei Details, an denen die Sache hängt:
+
+- **Nur real fließende Leistung wird zurückgerechnet** (`leistung_w()`): Boost
+  gewünscht **und** Anlage läuft (`_laeuft()`). Ein Boost, den die Anlage nicht
+  ausführt — Speicher schon warm, Beobachtungsmodus — verbraucht nichts. Ihn
+  mitzuzählen hieße, dem Auto Leistung zuzuteilen, die es nicht gibt, und das
+  wäre wieder Netzbezug (Issue #7).
+- **Weicht ein Boost dem Auto, gilt die Mindestlaufzeit nicht.** Sie schützt den
+  Verdichter vor Taktzyklen und ist in einer Verteilungsfrage kein Argument;
+  bis zu 30 min darauf zu warten hieße, die Wallbox so lange aus dem Netz laden
+  zu lassen. Die Rückstellung geht wie das Abschalten aus Issue #1 am Cloud-Gap
+  vorbei. Die 5-min-Bedingungszeit (`wp_aus_entprellung_s`) bleibt — eine
+  vorbeiziehende Wolke soll den Boost nicht killen. Der Wiederanlauf ist durch
+  die 10-min-Startbedingungszeit ohnehin gebremst, ein Taktzyklus entsteht also
+  nicht.
+
+Im Protokoll und in der Kachel steht der Unterschied im Klartext: „Überschuss
+weg" und „das Auto hat ihn bekommen" sehen in den Zahlen gleich aus, sind aber
+zwei verschiedene Sachverhalte.
 
 ### Getrennt schaltbar (Issue #1, v0.7.0)
 

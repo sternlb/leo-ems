@@ -36,8 +36,16 @@ class RegelConfig:
     min_current_a: int = 6
     max_current_a: int = 16
     phase_up_w: int = 4200             # 1p→3p (Spec §4.2)
-    phase_down_w: int = 4000           # 3p→1p (Spec §4.2)
-    phase_min_gap_s: int = 600         # Mindestabstand Umschaltungen (Spec §4.2, ⚙1)
+    # 3p→1p (Spec §4.2). 4140 W statt der ursprünglichen 4000 W: Das ist exakt
+    # das Minimum, das die Wallbox 3-phasig überhaupt abnehmen kann
+    # (3 × 6 A × 230 V). Wer darunter auf 3p stehen bleibt, zieht die Differenz
+    # aus dem Netz — genau Leos Beobachtung in Issue #7.
+    phase_down_w: int = 4140
+    phase_min_gap_s: int = 600         # Mindestabstand HOCHschaltungen (Spec §4.2, ⚙1)
+    # Rückfall 3p→1p: kurz entprellt und vom Mindestabstand nicht gebremst
+    # (Issue #7). Hochschalten ist eine Optimierung und darf warten; unter dem
+    # 3p-Minimum stehen zu bleiben kostet dagegen jede Sekunde Netzstrom.
+    phase_down_delay_s: int = 60
     charge_efficiency: float = 0.90    # η Zielladung (Spec §4.3, ⚙2)
     plan_buffer_min: int = 15          # Puffer Zielladung (Spec §4.3, ⚙2)
     lease_ttl_s: int = 900             # TTL für Übersteuerungen, 15 min (Spec §5.1)

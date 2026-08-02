@@ -108,18 +108,33 @@ class ControlLoop:
         plan = plane_garantieladung(self.store.list_rules(), soc_v if soc_v is not None else 100, now, self.cfg)
         garantie = bool(plan and soc_v is not None and plan.garantie_aktiv(now, soc_v))
 
-        # 7) Zustandsmaschine (Spec §3/§4.1/§4.2)
+        # 7) Zuteilung des Überschusses — Reihenfolge = Priorität (Issue #6).
+        #
+        #    Ein laufender WP-Boost hat keinen Leistungsmesswert: sein Verbrauch
+        #    steckt im Hausverbrauch und drückt `surplus` um rund 2 kW. Entschied
+        #    die Wallbox gegen diesen gedrückten Wert, gewann faktisch, wer
+        #    zuerst angelaufen war — läuft die WP auf Warmwasser, kam das Auto
+        #    gar nicht mehr über die Einschaltschwelle (Leos Fehlerbild vom
+        #    31.07.). Deshalb wird der Anteil erst zurückgerechnet, dann
+        #    zugeteilt: Auto zuerst, die WP bekommt den Rest.
+        wp_data = await self._safe_read(self.adapters.get("vaillant"), "vaillant")
+        wp_boost_w = self.heatpump.leistung_w(wp_data)
+        verteilbar = surplus + wp_boost_w
+
         connected = goe_data.get("connected", False) if goe_data else False
         cmd = self.controller.update(
-            now, surplus_w=surplus, connected=connected, mode=self.mode,
+            now, surplus_w=verteilbar, connected=connected, mode=self.mode,
             guarantee_active=garantie, soc_fahrzeug=soc_v, vehicle_limit_soc=self.vehicle_limit_soc,
         )
 
-        # 7b) Wärmepumpe (Stufe 2, REQ-010/011). Vorrang Auto (Leo, 2026-07-25):
-        #     die WP sieht nur, was nach der Wallbox-Zuteilung übrig bleibt.
-        wp_data = await self._safe_read(self.adapters.get("vaillant"), "vaillant")
+        # 7b) Wärmepumpe (Stufe 2, REQ-010/011): sieht, was nach der Wallbox übrig
+        #     bleibt. `ev_zuteilung_w` unterscheidet dabei „Sonne weg" von
+        #     „das Auto hat es bekommen" — nur im zweiten Fall weicht ein
+        #     laufender Boost sofort, ohne Mindestlaufzeit (Issue #6).
         ev_zuteilung_w = cmd.current_a * VOLT * cmd.phases if cmd.charging else 0
-        wp_cmd = self.heatpump.update(now, frei_w=surplus - ev_zuteilung_w, wp=wp_data)
+        wp_cmd = self.heatpump.update(
+            now, frei_w=verteilbar - ev_zuteilung_w, wp=wp_data, ev_zuteilung_w=ev_zuteilung_w
+        )
         await self._sende_wp(now, wp_cmd)
 
         # 8) Batterie-Entladesperre als Lease abgleichen (Spec §5.1)
@@ -147,7 +162,13 @@ class ControlLoop:
             "modus": self.mode, "state": cmd.state.value, "grund": grund,
             "read_only": self.cfg.read_only,
             "laedt": cmd.charging, "strom_a": cmd.current_a, "phasen": cmd.phases,
+            # `ueberschuss_w` bleibt der GEMESSENE Wert (so steht er auch in den
+            # Snapshots und damit in der Historie). `verteilbar_w` ist das, was
+            # tatsächlich zugeteilt wurde — die Differenz ist ein laufender
+            # WP-Boost, der sich selbst aus der Rechnung genommen hat (Issue #6).
             "ueberschuss_w": round(surplus), "soc_fahrzeug": soc_v,
+            "verteilbar_w": round(verteilbar), "wp_boost_w": round(wp_boost_w),
+            "ev_zuteilung_w": round(ev_zuteilung_w),
             "fahrzeug_limit_soc": self.vehicle_limit_soc,
             "soc_batterie": e_data["soc_batterie_pct"], "p_netz_w": e_data["p_netz_w"],
             "p_batterie_w": e_data["p_batterie_w"], "p_wallbox_w": p_lade,
@@ -156,7 +177,7 @@ class ControlLoop:
             "garantieladung": garantie,
             "entladesperre": self.guard.active("e3dc_entladesperre", now),
             # Entprellungs-/Sperr-Transparenz der 1p/3p-Umschaltung (Spec §4.2)
-            "phasen_info": self.controller.phase_diagnose(now, surplus),
+            "phasen_info": self.controller.phase_diagnose(now, verteilbar),
             # Wärmepumpe, zweigeteilt Warmwasser/Heizkreis (REQ-051, Issue #1)
             "wp": {
                 **self.heatpump.status(wp_data),

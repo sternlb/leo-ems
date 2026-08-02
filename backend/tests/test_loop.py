@@ -114,6 +114,52 @@ def test_waermepumpe_bekommt_ueberschuss_nach_wallbox(tmp_path):
     assert st["wp"]["frei_w"] < st["ueberschuss_w"]
 
 
+def test_auto_startet_auch_wenn_die_waermepumpe_schon_laeuft(tmp_path):
+    """Issue #6: „Wärmepumpe läuft auf Warmwasser, Auto wird nicht geladen."
+
+    Die WP hat keinen Leistungsmesswert — ihr Verbrauch steckt im Hausverbrauch
+    und drückt den gemessenen Überschuss. Entschied die Wallbox gegen diesen
+    gedrückten Wert, kam sie nicht mehr über ihre Einschaltschwelle: die
+    Verteilung entschied faktisch, wer zuerst angelaufen war.
+    """
+    cfg = RegelConfig(read_only=False)
+    store = Store(tmp_path / "test.db")
+    # 3,0 kW Überschuss, noch kein Auto — genug für den Warmwasser-Boost
+    e3dc = E3dcSimulator(p_netz_w=-3100, p_batterie_w=0, soc_pct=60, p_pv_w=4000)
+    goe = GoeSimulator(connected=False, power_w=0)
+    wp = VaillantSimulator()
+    loop = ControlLoop(cfg, SafetyGuard(cfg), store, {"e3dc": e3dc, "goe": goe, "vaillant": wp})
+
+    for i in range(70):                                  # ~11 min → Bedingungszeit voll
+        asyncio.run(loop.tick(T0 + timedelta(seconds=i * 10)))
+    assert loop.heatpump.ww_boost is True
+
+    # Die Anlage läuft jetzt wirklich und zieht ~2 kW: der gemessene Überschuss
+    # bricht auf 1,0 kW ein — unter der Einschaltschwelle der Wallbox (1,38 kW).
+    # Genau in dieser Lage steckt Leo das Auto an.
+    wp.werte["ww_sonderfunktion"] = "Zwangsladung"
+    e3dc.p_netz_w = -1100
+    goe._connected = True
+
+    t = T0 + timedelta(seconds=700)
+    for i in range(12):                                  # 2 min (Einschalt-Hysterese 60 s)
+        asyncio.run(loop.tick(t + timedelta(seconds=i * 10)))
+
+    st = loop.status()
+    assert st["ueberschuss_w"] == 1000                   # gemessen zu wenig …
+    assert st["wp_boost_w"] == 2000                      # … weil die WP 2 kW davon hält
+    assert st["verteilbar_w"] == 3000                    # zurückgerechnet reicht es
+    assert st["laedt"] is True and st["phasen"] == 1
+    assert st["ev_zuteilung_w"] == 13 * 230              # floor(3000/230) = 13 A
+
+    # Und die WP zieht sich zurück, statt die Wallbox ins Netz zu drücken
+    t += timedelta(seconds=120)
+    for i in range(36):                                  # 6 min > 5 min Bedingungszeit
+        asyncio.run(loop.tick(t + timedelta(seconds=i * 10)))
+    assert loop.heatpump.ww_boost is False
+    assert ("ww_soll", 45.0) in wp.commands
+
+
 def test_waermepumpe_im_beobachtungsmodus_stumm(tmp_path):
     """read_only: die Entscheidung steht im Status, aber nichts geht an die Cloud."""
     cfg = RegelConfig(read_only=True)

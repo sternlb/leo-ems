@@ -26,12 +26,12 @@ SOMMER = {
 WINTER = {**SOMMER, "aussen_c": 4.0, "raum_soll_c": 21.0, "hk_zustand": "HEATING", "raum_ist_c": 20.5}
 
 
-def _ticks(hp, wp, frei_w, minuten, start=T0, schritt_s=10, senden=True):
+def _ticks(hp, wp, frei_w, minuten, start=T0, schritt_s=10, senden=True, ev_w=0.0):
     """Regelschleife simulieren: alle 10 s ein Tick, Befehle „senden"."""
     letzte = None
     for i in range(int(minuten * 60 / schritt_s)):
         now = start + timedelta(seconds=i * schritt_s)
-        letzte = hp.update(now, frei_w=frei_w, wp=wp)
+        letzte = hp.update(now, frei_w=frei_w, wp=wp, ev_zuteilung_w=ev_w)
         if senden and (letzte.ww_soll_c is not None or letzte.raum_soll_c is not None):
             if letzte.ww_soll_c is not None:
                 wp["ww_soll_c"] = letzte.ww_soll_c      # Cloud bestätigt beim nächsten Lesen
@@ -85,6 +85,57 @@ def test_ww_boost_haelt_mindestlaufzeit_durch():
     _ticks(hp, wp, 0, minuten=10, start=T0 + timedelta(minutes=11))
     assert hp.ww_boost is True          # Mindestlaufzeit 30 min läuft noch
     assert wp["ww_soll_c"] == 57.0
+
+
+def test_ww_boost_weicht_dem_auto_ohne_mindestlaufzeit():
+    """Issue #6: Steckt das Auto an und nimmt den Überschuss, weicht der Boost sofort.
+
+    Die Mindestlaufzeit schützt den Verdichter vor Taktzyklen — sie ist kein
+    Argument in der Verteilungsfrage. Wer sie hier gelten ließe, würde die
+    Wallbox bis zu 30 min lang aus dem Netz laden lassen (Issue #7).
+    """
+    hp = HeatPumpController(RegelConfig())
+    wp = dict(SOMMER)
+    _ticks(hp, wp, 3000, minuten=11)
+    assert hp.ww_boost is True
+
+    # Auto lädt mit 11 kW, für die WP bleibt nichts. Es zählt die 5-min-
+    # Bedingungszeit, NICHT die 30 min Mindestlaufzeit
+    t = T0 + timedelta(minutes=11)
+    _ticks(hp, wp, 0, minuten=5, start=t, ev_w=11040, senden=False)
+    assert hp.ww_boost is True                           # Bedingungszeit noch nicht voll
+    cmd = hp.update(t + timedelta(minutes=5), frei_w=0, wp=wp, ev_zuteilung_w=11040)
+    assert hp.ww_boost is False
+    assert "Vorrang Auto" in cmd.grund and "11.0 kW" in cmd.grund
+    # Der Rückweg auf 45 °C geht am 15-min-Cloud-Gap vorbei (letzter Schreibzugriff
+    # war vor ~6 min) — sonst lädt das Auto derweil weiter aus dem Netz
+    assert cmd.ww_soll_c == 45.0
+
+
+def test_ohne_ladendes_auto_gilt_die_mindestlaufzeit_weiter():
+    """Gegenprobe zu Issue #6: „Sonne weg" ist kein Vorrangfall."""
+    hp = HeatPumpController(RegelConfig())
+    wp = dict(SOMMER)
+    _ticks(hp, wp, 3000, minuten=11)
+    _ticks(hp, wp, 0, minuten=6, start=T0 + timedelta(minutes=11), ev_w=0)
+    assert hp.ww_boost is True                           # Mindestlaufzeit schützt weiter
+
+
+def test_leistung_w_zaehlt_nur_einen_wirklich_laufenden_boost():
+    """Issue #6: Nur real fließende Leistung darf dem Auto zugerechnet werden.
+
+    Ein gewünschter Boost, den die Anlage nicht ausführt, verbraucht nichts —
+    ihn mitzurechnen hieße, dem Auto Leistung zuzuteilen, die es nicht gibt.
+    """
+    hp = HeatPumpController(RegelConfig())
+    wp = dict(SOMMER)
+    assert hp.leistung_w(wp) == 0.0                      # noch kein Boost
+    _ticks(hp, wp, 3000, minuten=11)
+    assert hp.ww_boost is True
+    assert hp.leistung_w(wp) == 0.0                      # Anlage steht noch im Standby
+    wp["ww_sonderfunktion"] = "Zwangsladung"             # jetzt läuft sie wirklich
+    assert hp.leistung_w(wp) == 2000.0
+    assert hp.leistung_w(None) == 0.0
 
 
 def test_ww_boost_schaltet_sich_nicht_selbst_ab():

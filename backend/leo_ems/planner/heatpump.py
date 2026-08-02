@@ -83,6 +83,7 @@ class HeatPumpController:
         self._eilig: set[str] = set()
         self._grund = "Wärmepumpe noch nicht bewertet"
         self._frei_w = 0.0
+        self._ev_zuteilung_w = 0.0
 
     # --- Hilfen ------------------------------------------------------------
     def _held(self, key: str, bedingung: bool, now: datetime) -> timedelta:
@@ -96,6 +97,16 @@ class HeatPumpController:
     def _laufzeit(self, key: str, now: datetime) -> timedelta:
         start = self._start.get(key)
         return now - start if start else timedelta(0)
+
+    def _vorrang_text(self, was: str) -> str:
+        """Begründung, wenn ein Boost dem Auto weicht (Issue #6).
+
+        Wichtig, dass das im Klartext steht: „Boost aus, Überschuss weg" und
+        „Boost aus, das Auto hat ihn bekommen" sehen in den Zahlen gleich aus,
+        sind aber zwei völlig verschiedene Sachverhalte.
+        """
+        return (f"{was} zurückgestellt — Vorrang Auto: die Wallbox lädt mit "
+                f"{self._ev_zuteilung_w / 1000:.1f} kW")
 
     def _ww_untergrenze(self) -> float:
         """Komfortgrenze Warmwasser (REQ-012): nie unter die harte Grenze stellen."""
@@ -112,9 +123,39 @@ class HeatPumpController:
         """
         return min(aus_w, an_w - self.cfg.wp_leistung_w)
 
+    def leistung_w(self, wp: dict | None) -> float:
+        """Geschätzte el. Aufnahme eines **laufenden** Überschuss-Boosts (Issue #6).
+
+        Die WP hat keinen Leistungsmesswert — ihr Verbrauch steckt im
+        Hausverbrauch und drückt damit den gemessenen Überschuss. Für die
+        Vorrangfrage „Auto oder Wärmepumpe?" muss dieser Anteil wieder sichtbar
+        werden, sonst gewinnt schlicht, wer zuerst angelaufen ist: läuft der
+        Warmwasser-Boost, sieht die Wallbox rund 2 kW weniger und startet gar
+        nicht erst. Genau das Fehlerbild aus Issue #6.
+
+        Bewusst konservativ: **gefordert und laufend**. Ein Boost, den die
+        Anlage nicht ausführt (Speicher schon warm, Beobachtungsmodus), nimmt
+        dem Auto nichts weg — würde man ihn mitzählen, plante das EMS mit
+        Leistung, die es nicht gibt, und das wäre wieder Netzbezug (Issue #7).
+        """
+        if not (self.ww_boost or self.hk_boost):
+            return 0.0
+        return float(self.cfg.wp_leistung_w) if self._laeuft(wp or {}) else 0.0
+
     # --- Hauptentscheidung -------------------------------------------------
-    def update(self, now: datetime, *, frei_w: float, wp: dict | None) -> HeatPumpCommand:
-        """Ein Tick. `frei_w` ist der Überschuss NACH der Wallbox-Zuteilung."""
+    def update(
+        self, now: datetime, *, frei_w: float, wp: dict | None, ev_zuteilung_w: float = 0.0
+    ) -> HeatPumpCommand:
+        """Ein Tick.
+
+        `frei_w` ist der Überschuss NACH der Wallbox-Zuteilung — inklusive der
+        Leistung, die ein eigener laufender Boost gerade selbst verbraucht
+        (`leistung_w`), damit beide Verbraucher gegen dasselbe Budget geprüft
+        werden. `ev_zuteilung_w` sagt, wie viel davon an die Wallbox gegangen
+        ist; nur daran erkennt der Controller, ob ein Boost dem Auto weichen
+        muss oder ob einfach die Sonne weg ist (Issue #6).
+        """
+        self._ev_zuteilung_w = max(0.0, ev_zuteilung_w)
         if not wp:
             # Fail-Safe E7: WP/HA nicht erreichbar → nichts entscheiden, nichts
             # zurücksetzen. Offene Sollwerte bleiben stehen und gehen raus,
@@ -155,6 +196,9 @@ class HeatPumpController:
             zu_wenig = self._held("ww_aus", frei < aus, now)
             laufzeit = self._laufzeit("ww", now)
             if zu_wenig >= timedelta(seconds=self.cfg.wp_aus_entprellung_s):
+                if self._ev_zuteilung_w > 0:
+                    self._eilig.add("ww")
+                    return self._ww_beenden(normal_c, self._vorrang_text("Warmwasser-Boost"))
                 if laufzeit >= timedelta(seconds=self.cfg.wp_min_laufzeit_s):
                     return self._ww_beenden(
                         normal_c,
@@ -217,6 +261,9 @@ class HeatPumpController:
             zu_wenig = self._held("hk_aus", frei < aus, now)
             laufzeit = self._laufzeit("hk", now)
             if zu_wenig >= timedelta(seconds=self.cfg.wp_aus_entprellung_s):
+                if self._ev_zuteilung_w > 0:
+                    self._eilig.add("hk")
+                    return self._hk_beenden(self._vorrang_text("Heizkreis-Anhebung"))
                 if laufzeit >= timedelta(seconds=self.cfg.wp_min_laufzeit_s):
                     return self._hk_beenden(
                         f"Heizkreis-Anhebung aus: Überschuss {frei / 1000:.1f} kW < "
@@ -323,6 +370,9 @@ class HeatPumpController:
             "laeuft": self._laeuft(wp),
             "grund": self._grund,
             "frei_w": round(self._frei_w),
+            # Was die Wallbox vorher aus demselben Budget genommen hat (Issue #6)
+            "ev_zuteilung_w": round(self._ev_zuteilung_w),
+            "leistung_w": round(self.leistung_w(wp)),
             "warmwasser": {
                 "aktiv": self.cfg.wp_ww_aktiv,
                 "ist_c": wp.get("ww_ist_c"),
