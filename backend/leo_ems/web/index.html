@@ -823,6 +823,11 @@ async function api(pfad, opts = {}) {
 const w = v => v == null ? "–" : (Math.abs(v) >= 1000 ? (v/1000).toFixed(1) + " kW" : Math.round(v) + " W");
 const pct = v => v == null ? "–" : Math.round(v) + " %";
 const mmss = s => Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0");
+// Entladegrenze der Hausbatterie (Spec §5.1): drei Zustände, nicht zwei
+const entladeText = st =>
+  st.entladelimit_art === "hart" ? "gesperrt (0 W)"
+  : st.entladelimit_art === "dynamisch" ? "bis " + w(st.entladelimit_w) + " für den Hausbedarf"
+  : "keine — Batterie frei";
 
 // ---------- Energy-Flow-Szene (Spec 04, v0.3) --------------------------------
 // Stilisierte Ostansicht (SVG-Hintergrund im Markup) + Funktions-Ebene als
@@ -1256,7 +1261,8 @@ function openPanel(k) {
       <dl><dt>SoC</dt><dd>${st.soc_batterie != null ? Math.round(st.soc_batterie) + " %" : "— (offline)"}</dd>
       <dt>Leistung</dt><dd>${pb > 50 ? "lädt " + fmtFluss(pb) : pb < -50 ? "entlädt " + fmtFluss(pb) : "Ruhe"}</dd>
       <dt>Reserve</dt><dd>${cfgCache ? cfgCache.soc_reserve_pct + " %" : "—"}</dd>
-      <dt>Entladesperre</dt><dd>${st.entladesperre ? "aktiv" : "inaktiv"}</dd></dl>`,
+      <dt>Entladegrenze</dt><dd>${entladeText(st)}</dd>
+      ${st.entladelimit_grund ? `<dt>Grund</dt><dd>${st.entladelimit_grund}</dd>` : ""}</dl>`,
     pv: `<h3>PV-Erzeugung</h3>
       <dl><dt>E3DC (9,23 kWp)</dt><dd>${fmtFluss(st.p_pv_e3dc_w) ?? "0 W"}</dd>
       <dt>Sungrow (5,64 kWp)</dt><dd>${fmtFluss(st.p_sungrow_w) ?? "geplant — Inbetriebnahme Ende 2026"}</dd>
@@ -1334,7 +1340,13 @@ function render(st) {
   $("t-batt-bar").classList.toggle("laedt", pb > 50);
   $("t-batt").textContent = pb > 50 ? "lädt " + w(pb) : pb < -50 ? "entlädt " + w(Math.abs(pb)) : "Ruhe";
   $("t-batt").className = pb > 50 ? "lime" : pb < -50 ? "gelbc" : "";
-  $("t-sperre").innerHTML = st.entladesperre ? ' · <span class="gelbc">Entladesperre</span>' : "";
+  // Entladegrenze: „gesperrt" und „darf bis X W decken" sind zwei verschiedene
+  // Zustände — beim Netzbezug-Suchen ist genau das der Unterschied (Spec §5.1).
+  $("t-sperre").innerHTML =
+    st.entladelimit_art === "hart" ? ' · <span class="gelbc">Entladesperre</span>'
+    : st.entladelimit_art === "dynamisch"
+      ? ` · <span class="gelbc">Grenze ${w(st.entladelimit_w)}</span>`
+      : "";
   const pn = st.p_netz_w || 0;
   $("t-netz").textContent = w(Math.abs(pn));
   $("t-netz").className = "kw " + (pn < -50 ? "lime" : pn > 50 ? "rotc" : "");

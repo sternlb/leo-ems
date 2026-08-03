@@ -19,6 +19,7 @@ from ..config import RegelConfig
 from ..planner import (
     VOLT,
     ChargeController,
+    EntladeLimitRegler,
     HeatPumpController,
     berechne_ueberschuss,
     plane_garantieladung,
@@ -27,7 +28,6 @@ from ..safety import SafetyGuard
 from ..store import Store
 
 E3DC_MAX_ALTER = timedelta(seconds=60)   # Fail-Safe E1 (Spec §7)
-BATT_ENTLADE_SCHWELLE_W = -200           # Entladung Richtung Haus (Spec §5.1)
 # Ein dauerhaft ausgefallenes Gerät soll das Protokoll nicht zumüllen (6 Ticks/min),
 # darin aber auch nicht verschwinden: melden bei Wechsel und danach stündlich.
 GERAET_MELDE_INTERVALL = timedelta(minutes=60)
@@ -41,12 +41,13 @@ class ControlLoop:
         self.adapters = adapters
         self.controller = ChargeController(cfg)
         self.heatpump = HeatPumpController(cfg)   # Stufe 2 (REQ-010/011)
+        self.batt_limit = EntladeLimitRegler(cfg)  # Entladegrenze Hausbatterie (Spec §5.1)
         self.mode = "Nur-PV"                 # Default-Modus (Spec §3)
         self.vehicle_limit_soc = 80          # fahrzeugseitiges Limit (Baseline)
         self._ueberschuss_fenster: list[float] = []  # gleitender Mittelwert über 3 (Spec §2)
         self._last_read: dict[str, datetime] = {}    # letzte erfolgreiche Lesung je Adapter (Tick-Zeit)
         self._geraete: dict[str, dict] = {}          # Lese-Gesundheit je Adapter (Diagnose)
-        self._sperre_hw_gesetzt = False
+        self._limit_hw_w: int | None = None   # zuletzt an die E3DC geschriebene Grenze
         self._last_status: dict = {"state": "start", "grund": "Regelschleife initialisiert"}
         self.running = False
 
@@ -137,8 +138,13 @@ class ControlLoop:
         )
         await self._sende_wp(now, wp_cmd)
 
-        # 8) Batterie-Entladesperre als Lease abgleichen (Spec §5.1)
-        await self._abgleich_entladesperre(now, e3dc, cmd.charging, e_data["p_batterie_w"])
+        # 8) Entladegrenze der Hausbatterie als Lease abgleichen (Spec §5.1)
+        entscheid = self.batt_limit.update(
+            charging=cmd.charging, netz_gewollt=cmd.netz_gewollt,
+            soc_batt=e_data["soc_batterie_pct"],
+            p_netz_w=e_data["p_netz_w"], p_batterie_w=e_data["p_batterie_w"],
+        )
+        await self._abgleich_entladegrenze(now, e3dc, entscheid)
 
         # 9) Befehle an die Wallbox — durch die Grenzen-Validierung (Spec §8.3).
         #    Beobachtungsmodus (read_only): Entscheidung nur protokollieren, NICHTS senden.
@@ -175,7 +181,12 @@ class ControlLoop:
             "p_pv_w": round(p_pv), "p_pv_e3dc_w": p_pv_e3dc, "p_sungrow_w": p_sungrow,
             "p_haus_w": round(max(0.0, p_haus)),
             "garantieladung": garantie,
+            # Entladegrenze: `entladesperre` bleibt das grobe Ja/Nein für die
+            # Anzeige, `entladelimit_*` zeigt, wie viel die Batterie decken darf.
             "entladesperre": self.guard.active("e3dc_entladesperre", now),
+            "entladelimit_w": entscheid.limit_w,
+            "entladelimit_art": entscheid.art,
+            "entladelimit_grund": entscheid.grund,
             # Entprellungs-/Sperr-Transparenz der 1p/3p-Umschaltung (Spec §4.2)
             "phasen_info": self.controller.phase_diagnose(now, verteilbar),
             # Wärmepumpe, zweigeteilt Warmwasser/Heizkreis (REQ-051, Issue #1)
@@ -199,6 +210,7 @@ class ControlLoop:
             soc_v=soc_v, p_wallbox_w=p_lade, p_sungrow_w=p_sungrow,
             wuerde_laden=cmd.charging, strom_a=cmd.current_a, phasen=cmd.phases,
             garantie=garantie, read_only=self.cfg.read_only,
+            entladelimit_w=entscheid.limit_w,
         )
 
     # --- Fail-Safe / Helfer ------------------------------------------------
@@ -211,7 +223,10 @@ class ControlLoop:
         goe = self.adapters.get("goe")
         if goe is not None and not self.cfg.read_only:
             await self._safe_cmd(goe.set_charging, False)
-        # Entladesperre nicht erneuern → läuft per TTL aus (ADR-005)
+        # Entladegrenze nicht erneuern → Lease läuft per TTL aus (ADR-005).
+        # Was zuletzt in der Anlage stand, gilt nach dem Ausfall als unbekannt:
+        # kommt die E3DC zurück, wird die Grenze frisch geschrieben.
+        self._limit_hw_w = None
         self._last_status = {
             "state": "abgeschaltet", "grund": "E3DC nicht erreichbar (Fail-Safe E1)", "laedt": False,
         }
@@ -241,21 +256,45 @@ class ControlLoop:
             "wp_sollwert", "waermepumpe",
         )
 
-    async def _abgleich_entladesperre(self, now, e3dc, charging: bool, p_batterie_w: float) -> None:
-        """Sperre setzen, solange geladen wird UND Batterie entlädt; per Lease/TTL (Spec §5.1)."""
-        soll = charging and (self.guard.active("e3dc_entladesperre", now) or p_batterie_w < BATT_ENTLADE_SCHWELLE_W)
-        if soll:
-            self.guard.acquire("e3dc_entladesperre", now, "EV lädt — Batterie-Entladesperre")  # = TTL-Renew
-            # read_only: Lease dient nur der Anzeige ("würde sperren"), HW bleibt unberührt
-            if not self._sperre_hw_gesetzt and e3dc is not None and not self.cfg.read_only:
-                await self._safe_cmd(e3dc.set_entladesperre, True)
-                self._sperre_hw_gesetzt = True
-        else:
+    async def _abgleich_entladegrenze(self, now, e3dc, entscheid) -> None:
+        """Entladegrenze als Lease abgleichen (Spec §5.1, ADR-005).
+
+        Der Lease heißt weiterhin `e3dc_entladesperre` — er trägt die
+        Fail-Safe-Semantik, nicht den Zahlenwert: wird er nicht mehr erneuert,
+        läuft er nach `lease_ttl_s` aus und die E3DC regelt wieder autonom.
+        """
+        if entscheid.limit_w is None:
             if self.guard.active("e3dc_entladesperre", now):
                 self.guard.release("e3dc_entladesperre")
-            if self._sperre_hw_gesetzt and e3dc is not None:
-                await self._safe_cmd(e3dc.set_entladesperre, False)
-                self._sperre_hw_gesetzt = False
+            if self._limit_hw_w is not None and e3dc is not None:
+                await self._safe_cmd(e3dc.set_entladelimit, None)
+                self._limit_hw_w = None
+            return
+
+        self.guard.acquire("e3dc_entladesperre", now, entscheid.grund)   # = TTL-Renew
+        # read_only: Lease dient nur der Anzeige („würde begrenzen"), HW bleibt unberührt
+        if self.cfg.read_only or e3dc is None or not self._schreiben_noetig(entscheid.limit_w):
+            return
+        await self._safe_cmd(e3dc.set_entladelimit, entscheid.limit_w)
+        self._limit_hw_w = entscheid.limit_w
+        self.store.log_decision(
+            now, entscheid.grund, {"limit_w": entscheid.limit_w},
+            "set_power_limits", f"entladegrenze_{entscheid.art}",
+        )
+
+    def _schreiben_noetig(self, limit_w: int) -> bool:
+        """Schreibdrossel für den RSCP-Weg.
+
+        `set_power_limits` schreibt eine persistente Anlagen-Einstellung — sie
+        alle 10 s mit einem um 20 W verschobenen Wert zu beschicken wäre
+        unnötiger Verschleiß. Ein Wechsel von oder auf die harte Sperre (0) geht
+        dagegen immer sofort raus, denn er ändert die Betriebsart.
+        """
+        if self._limit_hw_w is None:
+            return True
+        if limit_w == 0 or self._limit_hw_w == 0:
+            return limit_w != self._limit_hw_w
+        return abs(limit_w - self._limit_hw_w) > self.cfg.batt_dyn_schreibschwelle_w
 
     def _glätten(self, wert: float) -> float:
         self._ueberschuss_fenster.append(wert)

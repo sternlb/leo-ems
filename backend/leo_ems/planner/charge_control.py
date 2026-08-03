@@ -37,6 +37,12 @@ class ChargeCommand:
     phases: int
     state: ChargeState
     reason: str
+    # Ist der Netzbezug dieser Entscheidung *gewollt*? Wahr in „Schnell", bei der
+    # Garantieladung und für das Minimum in „PV+Min" — dort soll die Hausbatterie
+    # nicht einspringen (sie würde sonst ins Auto entladen). Die dynamische
+    # Entladegrenze liest genau dieses Flag, statt Modus-Strings zu raten:
+    # warum geladen wird, weiß nur der Controller selbst (planner/batt_limit.py).
+    netz_gewollt: bool = False
 
 
 class ChargeController:
@@ -167,9 +173,10 @@ class ChargeController:
             "grund": grund,
         }
 
-    def _charge(self, current_a: int, phases: int, reason: str) -> ChargeCommand:
+    def _charge(self, current_a: int, phases: int, reason: str,
+                netz_gewollt: bool = False) -> ChargeCommand:
         self.state = ChargeState.LADEN_3P if phases == 3 else ChargeState.LADEN_1P
-        return ChargeCommand(True, current_a, phases, self.state, reason)
+        return ChargeCommand(True, current_a, phases, self.state, reason, netz_gewollt)
 
     # --- Hauptentscheidung -------------------------------------------------
     def update(
@@ -197,7 +204,8 @@ class ChargeController:
         # Garantieladung übersteuert ALLES inkl. Modus "Aus" (Spec §3/§4.3, Festlegung 5)
         if guarantee_active:
             self.phases = 3
-            return self._charge(self.cfg.max_current_a, 3, "Garantieladung: Zielzeit/Mindest-SoC gefährdet")
+            return self._charge(self.cfg.max_current_a, 3,
+                                "Garantieladung: Zielzeit/Mindest-SoC gefährdet", netz_gewollt=True)
 
         if mode == "Aus":
             self.state = ChargeState.VERBUNDEN
@@ -205,14 +213,18 @@ class ChargeController:
 
         if mode == "Schnell":
             self.phases = 3
-            return self._charge(self.cfg.max_current_a, 3, "Modus Schnell (max. Leistung, Herkunft egal)")
+            return self._charge(self.cfg.max_current_a, 3,
+                                "Modus Schnell (max. Leistung, Herkunft egal)", netz_gewollt=True)
 
         if mode == "PV+Min":
             phases = self._decide_phases(surplus_w, now)
             current = self._current_for(surplus_w, phases)
             reicht_pv = surplus_w >= self.cfg.min_current_a * VOLT * phases
-            zusatz = "" if reicht_pv else " (Minimum aus Netz/Batterie)"
-            return self._charge(current, phases, f"PV+Min: {current} A {phases}p{zusatz}")
+            zusatz = "" if reicht_pv else " (Minimum aus Netz)"
+            # Trägt die PV das Minimum nicht, kommt es bewusst aus dem Netz —
+            # nicht aus der Hausbatterie, die sonst ins Auto entladen würde.
+            return self._charge(current, phases, f"PV+Min: {current} A {phases}p{zusatz}",
+                                netz_gewollt=not reicht_pv)
 
         # Nur-PV (Default): mit Ein-/Ausschalt-Hysterese (Spec §4.1)
         was_charging = self.state in (ChargeState.LADEN_1P, ChargeState.LADEN_3P)

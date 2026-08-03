@@ -1,4 +1,4 @@
-"""Integrationstest der Regelschleife mit Simulatoren — Entladesperre (§5.1) und Fail-Safe E1 (§7)."""
+"""Integrationstest der Regelschleife mit Simulatoren — Entladegrenze (§5.1) und Fail-Safe E1 (§7)."""
 
 import asyncio
 from datetime import datetime, timedelta
@@ -20,15 +20,15 @@ def build(tmp_path):
     cfg = RegelConfig(read_only=False)
     store = Store(tmp_path / "test.db")
     guard = SafetyGuard(cfg)
-    # 2900 W Überschuss (Netz -3000, residual 100), Batterie entlädt 300 W (<-200 → Sperre)
-    e3dc = E3dcSimulator(p_netz_w=-3000, p_batterie_w=-300, soc_pct=60)
+    # 2900 W Überschuss (Netz -3000, residual 100), Batterie weder lädt noch entlädt
+    e3dc = E3dcSimulator(p_netz_w=-3000, p_batterie_w=0, soc_pct=60)
     goe = GoeSimulator(connected=True, power_w=0)
     loop = ControlLoop(cfg, guard, store, {"e3dc": e3dc, "goe": goe})
     return loop, e3dc, goe, guard
 
 
-def test_laden_und_entladesperre(tmp_path):
-    """Nach der Einschaltverzögerung lädt die Wallbox und die E3DC-Entladesperre wird gesetzt."""
+def test_laden_und_entladegrenze(tmp_path):
+    """Nach der Einschaltverzögerung lädt die Wallbox und die Entladegrenze steht (§5.1)."""
     loop, e3dc, goe, guard = build(tmp_path)
 
     asyncio.run(loop.tick(T0))                       # Einschaltverzögerung startet
@@ -37,8 +37,95 @@ def test_laden_und_entladesperre(tmp_path):
     asyncio.run(loop.tick(T0 + timedelta(seconds=60)))   # Ladung beginnt
     assert goe.charging
     assert ("charging", True) in goe.commands
-    assert e3dc.entladesperre is True                # Sperre gesetzt (§5.1)
+    # Die Anlage speist ein, es gibt nichts zu decken: die Grenze steht auf dem
+    # reinen Puffer — Kopffreiheit für einen Lastsprung im nächsten Tick.
+    assert e3dc.entladelimit_w == 200
     assert guard.active("e3dc_entladesperre", T0 + timedelta(seconds=60))
+
+
+def test_entladegrenze_folgt_dem_netzbezug(tmp_path):
+    """Der Kern der Änderung: Netzbezug beim Laden gibt die Batterie frei — genau so weit.
+
+    Leos Fehlerbild nach v0.8.0: Auto lädt, eine Last kommt dazu, und weil die
+    Batterie hart gesperrt war, deckte zwingend das Netz.
+    """
+    loop, e3dc, goe, guard = build(tmp_path)
+    asyncio.run(loop.tick(T0))
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))
+    assert goe.charging
+
+    e3dc.p_netz_w = 800                              # Backofen an → 800 W aus dem Netz
+    asyncio.run(loop.tick(T0 + timedelta(seconds=70)))
+    assert e3dc.entladelimit_w == 1000               # 800 Bedarf + 200 Puffer
+
+    # Die Batterie deckt jetzt — der Bedarf ist derselbe, die Grenze bleibt stehen
+    # (kein Zurückfallen auf 0, sonst begänne der Netzbezug von vorn).
+    e3dc.p_netz_w, e3dc.p_batterie_w = 0.0, -800
+    asyncio.run(loop.tick(T0 + timedelta(seconds=80)))
+    assert e3dc.entladelimit_w == 1000
+
+    # Last weg → die Grenze sinkt gedämpft (batt_dyn_abbau_w = 500 W je Tick)
+    e3dc.p_batterie_w = 0.0
+    asyncio.run(loop.tick(T0 + timedelta(seconds=90)))
+    assert e3dc.entladelimit_w == 500
+    asyncio.run(loop.tick(T0 + timedelta(seconds=100)))
+    assert e3dc.entladelimit_w == 200
+
+
+def test_entladegrenze_schreibt_nicht_bei_jedem_zittern(tmp_path):
+    """set_power_limits ist ein persistenter Schreibzugriff — kleine Deltas werden gedrosselt."""
+    loop, e3dc, goe, guard = build(tmp_path)
+    asyncio.run(loop.tick(T0))
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))       # Ladung läuft
+
+    e3dc.p_netz_w = 800
+    asyncio.run(loop.tick(T0 + timedelta(seconds=70)))
+    assert e3dc.entladelimit_w == 1000
+    vorher = len([c for c in e3dc.commands if c[0] == "entladelimit"])
+
+    e3dc.p_netz_w = 850                              # +50 W → unter der Schreibschwelle
+    asyncio.run(loop.tick(T0 + timedelta(seconds=80)))
+    assert len([c for c in e3dc.commands if c[0] == "entladelimit"]) == vorher
+    assert e3dc.entladelimit_w == 1000
+
+
+def test_schnell_modus_sperrt_die_batterie_hart(tmp_path):
+    """Modus Schnell zieht bewusst aus dem Netz — die Hausbatterie bleibt außen vor."""
+    loop, e3dc, goe, guard = build(tmp_path)
+    loop.mode = "Schnell"
+    e3dc.p_netz_w = 5000                             # lädt mit voller Leistung aus dem Netz
+    asyncio.run(loop.tick(T0))
+    assert goe.charging
+    assert e3dc.entladelimit_w == 0                  # harte Sperre trotz Netzbezug
+    assert loop.status()["entladelimit_art"] == "hart"
+
+
+def test_entladegrenze_faellt_am_ladeende_weg(tmp_path):
+    """Ohne Ladung gehört die Batterie wieder dem Haus (Lease wird freigegeben)."""
+    loop, e3dc, goe, guard = build(tmp_path)
+    asyncio.run(loop.tick(T0))
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))
+    assert e3dc.entladelimit_w is not None
+
+    goe._connected = False
+    t = T0 + timedelta(seconds=70)
+    asyncio.run(loop.tick(t))
+    assert ("entladelimit", None) in e3dc.commands
+    assert not guard.active("e3dc_entladesperre", t)
+
+
+def test_entladegrenze_haelt_soc_untergrenze_ein(tmp_path):
+    """Unter dem Vorrang-SoC bleibt es hart: die Hausbatterie ist nicht fürs Auto da."""
+    loop, e3dc, goe, guard = build(tmp_path)
+    e3dc.soc_pct = 20                                # < priority_soc_pct (25 %)
+    asyncio.run(loop.tick(T0))
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))
+    assert goe.charging
+
+    e3dc.p_netz_w = 800                              # Netzbezug — trotzdem keine Freigabe
+    asyncio.run(loop.tick(T0 + timedelta(seconds=70)))
+    assert e3dc.entladelimit_w == 0
+    assert loop.status()["entladelimit_art"] == "hart"
 
 
 def test_failsafe_e1_schaltet_ab(tmp_path):
@@ -75,7 +162,7 @@ def test_status_enthaelt_energieverteilung_und_phaseninfo(tmp_path):
 
 
 def test_lease_laeuft_ohne_erneuerung_aus(tmp_path):
-    """ADR-005: Wird nach gesetzter Sperre nicht mehr getickt, läuft sie per TTL aus (T4-Kern)."""
+    """ADR-005: Wird nach gesetzter Grenze nicht mehr getickt, läuft sie per TTL aus (T4-Kern)."""
     loop, e3dc, goe, guard = build(tmp_path)
     asyncio.run(loop.tick(T0))
     asyncio.run(loop.tick(T0 + timedelta(seconds=60)))

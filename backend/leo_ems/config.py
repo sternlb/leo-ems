@@ -54,6 +54,16 @@ class RegelConfig:
     hard_limit_ev_min_soc: int | None = None
     hard_limit_ww_min_temp: float | None = None
 
+    # --- Dynamische Entladegrenze beim EV-Laden (planner/batt_limit.py) ------
+    # Ersetzt die harte Sperre in den PV-Modi: die Batterie darf Netzbezug
+    # decken, aber nicht ins Auto entladen. `batt_dyn_aktiv=False` stellt das
+    # Verhalten von v0.8.0 wieder her (Notausstieg ohne Deployment).
+    batt_dyn_aktiv: bool = True
+    batt_dyn_max_w: int = 3000             # Deckel der Entladegrenze (S10E könnte mehr)
+    batt_dyn_puffer_w: int = 200           # Kopffreiheit über dem gemessenen Bedarf
+    batt_dyn_abbau_w: int = 500            # max. Absenkung je Tick (Dämpfung nach unten)
+    batt_dyn_schreibschwelle_w: int = 100  # RSCP-Schreibzugriff erst ab diesem Delta
+
     # --- Wärmepumpe, Stufe 2 (REQ-010–014, planner/heatpump.py) --------------
     # Schwellen konservativ nach Leos Festlegung 2026-07-25: an ab 2,5 kW,
     # zurück unter 0,5 kW — bezogen auf den Überschuss NACH der Wallbox.

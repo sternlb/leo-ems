@@ -23,7 +23,7 @@ T0 = datetime(2026, 7, 16, 12, 0)
 def make_loop(read_only: bool):
     cfg = RegelConfig(read_only=read_only)
     store = Store(Path(tempfile.mkdtemp()) / "test.db")
-    e3dc = E3dcSimulator(p_netz_w=-3000, p_batterie_w=-500, soc_pct=61)  # speist ein, Batterie entlädt
+    e3dc = E3dcSimulator(p_netz_w=-3000, p_batterie_w=0, soc_pct=61)  # speist 3 kW ein
     goe = GoeSimulator(connected=True)
     loop = ControlLoop(cfg, SafetyGuard(cfg), store, {"e3dc": e3dc, "goe": goe})
     return loop, store, e3dc, goe
@@ -49,7 +49,7 @@ def test_aktiv_sendet_befehle():
     zwei_ticks(loop)
     assert ("charging", True) in goe.commands
     assert ("current", 12) in goe.commands          # 2900 W / 230 V = 12 A, 1-phasig
-    assert ("entladesperre", True) in e3dc.commands # Batterie entlud → Sperre gesetzt (Spec §5.1)
+    assert ("entladelimit", 200) in e3dc.commands   # Entladegrenze gesetzt (Spec §5.1)
 
 
 def test_read_only_failsafe_e1_stoppt_nichts():

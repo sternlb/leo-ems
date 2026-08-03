@@ -27,6 +27,18 @@
 - [ ] **Sichtbare Wirkung bei echtem Entladen:** Der Test lief bei SoC 98 % ohne Batterieaktivität — der Befehl kam durch, aber ohne sichtbaren Effekt (nichts entlud). Rerun empfohlen, wenn die Batterie abends tatsächlich Leistung abgibt: `python spikes/e3dc_spike.py --schreiben`, dabei E3DC-App/Portal offen halten und prüfen, ob die Entladeleistung während der 60 s auf 0 fällt.
 - [ ] **Abbruch-Test (kalibriert das Lease-TTL, Spec §5.1):** Skript mit `--schreiben` starten, **während der 60-Sekunden-Wartezeit mit Strg+C abbrechen** (Sperre bleibt dann gesetzt, da das Lösen im Skript nicht mehr läuft), danach am E3DC-Display/Portal stoppen, **wie lange es dauert, bis die Batterie von selbst wieder normal lädt/entlädt**. Ergebnis bitte melden — falls die E3DC deutlich schneller oder langsamer als 15 min zurückkehrt, passen wir `lease_ttl_s` in `backend/leo_ems/config.py` an.
 
+## Entladegrenze statt Entladesperre (v0.9.0)
+
+Seit v0.9.0 schreibt das EMS beim Laden nicht mehr nur 0, sondern eine **dynamische Grenze** (Spec §5.1, `backend/leo_ems/planner/batt_limit.py`). Was dabei über den RSCP-Weg zu wissen ist:
+
+- `set_power_limits(enable, max_charge=None, max_discharge=None, discharge_start=None)` sendet `EMS_REQ_SET_POWER_SETTINGS`. `max_discharge` ist ein Uint32 — nicht-negative ganze Watt. Rückgabe: `0` angenommen, `1` angenommen-aber-nicht-optimal, `-1` abgelehnt. Der Adapter wirft seit v0.9.0 bei `-1`; bis dahin lief eine Ablehnung stumm durch.
+- **Untere Wirkschwelle:** unterhalb `discharge_start` (Anlagen-Default ~65 W) entlädt die E3DC ohnehin nicht. Grenzen unter 100 W schreibt das EMS deshalb als 0 — sie wären nur Schein.
+- **`max_charge` bleibt ungenutzt** — das ist der Anknüpfungspunkt für REQ-022/023 (Zeitverschiebung, Netzladen bei dynamischem Tarif).
+- **Schreibfrequenz:** eine persistente Anlagen-Einstellung alle 10 s zu beschicken wäre unnötiger Verschleiß. Das EMS rastert auf 50 W und schreibt erst ab `batt_dyn_schreibschwelle_w` Änderung. **Zu beobachten:** Wie viele `entladegrenze`-Einträge stehen unter `/api/v1/history` pro Minute? Ziel < 6; falls mehr, die Schwelle anheben.
+
+**Noch offen:**
+- [ ] Folgt die reale Entladeleistung der gesetzten Grenze (nicht nur 0/frei)? Bei einem Ladevorgang mit Netzbezug prüfen, ob die Batterie genau den Hausbedarf deckt und nicht mehr.
+
 ## Ursprüngliche offene Fragen
 
 - [x] ~~RSCP getestet?~~ **Ja — funktioniert über EVCC** (2026-07-12); zusätzlich jetzt eigener RSCP-Zugriff verifiziert (s.o.).

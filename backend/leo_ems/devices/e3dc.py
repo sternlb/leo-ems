@@ -41,12 +41,21 @@ class E3dcAdapter(DeviceAdapter):
     def last_update(self) -> datetime | None:
         return self._last
 
-    async def set_entladesperre(self, on: bool) -> None:
-        """Entladesperre = Entladeleistung auf 0 begrenzen (Spec §5.1)."""
-        if on:
-            self._e3dc.set_power_limits(enable=True, max_discharge=0)
+    async def set_entladelimit(self, max_discharge_w: int | None) -> None:
+        """Entladeleistung begrenzen (Spec §5.1).
+
+        `None` hebt die Begrenzung auf, `0` ist die harte Sperre, alles dazwischen
+        die dynamische Grenze (planner/batt_limit.py). pye3dc liefert -1 zurück,
+        wenn die Anlage den Wert ablehnt — das lief bis v0.8.0 stumm durch und
+        hätte eine wirkungslose Steuerung nicht von einer wirksamen unterschieden.
+        1 heißt „angenommen, aber nicht optimal" und ist kein Fehler.
+        """
+        if max_discharge_w is None:
+            res = self._e3dc.set_power_limits(enable=False)
         else:
-            self._e3dc.set_power_limits(enable=False)
+            res = self._e3dc.set_power_limits(enable=True, max_discharge=int(max_discharge_w))
+        if res == -1:
+            raise RuntimeError(f"E3DC lehnt Entladegrenze {max_discharge_w} ab (RSCP -1)")
 
 
 class E3dcSimulator(DeviceAdapter):
@@ -60,7 +69,7 @@ class E3dcSimulator(DeviceAdapter):
         self.soc_pct = soc_pct
         self.p_pv_w = p_pv_w
         self.available = True
-        self.entladesperre = False
+        self.entladelimit_w: int | None = None
         self.commands: list[tuple] = []
         self._last: datetime | None = None
 
@@ -79,6 +88,11 @@ class E3dcSimulator(DeviceAdapter):
     def last_update(self) -> datetime | None:
         return self._last
 
-    async def set_entladesperre(self, on: bool) -> None:
-        self.entladesperre = on
-        self.commands.append(("entladesperre", on))
+    async def set_entladelimit(self, max_discharge_w: int | None) -> None:
+        self.entladelimit_w = max_discharge_w
+        self.commands.append(("entladelimit", max_discharge_w))
+
+    @property
+    def entladesperre(self) -> bool:
+        """Harte Sperre = Grenze auf 0 (die Batterie gibt nichts mehr ab)."""
+        return self.entladelimit_w == 0

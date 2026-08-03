@@ -36,10 +36,18 @@ CREATE TABLE IF NOT EXISTS snapshots (       -- je Regel-Tick ein Messbild (Cock
     p_wallbox_w REAL,                        -- real gemessene Wallbox-Leistung (= EVCC im Beobachtungsmodus)
     p_sungrow_w REAL,
     wuerde_laden INTEGER, strom_a INTEGER, phasen INTEGER,  -- EMS-Entscheidung (im read_only: "hätte")
-    garantie INTEGER, read_only INTEGER
+    garantie INTEGER, read_only INTEGER,
+    entladelimit_w REAL                      -- Entladegrenze Hausbatterie; NULL = keine (Spec §5.1)
 );
 CREATE INDEX IF NOT EXISTS idx_snap_ts ON snapshots(ts);
 """
+
+# Spalten, die nach der ersten Auslieferung dazugekommen sind. CREATE TABLE
+# IF NOT EXISTS lässt eine bestehende Tabelle unangetastet — für Leos laufende
+# Datenbank auf dem Pi muss deshalb nachträglich erweitert werden.
+NACHRUESTUNG = (
+    ("snapshots", "entladelimit_w", "REAL"),
+)
 
 
 class Store:
@@ -47,6 +55,12 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._db.executescript(SCHEMA)
+        for tabelle, spalte, typ in NACHRUESTUNG:
+            try:
+                self._db.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {typ}")
+            except sqlite3.OperationalError:
+                pass    # gibt es schon — neue Datenbank oder bereits nachgerüstet
+        self._db.commit()
 
     # --- Regeln (REQ-070) ---------------------------------------------------
     def list_rules(self) -> list[ChargingRule]:
@@ -95,14 +109,15 @@ class Store:
     def log_snapshot(self, ts: datetime, **felder) -> None:
         spalten = ("ueberschuss_w", "p_netz_w", "p_batterie_w", "soc_batt", "soc_v",
                    "p_wallbox_w", "p_sungrow_w", "wuerde_laden", "strom_a", "phasen",
-                   "garantie", "read_only")
+                   "garantie", "read_only", "entladelimit_w")
         werte = [ts.isoformat()] + [
             int(felder.get(s) or 0) if s in ("wuerde_laden", "garantie", "read_only", "strom_a", "phasen")
             else felder.get(s)
             for s in spalten
         ]
         self._db.execute(
-            f"INSERT INTO snapshots (ts, {', '.join(spalten)}) VALUES ({', '.join('?' * 13)})", werte
+            f"INSERT INTO snapshots (ts, {', '.join(spalten)})"
+            f" VALUES ({', '.join('?' * (len(spalten) + 1))})", werte
         )
         self._db.commit()
 

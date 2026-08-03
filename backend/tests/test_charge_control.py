@@ -118,10 +118,18 @@ def test_garantie_uebersteuert_aus():
 
 
 def test_pv_min_laedt_immer_mindestens():
-    """Spec §3: PV+Min lädt nie unter 6 A, Rest aus Netz/Batterie."""
+    """Spec §3: PV+Min lädt nie unter 6 A, den Rest aus dem Netz.
+
+    `netz_gewollt` sagt der Entladegrenze, dass dieser Netzbezug Absicht ist —
+    sonst spränge die Hausbatterie ein und liefe über das Auto leer (Spec §5.1).
+    """
     ctrl = ChargeController(CFG)
     cmd = upd(ctrl, 0, 200, mode="PV+Min")          # fast kein Überschuss
-    assert cmd.charging and cmd.current_a == 6 and "Netz/Batterie" in cmd.reason
+    assert cmd.charging and cmd.current_a == 6 and "Minimum aus Netz" in cmd.reason
+    assert cmd.netz_gewollt is True
+
+    cmd = upd(ctrl, 60, 5000, mode="PV+Min")        # PV trägt → normaler PV-Betrieb
+    assert cmd.charging and cmd.netz_gewollt is False
 
 
 def test_fahrzeug_limit_beendet():

@@ -1,6 +1,6 @@
 # 05 — Umsetzungsstand & Testabdeckung
 
-**Stand:** 2026-08-02 (v0.8.0) · **Grundlage:** [01-requirements.md](01-requirements.md)
+**Stand:** 2026-08-03 (v0.9.0) · **Grundlage:** [01-requirements.md](01-requirements.md)
 
 Diese Datei ist die Brücke zwischen Anforderung und Beweis: pro Requirement, was
 umgesetzt ist, wo es im Code steht und **welcher Test es hält**. Sie ersetzt keine
@@ -66,7 +66,7 @@ Warmwasser-Seite ist im Realbetrieb bestätigt (siehe REQ-010/013).
 
 | ID | Umsetzung | Code | Nachweis |
 |---|---|---|---|
-| REQ-020 Entladesperre beim EV-Laden | ✅ | `core/loop.py`, `safety/guard.py` | **T** `test_laden_und_entladesperre` · **L** |
+| REQ-020 Entladegrenze beim EV-Laden | ✅ *(dynamisch seit v0.9.0)* | `planner/batt_limit.py`, `core/loop.py`, `safety/guard.py` | **T** `test_batt_limit` (11 Fälle), `test_laden_und_entladegrenze`, `test_entladegrenze_folgt_dem_netzbezug`, `test_schnell_modus_sperrt_die_batterie_hart` · **L** offen für v0.9.0 |
 | REQ-021 SoC-Reserve respektieren | ✅ | `safety/guard.py`, `planner/surplus.py` | **T** `test_batterie_reserve`, `test_batterie_vorrang_unter_priority_soc` |
 | REQ-022 Batterieladung zeitlich steuern | ⚪ (Should, Stufe 3) | — | — |
 | REQ-023 Netzladen bei dynamischem Tarif | ⚪ (Should, Stufe 3) | — | — |

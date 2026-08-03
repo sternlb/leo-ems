@@ -112,11 +112,17 @@ Primär Škoda-Cloud. Ist der Wert älter als **30 min** während einer aktiven 
 
 ## 5. Batterie-Koordination (REQ-020/021/024)
 
-### 5.1 Entladesperre beim EV-Laden ⚡ *neu*
+### 5.1 Entladegrenze beim EV-Laden ⚡ *dynamisch seit v0.9.0*
 
-- **Aktivieren:** Wenn Loadpoint in `LADEN_*` und Batterie entlädt > 200 W in Richtung Hausnetz ⇒ E3DC-Entladesperre setzen.
-- **Aufheben:** ≤ 60 s nach Ladeende, bei Moduswechsel auf „Schnell" bleibt sie aktiv (Netzstrom statt Batterie), bei „PV+Min" bleibt sie aktiv (Minimalanteil aus Netz, nicht aus Batterie; ⚙ Festlegung).
-- **TTL-Pflicht (REQ-024):** Jede Sperre wird mit Ablaufzeit **15 min** gesetzt und zyklisch erneuert. Stirbt das EMS, läuft die Sperre aus und die E3DC regelt autonom weiter.
+Bis v0.8.0 galt beim Laden eine **harte Sperre** (`max_discharge = 0`). Sie hielt die 12 kWh zwar vom Auto fern, zwang aber jede Leistungslücke ins Netz: Regelübergänge, das 3p-Mindestband während der Rückfall-Entprellung, eine zugeschaltete Hauslast, ein Wolkenzug. Genau der Netzbezug, den Leo nach v0.8.0 weiterhin beobachtet hat. Statt „gesperrt oder frei" folgt die Grenze deshalb dem **gemessenen Restbedarf des Hauses**.
+
+- **Dynamisch** (Modus „Nur-PV", und „PV+Min", solange die PV das Minimum trägt): `Grenze = min(max(0, P_netz) + max(0, −P_batterie) + Puffer, Deckel)`. Hoch wird sofort geregelt, runter höchstens `batt_dyn_abbau_w` je Tick. Die Summe ist stationär selbstkonsistent: deckt die Batterie den Bedarf, bleibt der Bedarf derselbe und die Grenze steht — ein reiner Netzbezugs-Regler würde stattdessen schwingen. Die E3DC regelt selbst auf `P_netz ≈ 0` und entlädt nie mehr, als das Haus zieht; die Grenze deckelt also nur, was sie decken *darf*.
+- **Hart (0 W)**, wo Netzbezug **gewollt** ist: Modus „Schnell", Garantieladung und das Minimum in „PV+Min", wenn die PV es nicht trägt (Flag `netz_gewollt` aus der Ladesteuerung §4 — nicht aus Modus-Strings abgeleitet). Ebenso unterhalb `priority_soc_pct`, wo die Hausbatterie Vorrang hat (Hysterese 2 Punkte).
+- **Aufheben:** ≤ 60 s nach Ladeende — Begrenzung ganz weg, nicht auf 0.
+- **Rückwirkung auf §2:** Eine laufende Entladung wird vom Überschuss **abgezogen**. Ohne das sähe die Wallbox die Deckung als PV und speiste sich selbst aus der Batterie. So bleibt jede Deckung transient — Abschalthysterese und Phasenrückfall greifen wie vorgesehen.
+- **Schreibdrossel:** `set_power_limits` ist ein persistenter Anlagen-Schreibzugriff. Geschrieben wird erst ab `batt_dyn_schreibschwelle_w` Änderung; ein Wechsel von oder auf die harte Sperre geht immer sofort raus.
+- **TTL-Pflicht (REQ-024):** Jede Grenze wird mit Ablaufzeit **15 min** gesetzt und zyklisch erneuert. Stirbt das EMS, läuft der Lease aus und die E3DC regelt autonom weiter.
+- **Notausstieg:** `batt_dyn_aktiv = false` (per API, ohne Deployment) stellt das Verhalten von v0.8.0 wieder her.
 
 ### 5.2 SoC-Reserve (REQ-021)
 
@@ -192,7 +198,7 @@ Pflicht-Inhalte: **Hausverbrauch**, **Wallbox** (Leistung, Modus, Fahrzeug-SoC, 
 
 **Von Leo bestätigt (2026-07-12):**
 
-3. **Entladesperre auch bei „PV+Min" und „Schnell" aktiv** (§5.1) — die 12 kWh bleiben fürs Haus, kein doppelter Wandlungsverlust.
+3. **Entladesperre auch bei „PV+Min" und „Schnell" aktiv** (§5.1) — die 12 kWh bleiben fürs Haus, kein doppelter Wandlungsverlust. *Präzisiert v0.9.0:* Der Grundsatz gilt unverändert gegenüber dem **Auto**. Neu darf die Batterie beim Laden aber den **Hausbedarf** decken, statt ihn ins Netz zu schieben — ins Auto fließt dadurch nichts, denn die Grenze folgt nur dem gemessenen Bedarf. Hart gesperrt bleibt es überall dort, wo der Netzbezug Absicht ist (Schnell, Garantie, das Minimum in PV+Min).
 4. **Override-Gültigkeit: bis Abstecken oder max. 24 h** (§8.1).
 5. **Garantieladung übersteuert Modus „Aus"** (§3) — das Auto ist zur Abfahrt immer fahrbereit; die App begründet sichtbar.
 

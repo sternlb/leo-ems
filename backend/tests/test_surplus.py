@@ -26,3 +26,16 @@ def test_laufende_ladung_zaehlt_zum_ueberschuss():
 
 def test_bezug_ergibt_negativen_ueberschuss():
     assert berechne_ueberschuss(0, 500, 0, 50, CFG) == -600
+
+
+def test_batterieentladung_ist_kein_ueberschuss():
+    """Sonst speist sich die Ladung selbst aus der Hausbatterie (Spec §5.1).
+
+    Deckt die Batterie beim Laden den Netzbezug (dynamische Entladegrenze), steht
+    das Netz auf 0 — ohne diesen Abzug sähe die Wallbox die Deckung als PV und
+    hielte die Ladung am Laufen, bis die Batterie leer ins Auto gelaufen wäre.
+    """
+    # 1380 W Wallbox, Netz auf 0, weil die Batterie 800 W beisteuert
+    assert berechne_ueberschuss(1380, 0, -800, 60, CFG) == 480
+    # ohne Deckung stünden dieselben 800 W im Netzbezug — gleiches Ergebnis
+    assert berechne_ueberschuss(1380, 800, 0, 60, CFG) == 480
