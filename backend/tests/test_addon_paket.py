@@ -17,6 +17,7 @@ DOCKERFILE = (WURZEL / "Dockerfile").read_text(encoding="utf-8")
 RUN_SH_BYTES = (WURZEL / "run.sh").read_bytes()
 RUN_SH = RUN_SH_BYTES.decode("utf-8")
 CONFIG_YAML = (WURZEL / "config.yaml").read_text(encoding="utf-8")
+CHANGELOG = WURZEL / "CHANGELOG.md"
 
 
 def test_start_geht_ueber_run_sh():
@@ -63,3 +64,18 @@ def test_versionen_laufen_synchron():
     assert f'version: "{__version__}"' in CONFIG_YAML
     pyproject = (WURZEL / "backend" / "pyproject.toml").read_text(encoding="utf-8")
     assert f'version = "{__version__}"' in pyproject
+
+
+def test_changelog_liegt_neben_der_config():
+    """Der Supervisor sucht CHANGELOG.md im Add-on-Verzeichnis — hier die
+    Repo-Wurzel, weil dort auch die config.yaml liegt. Fehlt sie, steht im
+    Update-Dialog „No changelog found for app ed35676c_leo_ems!"."""
+    assert CHANGELOG.is_file()
+
+
+def test_changelog_kennt_die_aktuelle_version():
+    """Ein Update ohne Eintrag zeigt dem Nutzer die Änderungen der Vorversion —
+    schlimmer als gar kein Changelog, weil es plausibel aussieht."""
+    from leo_ems import __version__
+
+    assert f"## {__version__}" in CHANGELOG.read_text(encoding="utf-8")

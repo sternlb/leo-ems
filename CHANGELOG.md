@@ -1,0 +1,199 @@
+# Changelog
+
+Versionshistorie des Add-ons **Leo-EMS**. Diese Datei liegt bewusst neben der
+`config.yaml` in der Repo-Wurzel — genau dort sucht der Supervisor sie und zeigt
+sie im Update-Dialog an. Ohne sie meldet Home Assistant
+„No changelog found for app ed35676c_leo_ems!".
+
+Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
+der Projektnotiz im Second Brain.
+
+## 0.9.0
+
+**Die Hausbatterie darf beim EV-Laden einspringen — dynamische Entladegrenze statt harter Sperre.**
+
+- Statt `max_discharge = 0` folgt die Entladegrenze jetzt dem gemessenen
+  Restbedarf des Hauses: `min(max(0, P_netz) + max(0, −P_batterie) + 200 W, 3000 W)`.
+  Damit fällt der Netzbezug weg, der bei Regelübergängen, im 3p-Mindestband und
+  bei plötzlichen Lasten (Backofen, Wolkenzug) entstand.
+- Hoch wird sofort geregelt, runter nur 500 W je Tick.
+- **Hart gesperrt bleibt es, wo Netzbezug Absicht ist:** Modus Schnell,
+  Garantieladung und das 6-A-Minimum bei PV+Min — sowie unterhalb des
+  Vorrang-SoC von 25 % (Hysterese 2 Punkte).
+- Begleitfix: Batterieentladung wird jetzt vom Überschuss abgezogen. Sonst hätte
+  die Wallbox die Deckung als PV-Überschuss gesehen und sich selbst aus der
+  Batterie gespeist.
+- RSCP-Ablehnungen (`-1`) werfen jetzt, statt stumm durchzulaufen.
+  Schreibdrossel: 50-W-Raster, 100-W-Schwelle.
+- Notausstieg ohne Deployment: `batt_dyn_aktiv: false` per API = Verhalten v0.8.0.
+- 117 Tests grün.
+
+## 0.8.0
+
+**Vorrang Wallbox vor Wärmepumpe (Issue #6) und kein Netzbezug mehr bei 3p (Issue #7).**
+
+- Der Anteil eines *laufenden* WP-Boosts wird aus dem Hausverbrauch
+  zurückgerechnet und zuerst der Wallbox zugeteilt. Vorher drückte die WP den
+  gemessenen Überschuss um ~2 kW und die Wallbox kam nicht über ihre
+  Einschaltschwelle.
+- Weicht ein Boost dem Auto, gilt die Mindestlaufzeit nicht.
+- Die Abschaltbedingung war phasenblind: geprüft wurde gegen das 1p-Minimum
+  (1,38 kW), auch während 3-phasig geladen wurde — 3p braucht aber 4,14 kW. In
+  diesem Band lief die Ladung dauerhaft aus dem Netz weiter. Jetzt wird je Tick
+  zuerst die Phasenzahl nachgeführt, dann gegen deren Minimum geprüft.
+- Phasenumschaltung asymmetrisch: hoch wie bisher (4,2 kW / 60 s / 10 min
+  Abstand), runter nach 60 s und ohne Abstand. `phase_down_w` jetzt 4140 W.
+- Dashboard: Die Überschuss-Kachel zeigt den *verteilbaren* Wert, das
+  Hausverbrauch-Panel schlüsselt auf (gemessen → WP-Boost → verteilbar → Wallbox).
+- 100 Tests grün.
+
+## 0.7.0
+
+**Warmwasser und Heizkreis getrennt schaltbar (Issue #1).**
+
+- Neue Schalter `wp_ww_aktiv` (Default an) und `wp_hk_aktiv` (Default aus),
+  bedienbar direkt in der Überschrift der WP-Kachel.
+- Ausschalten wirkt sofort: ein laufender Boost wird zurückgestellt, ohne
+  Mindestlaufzeit und am 15-min-Cloud-Gap vorbei.
+- Die Schalter stehen in der Konfiguration, nicht am Gerät — sie gelten und sind
+  bedienbar, auch wenn die WP gerade nicht antwortet.
+- **Boost-Ziel von 60 auf 57 °C:** Der Speicher erreicht real nur ~57,5 °C, damit
+  wurde „Ziel erreicht" nie wahr und jeder Boost lief bis zum Überschuss-Ende.
+- Bestätigt: Der MyVaillant-Schreibweg funktioniert in Betriebsart `Auto`, ohne
+  Eingriff ins Heizungsprogramm.
+- 92 Tests grün.
+
+## 0.6.5
+
+**Start über `run.sh` mit `with-contenv` — Wurzel zweier stiller Fehler.**
+
+- Die HA-Basis-Images starten über s6-overlay, und s6 führt das `CMD` mit
+  bereinigter Umgebung aus. Das Add-on sah genau vier Variablen.
+- Folge 1: kein `SUPERVISOR_TOKEN` → die Wärmepumpe bekam auf allen vier
+  Zugangswegen zur HA-API HTTP 401.
+- Folge 2: kein `LEO_EMS_DATA_DIR` → Daten lagen unter `/app/data` im Container.
+  **API-Token, Regel-Konfiguration und Beobachtungs-Datenbank waren nach jedem
+  Add-on-Update weg**, inklusive `read_only` — das EMS fiel bei jedem Update
+  stillschweigend in den Beobachtungsmodus zurück.
+- Regressionsschutz: `test_addon_paket.py` hält die Verpackungs-Zusagen fest,
+  `.gitattributes` erzwingt LF für `run.sh` (CRLF im Shebang killt den Container).
+
+## 0.6.4
+
+- Diagnose-Endpunkt `GET /api/v1/diag/umgebung` — er hat den Umgebungs-Fehler
+  überhaupt erst sichtbar gemacht.
+
+## 0.6.3
+
+- Add-on-Token für die HA-API verdrahtet (`homeassistant_api` + `hassio_api`).
+- Škoda-Adapter repariert: myskoda hat das vertippte Feld
+  `state_of_charged_in_percent` korrigiert — deshalb war `soc_fahrzeug` seit dem
+  Go-live immer `null`. Liest jetzt wieder den echten SoC.
+
+## 0.6.2
+
+- Wärmepumpe findet ihren Weg zu Home Assistant: Zugang über
+  `http://supervisor/core/api`, Lese-Gesundheit je Gerät in `status.geraete`,
+  neuer Endpunkt `GET /api/v1/diag/devices`. Geräteausfall und -rückkehr stehen
+  jetzt im Protokoll.
+
+## 0.6.1
+
+**Energieflüsse laufen in die richtige Richtung.**
+
+- Jede Flusskurve war fest vom Knoten zum Haus gezeichnet — Einspeisung sah aus
+  wie Bezug, Batterieladung wie Entladung, die Wallbox speiste scheinbar ein.
+  Die Richtung steckt jetzt in der Geometrie statt in der Animation.
+- Beim Laden zeigt die Batterie ihre Quelle: PV → Batterie bei Erzeugung, sonst
+  Haus → Batterie (Netzladung).
+- Bei `prefers-reduced-motion` gibt es jetzt einen Richtungspfeil (die Perlen
+  stehen dort still, die Richtung war gar nicht ablesbar).
+
+## 0.6.0
+
+**Räumliche Tiefe in der Energy-Flow-Szene.**
+
+- Licht und Schatten auf Fassade, Laibungen und Boden.
+- Parallax über acht Ebenen (Zeigerbewegung bzw. Tablet-Neigung, ±9 px, nur waagerecht).
+- Flüsse als Röhren: Schattenkern, Körper, Leuchtsaum, laufende Ladungsperlen.
+- Tageszeit-Licht, rein lokal gerechnet (kein Cloud-Call).
+
+## 0.5.0
+
+**Die Szene wird lebendig.**
+
+- Garagentor öffnet und der Enyaq rollt heraus, sobald das Auto angesteckt ist.
+- PV-Modulfeld glimmt bei Erzeugung, Intensität aus der Leistung.
+- WP-Lüfter dreht, solange die Anlage läuft (schneller im Überschuss-Boost).
+- Neue Wärmepumpen-Skizze nach der Vaillant-aroTHERM-Referenz.
+- Neues Statusfeld `wp.laeuft`. `prefers-reduced-motion` schaltet alle
+  Bewegungen ab, die Zustände bleiben statisch ablesbar.
+
+## 0.4.0
+
+- **Wärmepumpe im EMS (Ausbaustufe 2):** PV-Überschuss steuert Warmwasser und
+  Heizkreis, Anzeige zweigeteilt mit Temperaturen.
+- Vorrang Auto vor Wärmepumpe eingeführt (griff zunächst nur, solange die WP noch
+  nicht lief — vollständig erst ab v0.8.0).
+- Batterie-Kachel zeigt den SoC in Prozent.
+
+## 0.3.2
+
+- Die Hausansicht wurde auf dem Handy unten abgeschnitten (Wärmepumpe, Terrasse,
+  Boden fielen weg). Ursache: `preserveAspectRatio="…slice"` bei flachem
+  Container, Fix auf `meet`.
+- Erste Version, die über das Add-on-Repository automatisch ausgerollt wurde.
+
+## 0.3.1
+
+**Dashboard im Handy-Hochkant lesbar.**
+
+- Labels und Badges vergrößert, Touch-Ziele auf 44 px.
+- Protokoll bricht um statt seitlich zu scrollen, Laderegeln werden zu
+  gestapelten Karten.
+- Hero-Szene und die Sektionen Einstellungen/Laderegeln/Protokoll einklappbar
+  (Zustand je Sektion gemerkt). Scrollhöhe −44 %. Desktop unverändert.
+
+## 0.3.0
+
+- **Energy-Flow-Szene im Dashboard** (Spec 04): stilisierte Ostansicht des Hauses
+  mit Live-Daten aus `/api/v1/status`, Detail-Panels, Fail-Safe E1 als Warnbanner.
+- Ganzes Dashboard auf die helle Palette umgestellt.
+
+## 0.2.2
+
+- Zwischenschritt: 2D-Lastverteilungsdesign mit echten Produktfotos (durch die
+  Energy-Flow-Szene in 0.3.0 ersetzt).
+
+## 0.2.1
+
+- 3D-Lastverteilungs-Szene: isometrisches Haus nach den Bauplan-Ansichten, PV auf
+  der Ost-Dachfläche, Enyaq in der Einfahrt, E3DC-Speicher mit Live-SoC.
+
+## 0.2.0
+
+- **Web-Dashboard direkt in Home Assistant** über Add-on-Ingress, als eigener
+  Eintrag in der Seitenleiste. Auth über die HA-Anmeldung, im LAN weiterhin Token.
+- Inhalte: Energieverteilung, Ladestatus mit Klartext-Grund, Einstellungen
+  (inkl. `PUT /api/v1/mode`), Laderegeln, Protokoll.
+- **`phasen_info` im Status:** beantwortet „Überschuss da, warum lädt er nur 1p?"
+  — Entprellung mit Fortschritt, 10-min-Umschaltsperre mit Restzeit und Grund.
+
+## 0.1.2
+
+- Token-Ausgabe im Add-on-Log erschien nicht (Docker-stdout-Pufferung).
+
+## 0.1.1
+
+- Pi-Build repariert: Basis-Image auf Python 3.13, weil myskoda >= 2.0 das verlangt.
+
+## 0.1.0
+
+- **Erste lauffähige Add-on-Version.** Regelschleife (10 s), Ladesteuerung mit
+  Hysterese und 1↔3-Phasenumschaltung, alle vier Lademodi, Zielladung als
+  Regelliste, Entladesperre als Lease mit TTL, Fail-Safe-Matrix.
+- Adapter: E3DC (RSCP), go-e, Škoda, Forecast.Solar, Sungrow (Stub).
+- **Beobachtungsmodus `read_only` (Default an):** volle Entscheidungslogik, null
+  Gerätebefehle — die Erstinstallation läuft gefahrlos parallel zu EVCC.
+  10-s-Snapshots in SQLite plus Auswertungs-API.
+- API v1 auf Port 8099, Bearer-Token, aarch64- und amd64-Build.
