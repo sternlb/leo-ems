@@ -14,10 +14,10 @@ from leo_ems.store import Store
 T0 = datetime(2026, 7, 15, 12, 0, 0)
 
 
-def build(tmp_path):
+def build(tmp_path, **cfg_kw):
     # Diese Tests prüfen den AKTIV-Betrieb; der Beobachtungsmodus (read_only,
     # Default True) hat eigene Tests in test_observation.py.
-    cfg = RegelConfig(read_only=False)
+    cfg = RegelConfig(read_only=False, **cfg_kw)
     store = Store(tmp_path / "test.db")
     guard = SafetyGuard(cfg)
     # 2900 W Überschuss (Netz -3000, residual 100), Batterie weder lädt noch entlädt
@@ -98,6 +98,106 @@ def test_schnell_modus_sperrt_die_batterie_hart(tmp_path):
     assert goe.charging
     assert e3dc.entladelimit_w == 0                  # harte Sperre trotz Netzbezug
     assert loop.status()["entladelimit_art"] == "hart"
+
+
+def test_schnell_mit_batterie_gibt_die_grenze_frei(tmp_path):
+    """Issue #11, erster Teil: derselbe Modus, ein Schalter — jetzt darf die
+    Hausbatterie mitspeisen, der Netzbezug bleibt zusätzlich erlaubt."""
+    loop, e3dc, goe, guard = build(tmp_path, schnell_batt_nutzen=True)
+    loop.mode = "Schnell"
+    e3dc.p_netz_w = 5000
+    asyncio.run(loop.tick(T0))
+    assert goe.charging
+    assert e3dc.entladelimit_w == 5000                       # batt_schnell_max_w
+    assert loop.status()["entladelimit_art"] == "freigabe"
+
+
+def test_pv_batterie_regelt_gegen_pv_plus_batterie(tmp_path):
+    """Issue #11, zweiter Teil: „Schnellladen ohne Netzbezug".
+
+    Der Prüfstein ist das Budget. In Nur-PV wird die Batterieentladung vom
+    Überschuss abgezogen (sonst speiste sich die Ladung selbst aus der Batterie);
+    in PV+Batterie ist genau diese Entladung das Budget.
+    """
+    loop, e3dc, goe, guard = build(tmp_path)
+    loop.mode = "PV+Batterie"
+    asyncio.run(loop.tick(T0))
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))
+    assert goe.charging
+
+    # Auto zieht 4,0 kW: 2,0 kW aus der PV, 2,0 kW aus der Batterie, Netz auf 0
+    goe._power_w, e3dc.p_netz_w, e3dc.p_batterie_w = 4000, 0.0, -2000
+    for i in range(7, 10):                                   # Glättungsfenster füllen
+        asyncio.run(loop.tick(T0 + timedelta(seconds=i * 10)))
+
+    st = loop.status()
+    assert st["ev_budget_w"] == 3900                         # 4000 − 0 − 100
+    assert st["ueberschuss_w"] == 1900                       # ... abzüglich der Entladung
+    assert st["ev_budget_w"] > st["verteilbar_w"]
+    assert e3dc.entladelimit_w == 5000
+    assert st["entladelimit_art"] == "freigabe"
+
+
+def test_pv_batterie_faellt_an_der_reserve_zurueck(tmp_path):
+    """`soc_reserve_pct` ist der harte Boden — davor lief der Parameter ins Leere."""
+    loop, e3dc, goe, guard = build(tmp_path, soc_reserve_pct=15, priority_soc_pct=0)
+    loop.mode = "PV+Batterie"
+    e3dc.soc_pct = 15
+    asyncio.run(loop.tick(T0))
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))
+    assert goe.charging                                      # PV trägt weiter
+    st = loop.status()
+    assert st["entladelimit_art"] != "freigabe"
+    assert st["ev_budget_w"] == st["verteilbar_w"]           # Budget ohne Batterie
+    assert "Batterie-Reserve erreicht" in st["grund"]
+
+
+def test_reserve_hysterese_verhindert_flattern(tmp_path):
+    """Am Vorschau-Server aufgefallen: die Reserve-Schwelle stand an zwei Stellen,
+    und die Schleife ohne Hysterese entschied zuerst — die in `batt_limit` sah
+    die Unterschreitung nie und lief ins Leere.
+
+    Die Hysterese gehört hierher, weil an `batt_verfuegbar` nicht nur die
+    Entladegrenze hängt, sondern auch das Ladebudget: ohne sie springt an der
+    Reserve der Ladestrom mit.
+    """
+    loop, e3dc, goe, guard = build(tmp_path, soc_reserve_pct=15, priority_soc_pct=0)
+    loop.mode = "PV+Batterie"
+    asyncio.run(loop.tick(T0))
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))
+    assert loop.status()["entladelimit_art"] == "freigabe"
+
+    e3dc.soc_pct = 14                                        # unter die Reserve
+    asyncio.run(loop.tick(T0 + timedelta(seconds=70)))
+    assert loop.status()["entladelimit_art"] != "freigabe"
+
+    e3dc.soc_pct = 16                                        # +1 reicht nicht
+    asyncio.run(loop.tick(T0 + timedelta(seconds=80)))
+    assert loop.status()["entladelimit_art"] != "freigabe"
+
+    e3dc.soc_pct = 17                                        # +2 (BATT_RESERVE_HYSTERESE)
+    asyncio.run(loop.tick(T0 + timedelta(seconds=90)))
+    assert loop.status()["entladelimit_art"] == "freigabe"
+
+
+def test_waermepumpe_sieht_in_pv_batterie_nur_den_pv_anteil(tmp_path):
+    """Die Freigabe gilt dem Auto. Reichte man sie an den Warmwasser-Boost
+    weiter, liefe die Hausbatterie über die WP leer — derselbe Ratchet, den der
+    Entladungs-Abzug in v0.9.0 verhindert hat."""
+    cfg = RegelConfig(read_only=False)
+    store = Store(tmp_path / "test.db")
+    # Netz 0, Batterie liefert 6 kW, Wallbox zieht 6 kW → PV-Überschuss ist negativ
+    e3dc = E3dcSimulator(p_netz_w=0.0, p_batterie_w=-6000, soc_pct=80, p_pv_w=0)
+    goe = GoeSimulator(connected=True, power_w=6000)
+    wp = VaillantSimulator()
+    loop = ControlLoop(cfg, SafetyGuard(cfg), store, {"e3dc": e3dc, "goe": goe, "vaillant": wp})
+    loop.mode = "PV+Batterie"
+
+    asyncio.run(loop.tick(T0))
+    st = loop.status()
+    assert st["ev_budget_w"] == 5900                          # 6000 − 0 − 100
+    assert st["wp"]["frei_w"] < 0                             # WP sieht nichts davon
+    assert loop.heatpump.ww_boost is False
 
 
 def test_entladegrenze_faellt_am_ladeende_weg(tmp_path):

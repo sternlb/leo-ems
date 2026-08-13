@@ -60,6 +60,28 @@ def test_deaktivierte_regel_zaehlt_nicht():
     assert plane_garantieladung([regel], 30, MITTWOCH_ABEND, CFG) is None
 
 
+def test_garantieladung_wird_auf_das_ladelimit_gedeckelt():
+    """Issue #9: Die Garantieladung übersteuert laut Festlegung 5 alles — damit
+    war sie auch der Weg, auf dem eine Regel mit hohem Mindest-SoC das Auto per
+    Netzstrom über die Schutzgrenze zieht. Gedeckelt wird schon in der Planung,
+    damit E_fehlt und t_start gegen den erreichbaren Wert rechnen."""
+    regel = ChargingRule(weekdays=MO_FR, departure=time(7, 30), soc_min_pct=95)
+    plan = plane_garantieladung([regel], soc_ist_pct=30, now=MITTWOCH_ABEND, cfg=CFG)
+    assert plan.soc_min_pct == 80                                  # hard_limit_ev_max_soc
+    assert abs(plan.e_fehlt_kwh - 42.8) < 0.05                     # (80−30)% × 77 kWh / 0,9
+    # ... und die Ladung endet dort, statt bis 95 % weiterzulaufen
+    assert not plan.garantie_aktiv(datetime(2026, 7, 16, 7, 0), soc_ist_pct=82)
+
+
+def test_ladelimit_deckelt_die_garantieladung_zusaetzlich():
+    """Auch ein niedrigeres, frei gesetztes `ev_limit_soc` bindet die Garantie."""
+    cfg = RegelConfig(ev_limit_soc=60)
+    plan = plane_garantieladung([default_rule()], soc_ist_pct=30, now=MITTWOCH_ABEND, cfg=cfg)
+    assert plan.soc_min_pct == 50          # Regel liegt unter dem Limit → unverändert
+    regel = ChargingRule(weekdays=MO_FR, departure=time(7, 30), soc_min_pct=75)
+    assert plane_garantieladung([regel], 30, MITTWOCH_ABEND, cfg).soc_min_pct == 60
+
+
 def test_garantie_uebersteuert_aus_modus():
     """Festlegung 5: garantie_aktiv ist die Bedingung, die auch Modus 'Aus' übersteuert."""
     plan = plane_garantieladung([default_rule()], soc_ist_pct=30, now=MITTWOCH_ABEND, cfg=CFG)

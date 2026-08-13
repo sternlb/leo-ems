@@ -65,5 +65,22 @@ class SafetyGuard:
         return None
 
     def validate_battery_discharge(self, soc_pct: float) -> bool:
-        """Kein aktives Entladen unter die Reserve (REQ-021)."""
+        """Kein aktives Entladen unter die Reserve (REQ-021).
+
+        Wird von `planner/batt_limit.py` vor jeder bewussten Batterie-Freigabe
+        ans Auto gefragt (Issue #11).
+        """
         return soc_pct > self.cfg.soc_reserve_pct
+
+    def validate_ev_ziel_soc(self, soc: float) -> float:
+        """Kein Ladeziel über der harten Obergrenze (REQ-072, Issue #9).
+
+        Anders als `validate_current` verwirft diese Prüfung den Wert nicht,
+        sondern **deckelt** ihn: ein zu hohes Ladeziel soll nicht dazu führen,
+        dass gar nicht geladen wird, sondern dass bis zur Schutzgrenze geladen
+        wird. Greift für das Fahrzeug-Ladelimit selbst wie auch für den
+        Mindest-SoC einer Laderegel, der sonst per Garantieladung darüber
+        hinweggehen würde.
+        """
+        grenze = self.cfg.hard_limit_ev_max_soc
+        return soc if grenze is None else min(soc, float(grenze))

@@ -15,14 +15,29 @@ def berechne_ueberschuss(
     p_batterie_w: float,
     soc_batterie_pct: float,
     cfg: RegelConfig,
+    *,
+    mit_batterie: bool = False,
 ) -> float:
     """Verfügbare Leistung für den Loadpoint (Spec §2).
 
     P_überschuss = P_lade_ist − P_netz − P_residual
     Batterie-Behandlung: Ab prioritySoc darf das EV der Batterie die
     Ladeleistung "wegnehmen" — darunter hat die Hausbatterie Vorrang.
+
+    `mit_batterie=True` liefert das Budget für den Modus „PV+Batterie" (Issue
+    #11): dort fällt der Batterie-Term **ganz** weg, übrig bleibt die Leistung,
+    die der Standort bei Netzbezug ≈ `residual_power_w` insgesamt liefern kann —
+    PV und Batterie zusammen, ohne sie trennen zu müssen. Der Abzug der
+    Entladung wäre hier falsch herum: die Batterie deckt, das Budget sänke, der
+    Ladestrom fiele, die Batterie deckte weniger — der Ladevorgang würde sich
+    selbst herunterregeln. Die Formel ohne Batterie-Term ist dagegen stationär
+    selbstkonsistent (dieselbe Überlegung wie in planner/batt_limit.py) und
+    begrenzt sich von allein: stößt die Batterie an ihre Entladegrenze, wird
+    `p_netz_w` positiv und das Budget fällt.
     """
     ueberschuss = p_lade_ist_w - p_netz_w - cfg.residual_power_w
+    if mit_batterie:
+        return ueberschuss
     if soc_batterie_pct >= cfg.priority_soc_pct and p_batterie_w > 0:
         ueberschuss += p_batterie_w
     elif p_batterie_w < 0:

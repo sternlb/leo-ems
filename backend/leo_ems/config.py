@@ -50,8 +50,17 @@ class RegelConfig:
     plan_buffer_min: int = 15          # Puffer Zielladung (Spec §4.3, ⚙2)
     lease_ttl_s: int = 900             # TTL für Übersteuerungen, 15 min (Spec §5.1)
     battery_capacity_kwh: float = 77.0 # Enyaq iV80
+    # Fahrzeug-Ladelimit (Issue #9/#10). Stand bis v0.9.0 als reine Instanz-
+    # Variable in der Regelschleife und war damit nach jedem Add-on-Update weg —
+    # bei aktivem `auto_update` also regelmäßig. Als Config-Feld läuft es durch
+    # save_config()/load_config() und überlebt Neustarts.
+    ev_limit_soc: int = 80
     # Harte Grenzen: Default KEINE aktiv (REQ-072); None = Grenze inaktiv
     hard_limit_ev_min_soc: int | None = None
+    # Ausnahme von „Default keine": die Obergrenze steht auf 80 %, weil sie die
+    # Fahrzeugbatterie schützt (Leo, Issue #9). Sie zu lockern ist ein bewusster
+    # Akt — erst `hard_limit_ev_max_soc` anheben, dann `ev_limit_soc`.
+    hard_limit_ev_max_soc: int | None = 80
     hard_limit_ww_min_temp: float | None = None
 
     # --- Dynamische Entladegrenze beim EV-Laden (planner/batt_limit.py) ------
@@ -63,6 +72,17 @@ class RegelConfig:
     batt_dyn_puffer_w: int = 200           # Kopffreiheit über dem gemessenen Bedarf
     batt_dyn_abbau_w: int = 500            # max. Absenkung je Tick (Dämpfung nach unten)
     batt_dyn_schreibschwelle_w: int = 100  # RSCP-Schreibzugriff erst ab diesem Delta
+
+    # --- Bewusste Batterie-Freigabe ans Auto (Issue #11) ---------------------
+    # Zwei getrennte Wege, die Hausbatterie ins Auto zu schicken:
+    #   "Schnell" + schnell_batt_nutzen  → max. Leistung aus PV, Batterie UND Netz
+    #   Modus "PV+Batterie"              → max. Leistung ohne Netzbezug
+    # Beide enden hart bei `soc_reserve_pct`; `priority_soc_pct` gilt dort NICHT,
+    # das ist eine Heuristik für die Automatik-Modi — hier hat Leo es angeordnet.
+    schnell_batt_nutzen: bool = False
+    # Deckel darf über `batt_dyn_max_w` liegen: die dynamische Grenze deckt nur
+    # Lücken, die Freigabe soll laden.
+    batt_schnell_max_w: int = 5000
 
     # --- Wärmepumpe, Stufe 2 (REQ-010–014, planner/heatpump.py) --------------
     # Schwellen konservativ nach Leos Festlegung 2026-07-25: an ab 2,5 kW,

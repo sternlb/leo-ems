@@ -38,9 +38,19 @@ P_überschuss = P_lade_ist − P_netz − P_residual            (verfügbare Lei
 
 - `P_residual` = **100 W** (Ziel-Netzbezug, konfigurierbar; Baseline-Wert)
 - **Batterie-Behandlung:** Ist `SoC_batterie < prioritySoc` (**25 %**, konfigurierbar), zählt Batterie-Ladeleistung als Verbrauch (Batterie hat Vorrang vor dem EV). Ist `SoC_batterie ≥ prioritySoc`, wird Batterie-Ladeleistung dem Überschuss zugerechnet (das EV darf sie „wegnehmen").
-- Berechnung im **Regelintervall 10 s**, gleitender Mittelwert über 3 Messungen gegen Flackern.
+- **Batterieentladung** wird vom Überschuss **abgezogen** (seit v0.9.0, siehe §5.1) — sonst sähe die Wallbox eine Batterie-Deckung als PV und speiste sich selbst aus der Hausbatterie.
+- Berechnung im **Regelintervall 10 s**, gleitender Mittelwert über 3 Messungen gegen Flackern. Je Budget-Reihe ein eigenes Fenster, sonst mischt ein Moduswechsel drei Ticks lang zwei Größen.
+
+**Zweites Budget für „PV+Batterie"** ⚡ *neu v0.10.0* (§3, Issue #11): Dort entfällt der Batterie-Term **ganz** — kein Vorrang-Zuschlag und kein Entladungs-Abzug:
+
+```
+P_budget_batt = P_lade_ist − P_netz − P_residual
+```
+
+Das ist die Leistung, die der Standort bei `P_netz ≈ P_residual` insgesamt liefern kann, PV und Batterie zusammen, ohne sie trennen zu müssen. Der Abzug wäre hier falsch herum: die Batterie deckt, das Budget sänke, der Ladestrom fiele, die Batterie deckte weniger — die Ladung regelte sich selbst herunter. Ohne den Term ist die Formel **stationär selbstkonsistent** (dieselbe Überlegung wie bei der Entladegrenze in §5.1) und begrenzt sich von allein: stößt die Batterie an ihre Entladegrenze, wird `P_netz` positiv und das Budget fällt.
 
 **Akzeptanz:** Bei P_netz = −3.000 W (Einspeisung), P_lade_ist = 0, SoC_bat ≥ 25 % ⇒ P_überschuss = 2.900 W.
+**Akzeptanz:** Auto zieht 5.000 W, davon 3.000 W aus der Batterie, P_netz = 0 ⇒ P_überschuss = 1.900 W, P_budget_batt = 4.900 W.
 
 ## 3. Lademodi (REQ-005)
 
@@ -49,9 +59,12 @@ P_überschuss = P_lade_ist − P_netz − P_residual            (verfügbare Lei
 | **Aus** | Wallbox gesperrt. Ausnahme: aktive Garantieladung (§4.3) hat Vorrang und meldet dies sichtbar (REQ-050). |
 | **Nur-PV** | Laden ausschließlich aus P_überschuss. Kein Überschuss ⇒ kein Laden. |
 | **PV+Min** | Wie Nur-PV, aber nie unter 6 A 1-phasig (≈ 1,4 kW) — Differenz ggf. aus Netz/Batterie. |
-| **Schnell** | Sofort maximale Leistung (16 A, 3-phasig ≈ 11 kW), Herkunft egal. |
+| **PV+Batterie** ⚡ *neu v0.10.0* | „Schnellladen ohne Netzbezug": wie Nur-PV, aber geregelt gegen PV **plus** Hausbatterie. Untergrenze ist `soc_reserve_pct`; darunter verhält sich der Modus wie Nur-PV. |
+| **Schnell** | Sofort maximale Leistung (16 A, 3-phasig ≈ 11 kW), Herkunft egal. Ob die Hausbatterie mitspeisen darf, steuert `schnell_batt_nutzen` (Default aus). |
 
 Default-Modus: **Nur-PV** (Baseline). Umschaltung über App (§9) und HA; Wechsel wirkt innerhalb eines Regelintervalls.
+
+**Zu „PV+Batterie" (Issue #11):** Der Modus benutzt bewusst *dieselbe* Zustandsmaschine wie Nur-PV (§4.1) — der einzige Unterschied ist das Budget aus §2 (`mit_batterie`). Daraus folgt die Zusage „ohne Netzbezug" ohne eigene Sonderlogik: geregelt wird gegen das, was der Standort ohne Netz liefern kann, und Ein-/Ausschalthysterese sowie Phasenumschaltung greifen unverändert, sobald auch das nicht mehr reicht. Die Wärmepumpe (§4 Zuteilung) rechnet weiterhin mit dem reinen PV-Überschuss: die Freigabe gilt dem Auto, sonst liefe die Hausbatterie über den Warmwasser-Boost leer.
 
 ## 4. Ladesteuerung E-Auto
 
@@ -99,7 +112,8 @@ T_start  = T_ab − T_dauer − 15 min Puffer
 
 1. Ab Ansteck-Zeitpunkt plant das EMS mit der Forecast.Solar-Prognose: Reicht erwarteter Überschuss vor `T_ab`, bleibt es bei PV-Laden.
 2. Spätestens ab `T_start` wird mit maximaler Leistung **netzunabhängig garantiert geladen** („Garantieladung"), bis `SoC_min` erreicht ist — unabhängig vom Modus (auch bei „Aus", sichtbar begründet).
-3. Oberhalb `SoC_min` wird nur noch PV-Überschuss geladen, bis fahrzeugseitiges Limit (aktuell 80 %).
+   ⚡ *seit v0.10.0:* `SoC_min` wird vorher auf das Fahrzeug-Ladelimit gedeckelt (§8.3). Weil die Garantieladung alles übersteuert, war sie sonst der Weg, auf dem eine Regel mit `SoC_min = 90 %` das Auto per Netzstrom über die Schutzgrenze zieht. Gedeckelt wird schon in der Planung, damit `E_fehlt` und `T_start` gegen den erreichbaren Wert rechnen.
+3. Oberhalb `SoC_min` wird nur noch PV-Überschuss geladen, bis zum Fahrzeug-Ladelimit `ev_limit_soc` (Default 80 %, gedeckelt durch `hard_limit_ev_max_soc` — §8.3).
 4. Kein Fahrzeug angesteckt ⇒ keine Aktion; ab `T_start` Benachrichtigungs-Hook (Stufe: Should, REQ-053).
 
 **Akzeptanz:** SoC 30 %, Regel Mo–Fr 07:30/50 %, Mittwochabend ⇒ E_fehlt = 17,1 kWh, T_dauer ≈ 1:33 h ⇒ Garantieladung startet spätestens 05:42, Ziel Donnerstag 07:30 erreicht.
@@ -118,6 +132,7 @@ Bis v0.8.0 galt beim Laden eine **harte Sperre** (`max_discharge = 0`). Sie hiel
 
 - **Dynamisch** (Modus „Nur-PV", und „PV+Min", solange die PV das Minimum trägt): `Grenze = min(max(0, P_netz) + max(0, −P_batterie) + Puffer, Deckel)`. Hoch wird sofort geregelt, runter höchstens `batt_dyn_abbau_w` je Tick. Die Summe ist stationär selbstkonsistent: deckt die Batterie den Bedarf, bleibt der Bedarf derselbe und die Grenze steht — ein reiner Netzbezugs-Regler würde stattdessen schwingen. Die E3DC regelt selbst auf `P_netz ≈ 0` und entlädt nie mehr, als das Haus zieht; die Grenze deckelt also nur, was sie decken *darf*.
 - **Hart (0 W)**, wo Netzbezug **gewollt** ist: Modus „Schnell", Garantieladung und das Minimum in „PV+Min", wenn die PV es nicht trägt (Flag `netz_gewollt` aus der Ladesteuerung §4 — nicht aus Modus-Strings abgeleitet). Ebenso unterhalb `priority_soc_pct`, wo die Hausbatterie Vorrang hat (Hysterese 2 Punkte).
+- **Freigabe (`batt_schnell_max_w`)** ⚡ *neu v0.10.0*, wo Leo die Batterie ausdrücklich anfordert: Modus „PV+Batterie" oder „Schnell" mit `schnell_batt_nutzen`. Zweites Flag `batt_freigabe` aus der Ladesteuerung — bewusst **nicht** als Erweiterung von `netz_gewollt`, denn „darf Netzstrom fließen?" und „darf die Batterie das Auto speisen?" sind unabhängig: „Schnell mit Batterie" will beides, „PV+Batterie" will die Batterie und gerade kein Netz. Die Freigabe sticht `netz_gewollt` und `priority_soc_pct` (eine Heuristik für die Automatik-Modi darf eine Anordnung nicht überstimmen), **nicht** aber `soc_reserve_pct` (§5.2) und nicht den Notausstieg `batt_dyn_aktiv`. Hysterese an der Reserve: 2 Punkte, sonst pendelt die Freigabe dort und jeder Wechsel ist ein Schreibzugriff.
 - **Aufheben:** ≤ 60 s nach Ladeende — Begrenzung ganz weg, nicht auf 0.
 - **Rückwirkung auf §2:** Eine laufende Entladung wird vom Überschuss **abgezogen**. Ohne das sähe die Wallbox die Deckung als PV und speiste sich selbst aus der Batterie. So bleibt jede Deckung transient — Abschalthysterese und Phasenrückfall greifen wie vorgesehen.
 - **Schreibdrossel:** `set_power_limits` ist ein persistenter Anlagen-Schreibzugriff. Geschrieben wird erst ab `batt_dyn_schreibschwelle_w` Änderung; ein Wechsel von oder auf die harte Sperre geht immer sofort raus.
@@ -127,6 +142,8 @@ Bis v0.8.0 galt beim Laden eine **harte Sperre** (`max_discharge = 0`). Sie hiel
 ### 5.2 SoC-Reserve (REQ-021)
 
 `SoC_reserve` (Default **0 %**, App-einstellbar) — das EMS gibt keinen Befehl, der die Batterie aktiv unter die Reserve entlädt. Validierung in §8.3.
+
+⚠️ Bis v0.9.0 war das eine Zusage ohne Durchsetzung: `validate_battery_discharge` existierte, wurde aber von keiner Produktionsstelle aufgerufen. Seit v0.10.0 ist die Reserve der harte Boden jeder Batterie-Freigabe (§5.1). **Mit dem Default 0 % darf das Auto die Hausbatterie leerziehen** — vor der ersten Nutzung von „PV+Batterie" oder „Schnell mit Batterie" ist ein sinnvoller Wert zu setzen.
 
 ## 6. Prognose (REQ-041)
 
@@ -157,7 +174,11 @@ Nutzer-Eingriffe (App, HA, Wallbox-Taster, EVCC-artige Modusumschaltung) gelten 
 Jede Steuerentscheidung wird geloggt: Zeitstempel, Regel/Trigger, Eingangswerte (P_überschuss, SoCs), Befehl, Ergebnis. Format: strukturiert (JSON-Zeilen), Aufbewahrung ≥ 90 Tage, einsehbar über die App.
 
 ### 8.3 Zentrale Grenzen-Validierung (REQ-063, REQ-072)
-Alle Befehle passieren einen Validator gegen die Konfiguration (Strom 6–16 A, SoC_reserve, harte Grenzen — Default: keine aktiv). Verstoß ⇒ Befehl verworfen + Log-Eintrag.
+Alle Befehle passieren einen Validator gegen die Konfiguration (Strom 6–16 A, SoC_reserve, harte Grenzen). Verstoß ⇒ Befehl verworfen + Log-Eintrag.
+
+**Harte Grenzen** sind grundsätzlich per Default inaktiv (REQ-072) — mit einer Ausnahme: `hard_limit_ev_max_soc` steht auf **80 %** und schützt die Fahrzeugbatterie (Leo, Issue #9). Sie greift an drei Stellen, die sonst unabhängig voneinander darüber hinweggingen: das Ladelimit selbst (`PUT /api/v1/config` und `/api/v1/mode` lehnen höhere Werte mit HTTP 400 und Klartext ab), und der Mindest-SoC einer Laderegel, den die Garantieladung sonst per Netzstrom durchsetzen würde (§4.3 deckelt schon in der Planung, damit `E_fehlt` und `T_start` gegen den erreichbaren Wert rechnen). Die Ladelimit-Prüfung **deckelt** dabei statt zu verwerfen: ein zu hohes Ziel soll nicht dazu führen, dass gar nicht geladen wird.
+
+Das Fahrzeug-Ladelimit ist ein persistiertes Konfigurationsfeld (`ev_limit_soc`). Bis v0.9.0 lag es in einer Instanz-Variablen der Regelschleife und war nach jedem Add-on-Update wieder auf dem Startwert — bei aktivem `auto_update` regelmäßig.
 
 ### 8.4 Schaltfrequenz-Schutz (REQ-064)
 Phasenumschaltung ≥ 10 min Abstand (§4.2); Entladesperre max. 1 Zustandswechsel/min; Ladefreigabe folgt der Hysterese (§4.1).

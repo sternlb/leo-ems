@@ -50,7 +50,7 @@ class RuleIn(BaseModel):
 class ModeIn(BaseModel):
     """Lademodus-Wechsel (Spec §3); Fahrzeug-Limit optional gleich mit."""
 
-    modus: Literal["Nur-PV", "PV+Min", "Schnell", "Aus"]
+    modus: Literal["Nur-PV", "PV+Min", "PV+Batterie", "Schnell", "Aus"]
     fahrzeug_limit_soc: int | None = Field(None, ge=0, le=100)
 
 
@@ -79,6 +79,23 @@ def create_app(
             raise HTTPException(status_code=401, detail="Ungültiger oder fehlender API-Token")
 
     auth = Depends(require_token)
+
+    def _pruefe_ev_limit(neu: int, grenze: int | None = ...) -> None:
+        """Fahrzeug-Ladelimit gegen die harte Obergrenze (Issue #9).
+
+        Bewusst eine Ablehnung mit Klartext statt einer stillen Deckelung: wer
+        90 % eingibt und danach 80 % im Feld sieht, hält das für einen Bug. Wer
+        wirklich höher laden will, hebt erst `hard_limit_ev_max_soc` — ein
+        zweiter, sichtbarer Schritt (REQ-072).
+        """
+        if grenze is ...:
+            grenze = cfg.hard_limit_ev_max_soc
+        if grenze is not None and neu > grenze:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"Fahrzeug-Ladelimit {neu} % über der harten Obergrenze {grenze} %. "
+                        f"Zum Anheben zuerst 'hard_limit_ev_max_soc' ändern."),
+            )
 
     # --- Web-Dashboard (HA-Sidebar via Ingress; auch direkt im LAN aufrufbar) ----
     @app.get("/", include_in_schema=False)
@@ -151,13 +168,20 @@ def create_app(
     # --- Lademodus + Fahrzeug-Limit (REQ-071) -----------------------------------
     @app.put("/api/v1/mode", dependencies=[auth])
     async def mode_put(update: ModeIn):
-        """Setzt den Lademodus (und optional das Fahrzeug-Ladelimit) live in der Regelschleife."""
+        """Setzt den Lademodus (und optional das Fahrzeug-Ladelimit) live in der Regelschleife.
+
+        Das Ladelimit landet in der Konfiguration und wird sofort persistiert —
+        bis v0.9.0 schrieb es in eine Instanz-Variable der Regelschleife und war
+        nach dem nächsten Add-on-Update wieder weg (Issue #9).
+        """
         if control is None:
             raise HTTPException(status_code=503, detail="Regelschleife nicht aktiv")
         control.mode = update.modus
         if update.fahrzeug_limit_soc is not None:
-            control.vehicle_limit_soc = update.fahrzeug_limit_soc
-        return {"modus": control.mode, "fahrzeug_limit_soc": control.vehicle_limit_soc}
+            _pruefe_ev_limit(update.fahrzeug_limit_soc)
+            cfg.ev_limit_soc = update.fahrzeug_limit_soc
+            save_config(cfg)
+        return {"modus": control.mode, "fahrzeug_limit_soc": cfg.ev_limit_soc}
 
     # --- Regeln (REQ-070/073) -------------------------------------------------
     @app.get("/api/v1/rules", dependencies=[auth])
@@ -197,9 +221,18 @@ def create_app(
 
     @app.put("/api/v1/config", dependencies=[auth])
     async def config_put(update: dict):
-        for key, value in update.items():
+        for key in update:
             if key not in RegelConfig.__dataclass_fields__:
                 raise HTTPException(status_code=400, detail=f"Unbekannter Parameter: {key}")
+        # Vollständig prüfen, bevor irgendetwas gesetzt wird — sonst bliebe bei
+        # einer Ablehnung ein halb geschriebener Stand stehen. Geprüft wird gegen
+        # das ERGEBNIS, damit Grenze und Limit in einem Request gemeinsam
+        # angehoben werden können (Issue #9).
+        _pruefe_ev_limit(
+            update.get("ev_limit_soc", cfg.ev_limit_soc),
+            update.get("hard_limit_ev_max_soc", cfg.hard_limit_ev_max_soc),
+        )
+        for key, value in update.items():
             setattr(cfg, key, value)
         save_config(cfg)  # sofort persistent, kein Neustart (REQ-073)
         return asdict(cfg)

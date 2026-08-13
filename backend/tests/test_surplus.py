@@ -39,3 +39,30 @@ def test_batterieentladung_ist_kein_ueberschuss():
     assert berechne_ueberschuss(1380, 0, -800, 60, CFG) == 480
     # ohne Deckung stünden dieselben 800 W im Netzbezug — gleiches Ergebnis
     assert berechne_ueberschuss(1380, 800, 0, 60, CFG) == 480
+
+
+# --- Budget für den Modus PV+Batterie (Issue #11) ----------------------------
+def test_mit_batterie_ignoriert_den_batterie_term_in_beiden_vorzeichen():
+    """Genau umgekehrt zum Test darüber: hier IST die Entladung Budget."""
+    # Entladung: 1380 W Wallbox, davon 800 W aus der Batterie
+    assert berechne_ueberschuss(1380, 0, -800, 60, CFG, mit_batterie=True) == 1280
+    # Ladung: der Zuschlag ab prioritySoc entfällt ebenfalls, er steckt schon
+    # im Netz-Term — 2000 W wandern in die Batterie, das Netz zeigt sie an
+    assert berechne_ueberschuss(0, -3000, 2000, 61, CFG, mit_batterie=True) == 2900
+
+
+def test_mit_batterie_ist_stationaer_selbstkonsistent():
+    """Das Budget darf sich nicht selbst wegregeln (der Ratchet aus v0.9.0).
+
+    Auto zieht 5 kW, davon 2 kW PV und 3 kW Batterie → Netz ≈ 0. Rechnet man das
+    Ergebnis zurück in denselben Zustand, muss dasselbe Budget herauskommen.
+    """
+    budget = berechne_ueberschuss(5000, 0, -3000, 60, CFG, mit_batterie=True)
+    assert budget == 4900
+    assert berechne_ueberschuss(4900, 0, -2900, 60, CFG, mit_batterie=True) == 4800
+
+
+def test_mit_batterie_faellt_wenn_die_batterie_am_deckel_ist():
+    """Selbstbegrenzung: stößt die Batterie an ihre Grenze, wird Netzbezug
+    sichtbar und das Budget sinkt — ohne Sonderfall im Code."""
+    assert berechne_ueberschuss(5000, 1200, -3000, 60, CFG, mit_batterie=True) == 3700

@@ -31,6 +31,9 @@ E3DC_MAX_ALTER = timedelta(seconds=60)   # Fail-Safe E1 (Spec §7)
 # Ein dauerhaft ausgefallenes Gerät soll das Protokoll nicht zumüllen (6 Ticks/min),
 # darin aber auch nicht verschwinden: melden bei Wechsel und danach stündlich.
 GERAET_MELDE_INTERVALL = timedelta(minutes=60)
+# Prozentpunkte über soc_reserve_pct, bevor die Batterie wieder ans Auto darf
+# (Issue #11). Gleiche Größenordnung wie die Hysterese am Vorrang-SoC.
+BATT_RESERVE_HYSTERESE = 2
 
 
 class ControlLoop:
@@ -41,10 +44,14 @@ class ControlLoop:
         self.adapters = adapters
         self.controller = ChargeController(cfg)
         self.heatpump = HeatPumpController(cfg)   # Stufe 2 (REQ-010/011)
-        self.batt_limit = EntladeLimitRegler(cfg)  # Entladegrenze Hausbatterie (Spec §5.1)
+        self.batt_limit = EntladeLimitRegler(cfg, guard)  # Entladegrenze Hausbatterie (Spec §5.1)
         self.mode = "Nur-PV"                 # Default-Modus (Spec §3)
-        self.vehicle_limit_soc = 80          # fahrzeugseitiges Limit (Baseline)
-        self._ueberschuss_fenster: list[float] = []  # gleitender Mittelwert über 3 (Spec §2)
+        # gleitender Mittelwert über 3 (Spec §2), je Budget-Reihe ein eigenes
+        # Fenster: "pv" ist der Überschuss ohne Batterie, "batt" das Budget für
+        # den Modus PV+Batterie. Ein gemeinsames Fenster würde nach einem
+        # Moduswechsel drei Ticks lang zwei Größen mischen.
+        self._fenster: dict[str, list[float]] = {}
+        self._batt_reserve_erreicht = False   # Hysterese an soc_reserve_pct (Issue #11)
         self._last_read: dict[str, datetime] = {}    # letzte erfolgreiche Lesung je Adapter (Tick-Zeit)
         self._geraete: dict[str, dict] = {}          # Lese-Gesundheit je Adapter (Diagnose)
         self._limit_hw_w: int | None = None   # zuletzt an die E3DC geschriebene Grenze
@@ -52,6 +59,16 @@ class ControlLoop:
         self.running = False
 
     # --- öffentlich --------------------------------------------------------
+    @property
+    def vehicle_limit_soc(self) -> int:
+        """Fahrzeug-Ladelimit (Issue #9).
+
+        Bewusst nur lesend: bis v0.9.0 war das eine setzbare Instanz-Variable und
+        damit nach jedem Add-on-Update wieder auf dem Startwert. Geschrieben wird
+        jetzt ausschließlich `cfg.ev_limit_soc` — das persistiert `save_config()`.
+        """
+        return self.cfg.ev_limit_soc
+
     def status(self) -> dict:
         """Live-Zustand für die API (REQ-050)."""
         return self._last_status
@@ -103,7 +120,16 @@ class ControlLoop:
         surplus_raw = berechne_ueberschuss(
             p_lade, e_data["p_netz_w"], e_data["p_batterie_w"], e_data["soc_batterie_pct"], self.cfg
         )
-        surplus = self._glätten(surplus_raw)
+        surplus = self._glätten(surplus_raw, "pv")
+        # Zweites Budget für den Modus PV+Batterie (Issue #11): dasselbe Messbild,
+        # nur ohne den Batterie-Term — also PV und Batterie zusammen.
+        budget_batt = self._glätten(
+            berechne_ueberschuss(
+                p_lade, e_data["p_netz_w"], e_data["p_batterie_w"],
+                e_data["soc_batterie_pct"], self.cfg, mit_batterie=True,
+            ),
+            "batt",
+        )
 
         # 6) Garantieladung gegen die Regelliste (Spec §4.3)
         plan = plane_garantieladung(self.store.list_rules(), soc_v if soc_v is not None else 100, now, self.cfg)
@@ -122,10 +148,19 @@ class ControlLoop:
         wp_boost_w = self.heatpump.leistung_w(wp_data)
         verteilbar = surplus + wp_boost_w
 
+        # In PV+Batterie regelt die Ladesteuerung gegen das größere Budget
+        # (Issue #11). `batt_verfuegbar` schneidet die Freigabe an der Reserve ab;
+        # der Modus fällt dann auf reines PV-Laden zurück.
+        batt_verfuegbar = self._batt_verfuegbar(e_data["soc_batterie_pct"])
+        ev_budget = verteilbar
+        if self.mode == "PV+Batterie" and batt_verfuegbar:
+            ev_budget = budget_batt + wp_boost_w
+
         connected = goe_data.get("connected", False) if goe_data else False
         cmd = self.controller.update(
-            now, surplus_w=verteilbar, connected=connected, mode=self.mode,
-            guarantee_active=garantie, soc_fahrzeug=soc_v, vehicle_limit_soc=self.vehicle_limit_soc,
+            now, surplus_w=ev_budget, connected=connected, mode=self.mode,
+            guarantee_active=garantie, soc_fahrzeug=soc_v,
+            vehicle_limit_soc=self.vehicle_limit_soc, batt_verfuegbar=batt_verfuegbar,
         )
 
         # 7b) Wärmepumpe (Stufe 2, REQ-010/011): sieht, was nach der Wallbox übrig
@@ -141,6 +176,7 @@ class ControlLoop:
         # 8) Entladegrenze der Hausbatterie als Lease abgleichen (Spec §5.1)
         entscheid = self.batt_limit.update(
             charging=cmd.charging, netz_gewollt=cmd.netz_gewollt,
+            batt_freigabe=cmd.batt_freigabe,
             soc_batt=e_data["soc_batterie_pct"],
             p_netz_w=e_data["p_netz_w"], p_batterie_w=e_data["p_batterie_w"],
         )
@@ -175,6 +211,10 @@ class ControlLoop:
             "ueberschuss_w": round(surplus), "soc_fahrzeug": soc_v,
             "verteilbar_w": round(verteilbar), "wp_boost_w": round(wp_boost_w),
             "ev_zuteilung_w": round(ev_zuteilung_w),
+            # Wogegen die Ladesteuerung wirklich geregelt hat. Weicht in
+            # PV+Batterie von `verteilbar_w` ab — die Differenz ist die
+            # freigegebene Batterieleistung (Issue #11).
+            "ev_budget_w": round(ev_budget),
             "fahrzeug_limit_soc": self.vehicle_limit_soc,
             "soc_batterie": e_data["soc_batterie_pct"], "p_netz_w": e_data["p_netz_w"],
             "p_batterie_w": e_data["p_batterie_w"], "p_wallbox_w": p_lade,
@@ -188,7 +228,7 @@ class ControlLoop:
             "entladelimit_art": entscheid.art,
             "entladelimit_grund": entscheid.grund,
             # Entprellungs-/Sperr-Transparenz der 1p/3p-Umschaltung (Spec §4.2)
-            "phasen_info": self.controller.phase_diagnose(now, verteilbar),
+            "phasen_info": self.controller.phase_diagnose(now, ev_budget),
             # Wärmepumpe, zweigeteilt Warmwasser/Heizkreis (REQ-051, Issue #1)
             "wp": {
                 **self.heatpump.status(wp_data),
@@ -296,10 +336,29 @@ class ControlLoop:
             return limit_w != self._limit_hw_w
         return abs(limit_w - self._limit_hw_w) > self.cfg.batt_dyn_schreibschwelle_w
 
-    def _glätten(self, wert: float) -> float:
-        self._ueberschuss_fenster.append(wert)
-        self._ueberschuss_fenster = self._ueberschuss_fenster[-3:]
-        return sum(self._ueberschuss_fenster) / len(self._ueberschuss_fenster)
+    def _batt_verfuegbar(self, soc_batt: float) -> bool:
+        """Darf die Hausbatterie gerade ans Auto abgeben (REQ-021, Issue #11)?
+
+        Die Reserve-Schwelle selbst steht in der zentralen Validierung (Spec
+        §8.3); hier kommt die **Hysterese** dazu, und zwar genau einmal für das
+        ganze System. Ohne sie pendelt es an der Reserve: die Freigabe endet, die
+        PV hebt den SoC um einen Punkt, die Freigabe kommt zurück, das Auto zieht
+        ihn wieder weg. Das ist nicht nur ein Schreibzugriff je Wechsel — an
+        diesem Flag hängt auch das Ladebudget, der Ladestrom würde also
+        mitspringen.
+        """
+        if self._batt_reserve_erreicht:
+            frei = soc_batt >= self.cfg.soc_reserve_pct + BATT_RESERVE_HYSTERESE
+        else:
+            frei = self.guard.validate_battery_discharge(soc_batt)
+        self._batt_reserve_erreicht = not frei
+        return frei
+
+    def _glätten(self, wert: float, reihe: str = "pv") -> float:
+        fenster = self._fenster.setdefault(reihe, [])
+        fenster.append(wert)
+        del fenster[:-3]
+        return sum(fenster) / len(fenster)
 
     # --- Lese-Gesundheit der Geräte (Diagnose) ------------------------------
     def geraete_status(self) -> dict:

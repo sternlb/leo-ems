@@ -43,6 +43,11 @@ class ChargeCommand:
     # Entladegrenze liest genau dieses Flag, statt Modus-Strings zu raten:
     # warum geladen wird, weiß nur der Controller selbst (planner/batt_limit.py).
     netz_gewollt: bool = False
+    # Darf die Hausbatterie das Auto aktiv speisen (Issue #11)? Bewusst ein
+    # ZWEITES Flag und keine Erweiterung von `netz_gewollt`: die beiden Fragen
+    # sind unabhängig. „Schnell mit Batterie" will beides (Netz *und* Batterie),
+    # „PV+Batterie" will die Batterie, aber gerade kein Netz.
+    batt_freigabe: bool = False
 
 
 class ChargeController:
@@ -174,9 +179,10 @@ class ChargeController:
         }
 
     def _charge(self, current_a: int, phases: int, reason: str,
-                netz_gewollt: bool = False) -> ChargeCommand:
+                netz_gewollt: bool = False, batt_freigabe: bool = False) -> ChargeCommand:
         self.state = ChargeState.LADEN_3P if phases == 3 else ChargeState.LADEN_1P
-        return ChargeCommand(True, current_a, phases, self.state, reason, netz_gewollt)
+        return ChargeCommand(True, current_a, phases, self.state, reason,
+                             netz_gewollt, batt_freigabe)
 
     # --- Hauptentscheidung -------------------------------------------------
     def update(
@@ -187,9 +193,20 @@ class ChargeController:
         connected: bool,
         mode: str,
         guarantee_active: bool,
+        vehicle_limit_soc: float,
         soc_fahrzeug: float | None = None,
-        vehicle_limit_soc: float = 100,
+        batt_verfuegbar: bool = True,
     ) -> ChargeCommand:
+        """Ein Regeltakt.
+
+        `vehicle_limit_soc` ist bewusst ein **Pflicht-Argument ohne Default**
+        (Issue #9): der frühere Default von 100 hätte jeden Aufrufweg, der ihn
+        vergisst, stumm bis 100 % laden lassen — ein vergessenes Argument soll
+        ein TypeError sein, kein aufgeladener Fahrzeugakku.
+
+        `batt_verfuegbar=False` heißt: die Hausbatterie ist an ihrer Reserve, eine
+        Freigabe ans Auto ist gerade nicht zulässig (Issue #11).
+        """
         if not connected:
             self.state = ChargeState.FREI
             self._since.clear()
@@ -213,8 +230,14 @@ class ChargeController:
 
         if mode == "Schnell":
             self.phases = 3
+            # Der Netzbezug ist hier immer gewollt; ob die Hausbatterie
+            # zusätzlich mitspeisen darf, ist eine davon unabhängige
+            # Einstellung (Issue #11) — deshalb zwei Flags statt eines.
+            freigabe = self.cfg.schnell_batt_nutzen and batt_verfuegbar
+            quelle = "PV + Batterie + Netz" if freigabe else "Herkunft egal"
             return self._charge(self.cfg.max_current_a, 3,
-                                "Modus Schnell (max. Leistung, Herkunft egal)", netz_gewollt=True)
+                                f"Modus Schnell (max. Leistung, {quelle})",
+                                netz_gewollt=True, batt_freigabe=freigabe)
 
         if mode == "PV+Min":
             phases = self._decide_phases(surplus_w, now)
@@ -226,7 +249,21 @@ class ChargeController:
             return self._charge(current, phases, f"PV+Min: {current} A {phases}p{zusatz}",
                                 netz_gewollt=not reicht_pv)
 
-        # Nur-PV (Default): mit Ein-/Ausschalt-Hysterese (Spec §4.1)
+        # Nur-PV (Default) und PV+Batterie teilen sich die Zustandsmaschine mit
+        # Ein-/Ausschalt-Hysterese (Spec §4.1). Der einzige Unterschied ist das
+        # Budget, das die Regelschleife hereingibt: in PV+Batterie steckt die
+        # Entladeleistung der Hausbatterie mit drin. Genau daher kommt die
+        # Zusage „ohne Netzbezug" — geregelt wird gegen das, was der Standort
+        # ohne Netz liefern kann, und die bekannte Abschalthysterese greift
+        # unverändert, sobald auch das nicht mehr reicht.
+        batt_freigabe = mode == "PV+Batterie" and batt_verfuegbar
+        if mode != "PV+Batterie":
+            label = "Nur-PV"
+        elif batt_verfuegbar:
+            label = "PV+Batterie"
+        else:
+            label = "PV+Batterie (Batterie-Reserve erreicht, nur PV)"
+
         was_charging = self.state in (ChargeState.LADEN_1P, ChargeState.LADEN_3P)
         if was_charging:
             # Reihenfolge ist entscheidend (Issue #7): erst die Phasenzahl
@@ -242,11 +279,12 @@ class ChargeController:
                 self.state = ChargeState.PAUSIERT
                 self._since.pop("enable", None)
                 return ChargeCommand(False, 0, phases, self.state,
-                                     "Nur-PV: kein Überschuss mehr (pausiert)")
+                                     f"{label}: kein Überschuss mehr (pausiert)")
             current = self._current_for(surplus_w, phases)
             fehlt = minimum - surplus_w
             zusatz = "" if fehlt <= 0 else f" (noch {fehlt / 1000:.1f} kW aus dem Netz, Rückfall läuft)"
-            return self._charge(current, phases, f"Nur-PV: {current} A {phases}p{zusatz}")
+            return self._charge(current, phases, f"{label}: {current} A {phases}p{zusatz}",
+                                batt_freigabe=batt_freigabe)
 
         # nicht ladend → Einschalt-Hysterese prüfen
         if self._held("enable", surplus_w >= self._enable_w(), now) >= timedelta(
@@ -254,6 +292,8 @@ class ChargeController:
         ):
             phases = self._decide_phases(surplus_w, now)
             current = self._current_for(surplus_w, phases)
-            return self._charge(current, phases, f"Nur-PV: {current} A {phases}p (Start)")
+            return self._charge(current, phases, f"{label}: {current} A {phases}p (Start)",
+                                batt_freigabe=batt_freigabe)
         self.state = ChargeState.VERBUNDEN
-        return ChargeCommand(False, 0, self.phases, self.state, "Nur-PV: warte auf ausreichenden Überschuss")
+        return ChargeCommand(False, 0, self.phases, self.state,
+                             f"{label}: warte auf ausreichenden Überschuss")

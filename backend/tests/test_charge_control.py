@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta
 
+import pytest
+
 from leo_ems.config import RegelConfig
 from leo_ems.planner.charge_control import ChargeController, ChargeState
 
@@ -13,9 +15,11 @@ def s(sec: int) -> datetime:
     return T0 + timedelta(seconds=sec)
 
 
-def upd(ctrl, sec, surplus, mode="Nur-PV", connected=True, guarantee=False, soc=None, limit=100):
+def upd(ctrl, sec, surplus, mode="Nur-PV", connected=True, guarantee=False, soc=None,
+        limit=100, batt=True):
     return ctrl.update(s(sec), surplus_w=surplus, connected=connected, mode=mode,
-                       guarantee_active=guarantee, soc_fahrzeug=soc, vehicle_limit_soc=limit)
+                       guarantee_active=guarantee, soc_fahrzeug=soc, vehicle_limit_soc=limit,
+                       batt_verfuegbar=batt)
 
 
 def test_t1_ueberschussfolge():
@@ -136,6 +140,67 @@ def test_fahrzeug_limit_beendet():
     ctrl = ChargeController(CFG)
     cmd = upd(ctrl, 0, 5000, soc=80, limit=80)
     assert not cmd.charging and cmd.state == ChargeState.BEENDET
+
+
+def test_fahrzeug_limit_ist_pflichtargument():
+    """Issue #9: `vehicle_limit_soc` hatte einen Default von 100 — ein Aufrufweg,
+    der ihn vergisst, hätte das Auto stumm bis 100 % geladen. Ein vergessenes
+    Argument muss ein TypeError sein."""
+    ctrl = ChargeController(CFG)
+    with pytest.raises(TypeError):
+        ctrl.update(s(0), surplus_w=5000, connected=True, mode="Nur-PV", guarantee_active=False)
+
+
+# --- Bewusste Batterie-Freigabe (Issue #11) ----------------------------------
+def test_schnell_ohne_batterie_gibt_nichts_frei():
+    """Default-Verhalten wie v0.9.0: Netz ja, Hausbatterie nein."""
+    ctrl = ChargeController(RegelConfig(schnell_batt_nutzen=False))
+    cmd = upd(ctrl, 0, 0, mode="Schnell")
+    assert cmd.charging and cmd.netz_gewollt is True and cmd.batt_freigabe is False
+
+
+def test_schnell_mit_batterie_gibt_frei():
+    """Die beiden Flags sind unabhängig: hier ist BEIDES gewollt."""
+    ctrl = ChargeController(RegelConfig(schnell_batt_nutzen=True))
+    cmd = upd(ctrl, 0, 0, mode="Schnell")
+    assert cmd.netz_gewollt is True and cmd.batt_freigabe is True
+    assert "Batterie" in cmd.reason
+
+
+def test_schnell_mit_batterie_endet_an_der_reserve():
+    ctrl = ChargeController(RegelConfig(schnell_batt_nutzen=True))
+    cmd = upd(ctrl, 0, 0, mode="Schnell", batt=False)
+    assert cmd.charging and cmd.batt_freigabe is False
+
+
+def test_pv_batterie_regelt_gegen_das_budget_ohne_netzbezug():
+    """PV+Batterie nutzt dieselbe Zustandsmaschine wie Nur-PV — das Budget
+    enthält die Batterie, deshalb entsteht kein Netzbezug."""
+    ctrl = ChargeController(CFG)
+    assert not upd(ctrl, 0, 5000, mode="PV+Batterie").charging   # Einschalt-Hysterese
+    cmd = upd(ctrl, 60, 5000, mode="PV+Batterie")
+    assert cmd.charging and cmd.batt_freigabe is True
+    assert cmd.netz_gewollt is False                              # kein gewollter Netzbezug
+    assert cmd.reason.startswith("PV+Batterie:")
+
+
+def test_pv_batterie_faellt_an_der_reserve_auf_reines_pv_laden():
+    ctrl = ChargeController(CFG)
+    upd(ctrl, 0, 5000, mode="PV+Batterie", batt=False)
+    cmd = upd(ctrl, 60, 5000, mode="PV+Batterie", batt=False)
+    assert cmd.charging and cmd.batt_freigabe is False
+    assert "Batterie-Reserve erreicht" in cmd.reason
+
+
+def test_pv_batterie_pausiert_wie_nur_pv():
+    """Die Abschalthysterese gilt unverändert — reicht auch PV+Batterie nicht
+    mehr, wird pausiert statt Netzstrom zu ziehen."""
+    ctrl = ChargeController(CFG)
+    upd(ctrl, 0, 5000, mode="PV+Batterie")
+    assert upd(ctrl, 60, 5000, mode="PV+Batterie").charging
+    assert upd(ctrl, 120, 0, mode="PV+Batterie").charging        # 180-s-Hysterese läuft
+    cmd = upd(ctrl, 300, 0, mode="PV+Batterie")
+    assert not cmd.charging and cmd.state == ChargeState.PAUSIERT
 
 
 def test_phase_diagnose_entprellung():

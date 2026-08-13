@@ -86,6 +86,8 @@
   .btn.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); font-weight: 400; }
   .btn:disabled { opacity: .5; cursor: default; }
   .savemsg { font-family: var(--mono); font-size: .75rem; margin-left: .8rem; color: var(--lime-ink); }
+  /* Seit der harten Ladelimit-Grenze kann Speichern auch scheitern (Issue #9) */
+  .savemsg.err { color: var(--rot); }
 
   table { width: 100%; border-collapse: collapse; font-size: .85rem; }
   th { font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); text-align: left; padding: .4em .5em; border-bottom: 1px solid var(--line); font-weight: 400; }
@@ -719,15 +721,22 @@
       <div class="modes" id="modes">
         <button data-m="Nur-PV">Nur-PV</button>
         <button data-m="PV+Min">PV+Min</button>
+        <button data-m="PV+Batterie" title="Schnellladen ohne Netzbezug: PV und Hausbatterie, bis zur Batterie-Reserve">PV+Batterie</button>
         <button data-m="Schnell">Schnell</button>
         <button data-m="Aus">Aus</button>
       </div>
+      <div class="sub" style="margin:.7rem 0; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap">
+        <span>Hausbatterie im Modus „Schnell" mitnutzen</span>
+        <span class="badge switch" id="schnell-batt-schalter"
+              title="Im Modus Schnell zusätzlich aus der Hausbatterie laden (Netzbezug bleibt erlaubt)">–</span>
+      </div>
       <div class="form-grid">
-        <label class="f"><span>Fahrzeug-Ladelimit (% SoC)</span><input type="number" id="c-limit" min="0" max="100"></label>
+        <label class="f"><span id="c-ev_limit_soc-label">Fahrzeug-Ladelimit (% SoC)</span><input type="number" id="c-ev_limit_soc" min="0" max="100"></label>
         <label class="f"><span>Min. Ladestrom (A)</span><input type="number" id="c-min_current_a" min="6" max="16"></label>
         <label class="f"><span>Max. Ladestrom (A)</span><input type="number" id="c-max_current_a" min="6" max="32"></label>
         <label class="f"><span>Batterie-Reserve (% SoC)</span><input type="number" id="c-soc_reserve_pct" min="0" max="100"></label>
         <label class="f"><span>Batterie-Vorrang bis (% SoC)</span><input type="number" id="c-priority_soc_pct" min="0" max="100"></label>
+        <label class="f"><span>Batterie-Freigabe max. (W)</span><input type="number" id="c-batt_schnell_max_w" min="0" max="12000" step="100"></label>
         <label class="f"><span>Ziel-Netzbezug (W)</span><input type="number" id="c-residual_power_w" min="-500" max="1000"></label>
         <label class="f"><span>1p→3p ab (W)</span><input type="number" id="c-phase_up_w" min="1400" max="11000"></label>
         <label class="f"><span>3p→1p unter (W)</span><input type="number" id="c-phase_down_w" min="1400" max="11000"></label>
@@ -823,10 +832,13 @@ async function api(pfad, opts = {}) {
 const w = v => v == null ? "–" : (Math.abs(v) >= 1000 ? (v/1000).toFixed(1) + " kW" : Math.round(v) + " W");
 const pct = v => v == null ? "–" : Math.round(v) + " %";
 const mmss = s => Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0");
-// Entladegrenze der Hausbatterie (Spec §5.1): drei Zustände, nicht zwei
+// Entladegrenze der Hausbatterie (Spec §5.1): vier Zustände, nicht zwei.
+// „freigabe" ist seit v0.10.0 dabei und meint das Gegenteil der Sperre — die
+// Batterie lädt bewusst das Auto (Issue #11).
 const entladeText = st =>
   st.entladelimit_art === "hart" ? "gesperrt (0 W)"
   : st.entladelimit_art === "dynamisch" ? "bis " + w(st.entladelimit_w) + " für den Hausbedarf"
+  : st.entladelimit_art === "freigabe" ? "freigegeben bis " + w(st.entladelimit_w) + " fürs Auto"
   : "keine — Batterie frei";
 
 // ---------- Energy-Flow-Szene (Spec 04, v0.3) --------------------------------
@@ -1202,6 +1214,8 @@ async function schalte(feld, an) {
 
 $("wp-ww-schalter").onclick = () => schalte("wp_ww_aktiv", !(cfgCache && cfgCache.wp_ww_aktiv));
 $("wp-hk-schalter").onclick = () => schalte("wp_hk_aktiv", !(cfgCache && cfgCache.wp_hk_aktiv));
+$("schnell-batt-schalter").onclick =
+  () => schalte("schnell_batt_nutzen", !(cfgCache && cfgCache.schnell_batt_nutzen));
 
 function renderWp(st) {
   const wp = st.wp;
@@ -1274,9 +1288,13 @@ function openPanel(k) {
       <dt>Überschuss gemessen</dt><dd>${fmtFluss(st.ueberschuss_w) ?? "0 W"}</dd>
       ${st.wp_boost_w > 0 ? `<dt>davon WP-Boost</dt><dd>+ ${fmtFluss(st.wp_boost_w)} zurückgerechnet</dd>
       <dt>verteilbar</dt><dd>${fmtFluss(st.verteilbar_w) ?? "0 W"}</dd>` : ""}
+      ${st.ev_budget_w != null && st.ev_budget_w !== st.verteilbar_w
+          ? `<dt>Budget fürs Auto</dt><dd>${fmtFluss(st.ev_budget_w)} — inkl. Hausbatterie</dd>` : ""}
       ${st.ev_zuteilung_w > 0 ? `<dt>an die Wallbox</dt><dd>${fmtFluss(st.ev_zuteilung_w)}</dd>` : ""}</dl>
       <p class="note">Bilanz: PV + Netzbezug − Batterieladung − Wallbox. Enthält die Wärmepumpe, solange sie nicht separat gemessen wird.
-      ${st.wp_boost_w > 0 ? "Ihr geschätzter Verbrauch wird für die Verteilung zurückgerechnet — sonst entschiede darüber, wer zuerst angelaufen ist." : ""}</p>`,
+      ${st.wp_boost_w > 0 ? "Ihr geschätzter Verbrauch wird für die Verteilung zurückgerechnet — sonst entschiede darüber, wer zuerst angelaufen ist." : ""}
+      ${st.ev_budget_w != null && st.ev_budget_w !== st.verteilbar_w
+          ? "Im Modus PV+Batterie regelt die Wallbox gegen das größere Budget; die Wärmepumpe bekommt weiterhin nur den PV-Anteil." : ""}</p>`,
     netz: `<h3>Netz</h3>
       <dl><dt>aktuell</dt><dd>${(st.p_netz_w || 0) > 50 ? "Bezug " + fmtFluss(st.p_netz_w) : (st.p_netz_w || 0) < -50 ? "Einspeisung " + fmtFluss(st.p_netz_w) : "ausgeglichen"}</dd></dl>`,
   };
@@ -1346,6 +1364,9 @@ function render(st) {
     st.entladelimit_art === "hart" ? ' · <span class="gelbc">Entladesperre</span>'
     : st.entladelimit_art === "dynamisch"
       ? ` · <span class="gelbc">Grenze ${w(st.entladelimit_w)}</span>`
+    : st.entladelimit_art === "freigabe"
+      // Lime statt Gelb: das ist keine Einschränkung, sondern eine Freigabe.
+      ? ` · <span class="lime">freigegeben ${w(st.entladelimit_w)}</span>`
       : "";
   const pn = st.p_netz_w || 0;
   $("t-netz").textContent = w(Math.abs(pn));
@@ -1391,7 +1412,12 @@ function renderPhasen() {
 }
 
 // --- Einstellungen ----------------------------------------------------------
-const CFG_FELDER = ["min_current_a","max_current_a","soc_reserve_pct","priority_soc_pct",
+// `ev_limit_soc` steht bewusst in dieser Liste: bis v0.9.0 lief das Ladelimit
+// als Sonderfall über PUT /api/v1/mode und wurde erst NACH ladeConfig() gesetzt —
+// schlug ladeConfig() fehl, blieb das Feld leer und Speichern schickte 0 %
+// (Issue #9). Jetzt lädt und speichert es denselben Weg wie alles andere.
+const CFG_FELDER = ["ev_limit_soc","min_current_a","max_current_a","soc_reserve_pct",
+                    "priority_soc_pct","batt_schnell_max_w",
                     "residual_power_w","phase_up_w","phase_down_w","phase_min_gap_s",
                     // Wärmepumpe (Issue #1); Timing-Parameter bleiben API-only
                     "wp_ww_an_w","wp_ww_aus_w","wp_ww_boost_c","wp_ww_normal_c",
@@ -1411,15 +1437,36 @@ async function ladeConfig() {
   }
   schalter($("wp-ww-schalter"), cfgCache.wp_ww_aktiv);
   schalter($("wp-hk-schalter"), cfgCache.wp_hk_aktiv);
+  schalter($("schnell-batt-schalter"), cfgCache.schnell_batt_nutzen);
+
+  // Die harte Obergrenze steht in der Konfiguration, nicht im Markup (Issue #9):
+  // sie ist änderbar, und ein Feld, das mehr zulässt als die API annimmt,
+  // produziert eine Fehlermeldung statt einer Erklärung.
+  const grenze = cfgCache.hard_limit_ev_max_soc;
+  $("c-ev_limit_soc").max = grenze == null ? 100 : grenze;
+  $("c-ev_limit_soc-label").textContent =
+    "Fahrzeug-Ladelimit (% SoC" + (grenze == null ? "" : ", max. " + grenze) + ")";
 }
 
 $("save").onclick = async () => {
   const upd = {};
   for (const f of CFG_FELDER) upd[f] = Number($("c-" + f).value);
-  await api("api/v1/config", { method: "PUT", body: JSON.stringify(upd) });
-  const lim = Number($("c-limit").value);
-  const modus = lastStatus ? lastStatus.modus : "Nur-PV";
-  await api("api/v1/mode", { method: "PUT", body: JSON.stringify({ modus, fahrzeug_limit_soc: lim }) });
+  try {
+    // Ein Request für alles — das Ladelimit ist seit v0.10.0 ein normales
+    // Konfigurationsfeld und braucht keinen Sonderweg über /mode mehr.
+    await api("api/v1/config", { method: "PUT", body: JSON.stringify(upd) });
+  } catch (e) {
+    // Seit der harten Obergrenze kann Speichern abgelehnt werden (Issue #9).
+    // Vorher konnte hier nichts schiefgehen, entsprechend gab es keine Anzeige —
+    // eine stumme Ablehnung sähe aus wie ein übernommener Wert.
+    let text = String(e.message || e);
+    try { text = JSON.parse(text).detail || text; } catch {}
+    $("savemsg").textContent = "nicht gespeichert: " + text;
+    $("savemsg").classList.add("err");
+    ladeConfig();
+    return;
+  }
+  $("savemsg").classList.remove("err");
   $("savemsg").textContent = "gespeichert ✓"; setTimeout(() => $("savemsg").textContent = "", 3000);
   ladeConfig();
 };
@@ -1525,7 +1572,7 @@ $("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = f
   updateLicht(new Date());
   try { const h = await api("api/v1/health"); $("f-ver").textContent = "Leo-EMS v" + h.version; } catch {}
   await poll();
-  try { await ladeConfig(); if (lastStatus) $("c-limit").value = lastStatus.fahrzeug_limit_soc ?? 80; } catch {}
+  try { await ladeConfig(); } catch {}
   try { await ladeRegeln(); } catch {}
   try { await ladeHistorie(); } catch {}
   setInterval(poll, 5000);

@@ -1,6 +1,6 @@
 # 05 — Umsetzungsstand & Testabdeckung
 
-**Stand:** 2026-08-03 (v0.9.0) · **Grundlage:** [01-requirements.md](01-requirements.md)
+**Stand:** 2026-08-13 (v0.10.0) · **Grundlage:** [01-requirements.md](01-requirements.md)
 
 Diese Datei ist die Brücke zwischen Anforderung und Beweis: pro Requirement, was
 umgesetzt ist, wo es im Code steht und **welcher Test es hält**. Sie ersetzt keine
@@ -18,7 +18,7 @@ Legende Abdeckung: **T** = automatisierter Test · **L** = am Live-System verifi
 | 🔵 teilweise | 4 | 4 | **8** |
 | ⚪ offen | 2 | 4 | **6** |
 
-100 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test,
+146 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test,
 Live-Verifikation oder beides). Ohne jeden Nachweis sind nur REQ-008, 022, 023,
 030 und 031 — vier davon gehören zu Ausbaustufe 3, die es real noch nicht gibt.
 
@@ -36,7 +36,7 @@ bewiesen**.
 | REQ-002 Ladeleistung + 1p/3p | ✅ *(Netzbezug-Fehler behoben in v0.8.0)* | `planner/charge_control.py` | **T** `test_t1_ueberschussfolge`, `test_t2_phasenwechsel` (wörtlich nach Spec), `test_3p_unter_minimum_zieht_keinen_dauernetzbezug`, `test_pause_erst_wenn_auch_1p_nicht_mehr_traegt`, `test_hochschalten_wartet_weiter_auf_die_sperre` · **L** |
 | REQ-003 Zielladung auf Abfahrtszeit | ✅ | `planner/rules.py` | **T** `test_rules.py` (6 Tests, inkl. T3-Mehrfachregel) |
 | REQ-004 Mindest-SoC garantieren | ✅ | `planner/rules.py` | **T** `test_garantie_uebersteuert_aus`, `test_garantie_uebersteuert_aus_modus` |
-| REQ-005 Lademodi | ✅ | `charge_control.py`, `PUT /api/v1/mode` | **T** `test_modus_aus_kein_laden`, `test_modus_schnell_max_sofort`, `test_pv_min_laedt_immer_mindestens`, `test_api::test_mode_put` |
+| REQ-005 Lademodi | ✅ *(fünfter Modus „PV+Batterie" seit v0.10.0)* | `charge_control.py`, `PUT /api/v1/mode` | **T** `test_modus_aus_kein_laden`, `test_modus_schnell_max_sofort`, `test_pv_min_laedt_immer_mindestens`, `test_pv_batterie_regelt_gegen_das_budget_ohne_netzbezug`, `test_pv_batterie_regelt_gegen_pv_plus_batterie`, `test_api::test_mode_put` |
 | REQ-006 Fahrzeug-SoC aus der Integration | ✅ *(seit v0.6.3 erstmals wirklich)* | `devices/skoda.py` | **T** `test_skoda_liest_soc_unter_beiden_feldnamen`, `test_skoda_unbekanntes_soc_feld_wird_als_ausfall_gemeldet` · **L** 80 % gelesen |
 | REQ-007 EVCC funktionsäquivalent | 🔵 Funktionen da, Äquivalenz nicht belegt | ganzer Ladepfad | **T** je Einzelfunktion · **Vergleich gegen die EVCC-Baseline fehlt** |
 | REQ-008 EVCC ablösen/deinstallieren | ⚪ EVCC läuft weiter parallel | — | — |
@@ -66,8 +66,8 @@ Warmwasser-Seite ist im Realbetrieb bestätigt (siehe REQ-010/013).
 
 | ID | Umsetzung | Code | Nachweis |
 |---|---|---|---|
-| REQ-020 Entladegrenze beim EV-Laden | ✅ *(dynamisch seit v0.9.0)* | `planner/batt_limit.py`, `core/loop.py`, `safety/guard.py` | **T** `test_batt_limit` (11 Fälle), `test_laden_und_entladegrenze`, `test_entladegrenze_folgt_dem_netzbezug`, `test_schnell_modus_sperrt_die_batterie_hart` · **L** offen für v0.9.0 |
-| REQ-021 SoC-Reserve respektieren | ✅ | `safety/guard.py`, `planner/surplus.py` | **T** `test_batterie_reserve`, `test_batterie_vorrang_unter_priority_soc` |
+| REQ-020 Entladegrenze beim EV-Laden | ✅ *(dynamisch seit v0.9.0, Freigabe seit v0.10.0)* | `planner/batt_limit.py`, `core/loop.py`, `safety/guard.py` | **T** `test_batt_limit` (17 Fälle), `test_laden_und_entladegrenze`, `test_entladegrenze_folgt_dem_netzbezug`, `test_schnell_modus_sperrt_die_batterie_hart`, `test_schnell_mit_batterie_gibt_die_grenze_frei` · **L** offen für v0.9.0/v0.10.0 |
+| REQ-021 SoC-Reserve respektieren | ✅ *(seit v0.10.0 wirklich durchgesetzt)* | `safety/guard.py`, `planner/batt_limit.py`, `planner/surplus.py` | **T** `test_batterie_reserve`, `test_batterie_vorrang_unter_priority_soc`, `test_freigabe_endet_an_der_reserve`, `test_reserve_hysterese_verhindert_flattern`, `test_pv_batterie_faellt_an_der_reserve_zurueck` |
 | REQ-022 Batterieladung zeitlich steuern | ⚪ (Should, Stufe 3) | — | — |
 | REQ-023 Netzladen bei dynamischem Tarif | ⚪ (Should, Stufe 3) | — | — |
 | REQ-024 Rückfall auf autonome Regelung | ✅ Lease/TTL (ADR-005) | `safety/guard.py` | **T** `test_lease_laeuft_nach_ttl_aus`, `test_lease_laeuft_ohne_erneuerung_aus`, `test_sweep_meldet_abgelaufene_leases` |
@@ -118,9 +118,9 @@ Neuerungen gegenüber EVCC.
 | ID | Umsetzung | Code | Nachweis |
 |---|---|---|---|
 | REQ-070 Laderegeln frei verwaltbar | ✅ | `/api/v1/rules` (CRUD), Dashboard | **T** Regel-Logik in `test_rules.py`; **die API-Endpunkte selbst sind nicht getestet** |
-| REQ-071 SoC-Reserve über die UI | ✅ | `/api/v1/config`, Dashboard | **T** Wirkung in `test_batterie_reserve`; `PUT /config` nicht getestet |
-| REQ-072 harte Grenzen über die UI | ✅ | `config.py` (`hard_limit_*`) | **T** `test_ww_komfortgrenze_hebt_rueckstellwert_an` |
-| REQ-073 sofort wirksam **und persistent** | ✅ *(persistent erst seit v0.6.5)* | `config.py`, `run.sh` | **T** `test_run_sh_setzt_das_persistente_datenverzeichnis` — bis v0.6.4 lag `config.json` im Container und war nach jedem Update weg, inklusive `read_only` |
+| REQ-071 SoC-Reserve über die UI | ✅ | `/api/v1/config`, Dashboard | **T** Wirkung in `test_batterie_reserve`, `PUT /config` in `test_abgelehnte_konfiguration_wird_nicht_halb_geschrieben` |
+| REQ-072 harte Grenzen über die UI | ✅ *(EV-Obergrenze seit v0.10.0)* | `config.py` (`hard_limit_*`), `safety/guard.py`, `api/app.py` | **T** `test_ww_komfortgrenze_hebt_rueckstellwert_an`, `test_ladelimit_ueber_der_harten_grenze_wird_abgelehnt`, `test_grenze_und_limit_gemeinsam_anheben`, `test_garantieladung_wird_auf_das_ladelimit_gedeckelt` |
+| REQ-073 sofort wirksam **und persistent** | ✅ *(persistent erst seit v0.6.5, Ladelimit erst seit v0.10.0)* | `config.py`, `run.sh` | **T** `test_run_sh_setzt_das_persistente_datenverzeichnis`, `test_mode_put_persistiert_das_ladelimit` — bis v0.6.4 lag `config.json` im Container und war nach jedem Update weg, inklusive `read_only`; das Fahrzeug-Ladelimit stand bis v0.9.0 überhaupt nicht in der Config |
 | REQ-074 eigenständige LAN-App | 🔵 HA-Dashboard erfüllt die LAN-Bedienung, die Android-App ist Gerüst | `web/index.html`, `app/` | **L** Dashboard; App nie gebaut |
 
 ---
@@ -157,5 +157,8 @@ Ergänzend zur Laufzeit: `GET /api/v1/diag/devices` (jeder Adapter aktiv gelesen
    jetzt auf persistenten Daten, also ab heute sinnvoll messbar.
 4. **REQ-061 Wallbox-Override** — „bis Abstecken oder 24 h" fehlt komplett.
 5. **REQ-008 EVCC deinstallieren** — erst nach 1./3., mit belegtem Vergleich.
-6. **API-Tests für `/rules` und `/config`** — die UI-Requirements hängen an
-   Endpunkten, die kein Test anfasst.
+6. **API-Tests für `/rules`** — REQ-070 hängt an Endpunkten, die kein Test
+   anfasst. (`/config` ist seit v0.10.0 abgedeckt.)
+7. **Realbetriebs-Nachweis für v0.9.0/v0.10.0** — die dynamische Entladegrenze und
+   die Batterie-Freigabe sind vollständig getestet, aber noch nicht am Pi belegt.
+   Vor der ersten Nutzung von „PV+Batterie": `soc_reserve_pct` setzen (§5.2).

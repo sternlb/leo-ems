@@ -8,6 +8,42 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.10.0
+
+**Die Fahrzeugbatterie wird geschützt — und die Hausbatterie darf das Auto laden, wenn du es willst.**
+
+Fahrzeug-Ladelimit (Issues #9/#10):
+
+- Das Ladelimit steht jetzt in der Konfiguration und **überlebt Add-on-Updates**.
+  Bisher war es eine Variable in der Regelschleife und bei jedem Neustart wieder
+  auf dem Startwert — bei aktivem `auto_update` also regelmäßig.
+- Neue **harte Obergrenze** `hard_limit_ev_max_soc`, Default **80 %**. Ein höheres
+  Ladelimit lehnt die API mit Klartext ab; wer wirklich mehr will, hebt zuerst
+  die Grenze. Das Dashboard zeigt sie im Feld-Label an.
+- Die **Garantieladung** wird mitgedeckelt. Eine Laderegel mit Mindest-SoC 90 %
+  hätte das Auto sonst per Netzstrom über die Schutzgrenze gezogen — sie
+  übersteuert laut Spec alles, auch den Modus „Aus".
+- Der Default-Parameter `vehicle_limit_soc = 100` in der Ladesteuerung ist weg:
+  ein vergessenes Argument ist jetzt ein Fehler, kein stilles Laden bis 100 %.
+
+Batterie ins Auto (Issue #11):
+
+- Neuer Schalter **„Hausbatterie im Modus Schnell mitnutzen"** (Default aus).
+  Bis v0.9.0 war die Batterie in genau diesem Modus hart gesperrt.
+- Neuer Lademodus **„PV+Batterie" — Schnellladen ohne Netzbezug**: geregelt wird
+  gegen PV *plus* Hausbatterie, der Netzbezug bleibt bei ≈ 0. Es ist dieselbe
+  Zustandsmaschine wie „Nur-PV", nur mit größerem Budget — die bekannte
+  Abschalthysterese greift unverändert, sobald auch das nicht mehr reicht.
+- **Untergrenze ist die Batterie-Reserve** (`soc_reserve_pct`, mit 2 Punkten
+  Hysterese). Der Parameter wurde bis v0.9.0 nirgends durchgesetzt — **bitte vor
+  dem ersten Schnellladen setzen**, mit dem Default 0 % darf das Auto die
+  Hausbatterie bis auf null ziehen. Der Vorrang-SoC (25 %) gilt hier bewusst
+  nicht: er ist eine Heuristik für die Automatik-Modi.
+- Die Wärmepumpe rechnet weiter mit dem reinen PV-Überschuss — die Freigabe gilt
+  dem Auto, sonst liefe die Hausbatterie über den Warmwasser-Boost leer.
+- `batt_dyn_aktiv: false` bleibt der Notausstieg und sticht auch die Freigabe.
+- 146 Tests grün (27 neue).
+
 ## 0.9.0
 
 **Die Hausbatterie darf beim EV-Laden einspringen — dynamische Entladegrenze statt harter Sperre.**

@@ -71,6 +71,19 @@ class Garantieplan:
         return now >= self.t_start and soc_ist_pct < self.soc_min_pct
 
 
+def ev_ziel_grenze(cfg: RegelConfig) -> int:
+    """Höchster SoC, auf den überhaupt geladen werden darf (Issue #9).
+
+    `ev_limit_soc` ist der eingestellte Wert, `hard_limit_ev_max_soc` die
+    Schutzgrenze darüber. Normalerweise hält die API die beiden schon in der
+    richtigen Reihenfolge — hier wird trotzdem das Minimum genommen, damit eine
+    von Hand editierte `/data/config.json` den Schutz nicht aushebelt.
+    """
+    if cfg.hard_limit_ev_max_soc is None:
+        return cfg.ev_limit_soc
+    return min(cfg.ev_limit_soc, cfg.hard_limit_ev_max_soc)
+
+
 def plane_garantieladung(
     rules: list[ChargingRule], soc_ist_pct: float, now: datetime, cfg: RegelConfig
 ) -> Garantieplan | None:
@@ -79,6 +92,12 @@ def plane_garantieladung(
     if ziel is None:
         return None
     abfahrt, soc_min = ziel
+    # Die Garantieladung übersteuert laut Spec §3 Festlegung 5 alles — auch den
+    # Modus „Aus". Ohne diese Deckelung wäre sie damit auch der Weg, auf dem eine
+    # Regel mit `soc_min = 90` das Auto per Netzstrom über die Schutzgrenze zieht
+    # (Issue #9). Hier gedeckelt und nicht erst im Controller, damit schon
+    # `E_fehlt` und `T_start` gegen den erreichbaren Wert rechnen.
+    soc_min = min(soc_min, ev_ziel_grenze(cfg))
     e_fehlt_kwh = max(0.0, soc_min - soc_ist_pct) / 100.0 * cfg.battery_capacity_kwh / cfg.charge_efficiency
     t_dauer = timedelta(hours=e_fehlt_kwh / (MAX_CHARGE_POWER_W / 1000.0))
     t_start = abfahrt - t_dauer - timedelta(minutes=cfg.plan_buffer_min)
