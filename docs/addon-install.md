@@ -18,7 +18,7 @@ Das EMS läuft als **Home-Assistant-Add-on aus einem registrierten Add-on-Reposi
 2. **Installieren:** „Leo-EMS" erscheint unter dem neuen Repository (Supervisor baut das Image für aarch64 aus `build.yaml`).
 3. **Konfigurieren** (Tab *Konfiguration*): Geräte-Zugangsdaten eintragen —
    `e3dc_host/user/password/rscp_key`, `goe_host`, `skoda_user/password`, `lat`/`lon`
-   (Sungrow leer lassen bis zur Installation Ende 2026). Zugangsdaten liegen nur hier, nie im Code.
+   sowie `sungrow_host` (192.168.178.51), optional `sungrow_port`/`sungrow_unit_id`. Zugangsdaten liegen nur hier, nie im Code.
    Für die **Wärmepumpe** (ab v0.4.0) sind `vaillant_ww_entity` und
    `vaillant_zone_entity` bereits vorbelegt; `ha_base_url`/`ha_token` bleiben
    leer, weil das Add-on über den Supervisor-Proxy geht (`homeassistant_api: true`

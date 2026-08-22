@@ -2,7 +2,7 @@
 
 Verbindungsdaten kommen aus Umgebungsvariablen, die das HA-Add-on aus seinen
 Optionen setzt (addon/config.yaml) — Zugangsdaten liegen NIE im Code/Repo.
-Nur konfigurierte Geräte werden gebaut; Sungrow läuft bis zur Installation
+Nur konfigurierte Geräte werden gebaut; ohne `sungrow_host` läuft der Sungrow
 als Stub (0 W).
 """
 
@@ -16,7 +16,8 @@ OPTIONS_FILE = Path("/data/options.json")  # vom HA-Supervisor aus den Add-on-Op
 
 _KEYS = (
     "e3dc_host", "e3dc_user", "e3dc_password", "e3dc_rscp_key",
-    "goe_host", "skoda_user", "skoda_password", "sungrow_host", "lat", "lon",
+    "goe_host", "skoda_user", "skoda_password",
+    "sungrow_host", "sungrow_port", "sungrow_unit_id", "lat", "lon",
     # Wärmepumpe über Home Assistant (Stufe 2, devices/vaillant.py).
     # ha_base_url/ha_token leer = Supervisor-Proxy + SUPERVISOR_TOKEN.
     "ha_base_url", "ha_token", "vaillant_ww_entity", "vaillant_zone_entity",
@@ -65,10 +66,17 @@ def build_adapters(conn: dict) -> dict:
         from .skoda import SkodaAdapter
         adapters["skoda"] = SkodaAdapter(conn["skoda_user"], conn["skoda_password"])
 
-    # Sungrow: real ab Installation, sonst Stub 0 W (Fail-Safe/Übergang, Spec §6)
+    # Sungrow: mit Host der echte Modbus-Adapter, ohne Host der Stub (0 W).
+    # Port und Unit-ID sind konfigurierbar, weil die Unit-ID am WiNet-S nirgends
+    # ablesbar ist — bei einem Gerätetausch muss man sie neu erraten können,
+    # ohne dafür das Add-on neu zu bauen (hier: 1, ermittelt am 2026-08-22).
     if conn.get("sungrow_host"):
         from .sungrow import SungrowAdapter
-        adapters["sungrow"] = SungrowAdapter(conn["sungrow_host"])
+        adapters["sungrow"] = SungrowAdapter(
+            conn["sungrow_host"],
+            port=int(conn.get("sungrow_port") or 502),
+            unit_id=int(conn.get("sungrow_unit_id") or 1),
+        )
     else:
         from .sungrow import SungrowStub
         adapters["sungrow"] = SungrowStub()

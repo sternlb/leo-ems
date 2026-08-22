@@ -1,6 +1,6 @@
 # 01 — Requirements
 
-**Status Phase 1:** ✅ **abgeschlossen** — alle Requirements per MoSCoW priorisiert (26 Must, 13 Should), keine offenen Flanken. Zur 70 %-Regel der Neuanlage gilt eine dokumentierte Arbeitsannahme (REQ-043), die bei der Sungrow-Inbetriebnahme verifiziert wird.
+**Status Phase 1:** ✅ **abgeschlossen** — alle Requirements per MoSCoW priorisiert (26 Must, 13 Should), keine offenen Flanken. Die Einspeisebegrenzung der Neuanlage ist seit 2026-08-22 geklärt (REQ-043): 60 %, durchgesetzt über die E3DC.
 **Stand Anforderungen:** 2026-07-12 (MoSCoW + finale Entscheidungen UI/70 %-Regel)
 **Stand Umsetzung:** 2026-07-26 (v0.6.5) — die Spalte *Umsetzung* wird bei jedem Release mitgeführt.
 
@@ -82,8 +82,8 @@ Konventionen:
 |---|---|---|---|
 | REQ-040 | Das EMS muss die Erzeugung beider Anlagen (E3DC-DC-seitig + Sungrow AC-seitig) zu einer Gesamterzeugung zusammenführen. | Must | ✅ getestet + live |
 | REQ-041 | Das EMS soll eine PV-Ertragsprognose (mind. 24 h) über **Forecast.Solar** nutzen, um Ladeplanung und WP-Vorziehen vorausschauend zu steuern — konfiguriert für beide Anlagen (Ost 22° + Garagendach Ost/West 15°). | Must | 🔵 **Adapter fertig und getestet, aber von der Regelschleife nie gelesen** — die Planung nutzt keine Prognose |
-| REQ-042 | Das EMS soll den Sungrow SG 6.0RT lokal auslesen (Modbus TCP bevorzugt, keine Cloud-Pflicht). | Must | ⚪ Stub (0 W) bis zur Installation Ende 2026 |
-| REQ-043 | Das EMS soll Abregelungsverluste durch die **70 %-Einspeisebegrenzung** minimieren, indem Überschuss lokal verwertet wird (EV, WP, Batterie), statt ihn abregeln zu lassen. Die Begrenzung selbst **durchsetzen muss das EMS nicht**: Bestandsanlage → in der E3DC-Steuerung hinterlegt; Neuanlage → *Annahme lt. Elektriker Waldemar (2026-07-12): der Sungrow-Wechselrichter übernimmt das selbst.* Annahme bei Inbetriebnahme verifizieren. | Should | ✅ lokale Verwertung über EV + WP; Annahme zur Neuanlage bleibt zu verifizieren |
+| REQ-042 | Das EMS soll den Sungrow SG 6.0RT lokal auslesen (Modbus TCP bevorzugt, keine Cloud-Pflicht). | Must | ✅ **erfüllt seit 2026-08-22 (v0.11.0)** — Modbus TCP ohne Cloud, 192.168.178.51:502, Unit-ID 1; gegen die reale Anlage verifiziert |
+| REQ-043 | Das EMS soll Abregelungsverluste durch die **Einspeisebegrenzung** minimieren, indem Überschuss lokal verwertet wird (EV, WP, Batterie), statt ihn abregeln zu lassen. Die Begrenzung selbst **durchsetzen muss das EMS nicht** — sie liegt für beide Anlagen auf der E3DC-Seite. *Geklärt 2026-08-22 (Leo): für die Neuanlage gilt **60 %**, durchgesetzt über die E3DC am gemeinsamen Netzverknüpfungspunkt; der Sungrow läuft unbegrenzt (Sollwert 100 % ausgelesen).* | Should | ✅ lokale Verwertung über EV + WP. **Neu gewichtet:** 60 % von 13,96 kWp ≈ 8,4 kW — die Verwertung vermeidet jetzt Abregelung, nicht nur Netzbezug. Offen: E3DC-Umkonfiguration durch Waldemar |
 
 ## F — Monitoring / Dashboard
 
@@ -127,7 +127,7 @@ Konventionen:
 | 5 | Tarifanbieter | Noch offen — Schnittstelle für **Top-5-Anbieter DE** vorbereiten | REQ-030 |
 | 6 | Prognosequelle | *(noch offen)* | REQ-041 |
 | 7 | Einspeisebegrenzung | **70 %-Regel**, für Bestandsanlage in der E3DC-Steuerung hinterlegt | REQ-043 |
-| 8 | Sungrow | **LAN vorhanden**, Installation **bis Ende 2026** | REQ-042, docs/systems/sungrow.md |
+| 8 | Sungrow | ✅ **in Betrieb und angebunden seit 2026-08-22** (Modbus TCP, Unit-ID 1) | REQ-042, docs/systems/sungrow.md |
 | 9 | Dashboard | *(noch offen)* | REQ-050 ff. |
 | 10 | Harte Grenzen | Aktuell keine nötig, müssen aber **einstellbar** sein | REQ-072 |
 | 11 | Autoladen-Features | **EVCC-Funktionsumfang gefordert** | REQ-007 |
@@ -146,7 +146,7 @@ Konventionen:
 
 ## Offene Fragen (Runde 3)
 
-1. ~~**70 %-Regel Neuanlage**~~ ✅ Beantwortet (2026-07-12, Elektriker Waldemar): Arbeitsannahme — **der Wechselrichter kümmert sich selbst darum**. In REQ-043 dokumentiert, bei Sungrow-Inbetriebnahme verifizieren.
+1. ~~**Einspeisebegrenzung Neuanlage**~~ ✅ Endgültig geklärt (2026-08-22, Leo): **60 %, durchgesetzt über die E3DC** am gemeinsamen Netzverknüpfungspunkt — der Sungrow läuft unbegrenzt. Die Arbeitsannahme von Waldemar (2026-07-12, „der Wechselrichter kümmert sich selbst darum“) ist damit überholt. In REQ-043 dokumentiert; Restpunkt liegt beim Elektriker, die E3DC muss neu konfiguriert werden.
 2. ~~**UI-Entscheidung**~~ ✅ Entschieden (2026-07-12): **eigenständige App, funktioniert komplett im Heim-LAN** (REQ-074).
 3. ~~**MyVaillant-Steuerbarkeit:**~~ ✅ **Beantwortet 2026-08-02: ja, sie reichen — und ohne Eingriff ins Zeitprogramm.** Lesen läuft seit v0.6.5 vollständig. Der Verdacht vom 26.07., MyVaillant übernehme in der Betriebsart `Auto` keine Sollwerte (und man müsste erst per `set_operation_mode` in den Tag-/Manuell-Betrieb, also in Leos Heizungsprogramm eingreifen), ist **widerlegt**: die HA-Historie von `sensor.home_domestic_hot_water_0_setpoint` zeigt seit dem 29.07. durchgehend echte Zyklen 45 ↔ 57/60 °C, allein am 31.07. fünf Stück, und die Speichertemperatur folgt (08:15–08:52: 48,5 → 56,5 °C). Der Einzelfall vom 26.07. war eine verschluckte Cloud-Übernahme — genau dafür wiederholt das EMS am Cloud-Gap. **Nebenbefund:** die Anlage kommt real nur auf ~57,5 °C, das Boost-Ziel steht deshalb seit v0.7.0 auf 57 statt 60 °C.
 4. ~~**Migrations-Baseline**~~ ✅ Erledigt (2026-07-12): siehe [docs/evcc-baseline.md](../docs/evcc-baseline.md) — EVCC läuft als **Add-on** (nicht HACS), Site-Parameter, Loadpoint „Garage", Vehicle und Statistik-Baseline (99,4 % Solaranteil 30d) dokumentiert. Rest-Todo dort: `evcc.yaml`/Zugangsdaten vor der Ablösung sichern.
@@ -163,11 +163,11 @@ Die Musts bilden zusammen **Ausbaustufe 1: den EVCC-Ersatz** — Überschusslade
 
 | Stufe | Inhalt | Requirements | Voraussetzung | Stand 2026-07-26 |
 |---|---|---|---|---|
-| **1 — EVCC-Ersatz** | EV-Überschussladen, Batterie-Grundsteuerung, Prognose, Dashboard, Sicherheit, UI | alle Musts (REQ-001–008, 020/021/024, 032, 040–042, 050/051, 060–064, 070/071/073/074) | EVCC-Baseline dokumentieren (Fragen Runde 3) | 🔵 20 von 26 Musts fertig; offen: Forecast verdrahten (041), Wallbox-Override (061), Sungrow (042), EVCC-Ablösung (007/008), eigenständige App (074) |
+| **1 — EVCC-Ersatz** | EV-Überschussladen, Batterie-Grundsteuerung, Prognose, Dashboard, Sicherheit, UI | alle Musts (REQ-001–008, 020/021/024, 032, 040–042, 050/051, 060–064, 070/071/073/074) | EVCC-Baseline dokumentieren (Fragen Runde 3) | 🔵 21 von 26 Musts fertig; offen: Forecast verdrahten (041), Wallbox-Override (061), EVCC-Ablösung (007/008), eigenständige App (074) |
 | **2 — Wärmepumpe** | WW-Vorziehen, Heizkreis-Anhebung, Komfortgrenzen, Cloud-Robustheit | REQ-010–014 (Should) | MyVaillant-Praxistest bestanden | 🔵 **Warmwasser fertig und live bestätigt** (Schreibweg belegt 2026-08-02, getrennt schaltbar seit v0.7.0); Heizkreis umgesetzt, aber abgeschaltet — belegbar erst in der Heizperiode |
 | **3 — Dynamischer Tarif** | Preis-Adapter, Lastverschiebung in Billigstunden, Batterie-Netzladen, Feinsteuerung | REQ-022/023, 030/031, 043, 052/053, 072 (Should) | Tarifvertrag abgeschlossen | ⚪ nicht begonnen (außer 043/072, die nicht tarifgebunden sind) |
 
-*(REQ-052/053/072 sind nicht tarifgebunden und können vorgezogen werden, sobald Stufe 1 stabil läuft. REQ-042 (Sungrow) ist Must, aber erst nach der Installation Ende 2026 real testbar — bis dahin gegen simulierte Werte entwickeln.)*
+*(REQ-052/053/072 sind nicht tarifgebunden und können vorgezogen werden, sobald Stufe 1 stabil läuft. REQ-042 (Sungrow) ist seit 2026-08-22 erledigt und gegen die reale Anlage verifiziert.)*
 
 ### Won't (aus den Nicht-Zielen der Vision)
 

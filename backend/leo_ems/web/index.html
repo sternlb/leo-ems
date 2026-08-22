@@ -971,7 +971,13 @@ function buildScenes() {
 function nodeState(k, st) {
   const off = e3dcWeg(st);
   if (k === "pv")      return { val: fmtFluss(st.p_pv_e3dc_w), aktiv: hysterese("pv", st.p_pv_e3dc_w), dim: off || !fmtFluss(st.p_pv_e3dc_w), dir: "→", badge: off ? "offline" : "" };
-  if (k === "sungrow") return { val: fmtFluss(st.p_sungrow_w), aktiv: hysterese("sungrow", st.p_sungrow_w), dim: !fmtFluss(st.p_sungrow_w), dir: "→", badge: fmtFluss(st.p_sungrow_w) ? "" : "geplant" };
+  // Seit v0.11.0 real angebunden. Ohne Wert ist der Wechselrichter offline oder
+  // es ist schlicht Nacht — „geplant" wäre jetzt falsch. Nur ein gemeldeter
+  // Lesefehler rechtfertigt das Offline-Badge; 0 W bei Dunkelheit ist normal.
+  if (k === "sungrow") {
+    const sg = st.sungrow || {};
+    return { val: fmtFluss(st.p_sungrow_w), aktiv: hysterese("sungrow", st.p_sungrow_w), dim: !fmtFluss(st.p_sungrow_w), dir: "→", badge: sg.fehler ? "offline" : "" };
+  }
   if (k === "wp") {
     const wp = st.wp;
     if (!wp || !wp.verbunden) return { val: null, aktiv: false, dim: true, dir: "", badge: "offline" };
@@ -1171,6 +1177,36 @@ function updateLicht(jetzt) {
 // aus status.wp (backend/leo_ems/planner/heatpump.py).
 const grad = (v, n = 1) => v == null ? "–" : v.toFixed(n).replace(".", ",") + " °C";
 
+// Garagendach-Anlage (v0.11.0). Der Nutzen dieses Panels sind die beiden
+// Strangwerte: Bei 2× 6 Modulen müssen die Spannungen dicht beieinander liegen.
+// Driften sie auseinander, ist ein String gestört — und genau das sieht man
+// weder am AC-Wert noch an der Tagesertragskurve rechtzeitig.
+function sungrowPanel(st) {
+  const sg = st.sungrow || {};
+  if (!sg.installiert) {
+    return `<h3>PV Sungrow</h3><p class="note">Garagendach-Anlage (5,64 kWp O/W), AC-gekoppelt.
+      Kein Wechselrichter konfiguriert — das EMS rechnet mit 0 W.</p>
+      ${sg.fehler ? `<p class="note"><strong>Grund:</strong> ${sg.fehler}</p>` : ""}`;
+  }
+  const v = (x, e) => x == null ? "–" : `${x.toFixed(1).replace(".", ",")} ${e}`;
+  const strangDelta = (sg.mppt1_v != null && sg.mppt2_v != null)
+    ? Math.abs(sg.mppt1_v - sg.mppt2_v) : null;
+  return `<h3>PV Sungrow — Garagendach</h3>
+    <dl><dt>AC-Leistung</dt><dd>${fmtFluss(sg.p_ac_w) ?? "0 W"}</dd>
+    <dt>DC-Leistung</dt><dd>${fmtFluss(sg.p_dc_w) ?? "0 W"}</dd>
+    <dt>String 1 (6 Module)</dt><dd>${v(sg.mppt1_v, "V")} · ${v(sg.mppt1_a, "A")}</dd>
+    <dt>String 2 (6 Module)</dt><dd>${v(sg.mppt2_v, "V")} · ${v(sg.mppt2_a, "A")}</dd>
+    <dt>heute</dt><dd>${sg.tagesertrag_kwh != null ? v(sg.tagesertrag_kwh, "kWh") : "–"}</dd>
+    <dt>gesamt</dt><dd>${sg.gesamtertrag_kwh != null ? Math.round(sg.gesamtertrag_kwh) + " kWh" : "–"}</dd>
+    <dt>Gerät</dt><dd>${v(sg.temperatur_c, "°C")} · ${v(sg.frequenz_hz, "Hz")}</dd></dl>
+    ${strangDelta != null && strangDelta > 30 && sg.p_dc_w > 200
+      ? `<p class="note"><strong>Achtung:</strong> Die Strangspannungen liegen
+         ${Math.round(strangDelta)} V auseinander. Bei gleich bestückten Strings
+         deutet das auf Verschattung oder einen Fehler in einem String hin.</p>`
+      : ""}
+    ${sg.fehler ? `<p class="note"><strong>Lesefehler:</strong> ${sg.fehler}</p>` : ""}`;
+}
+
 function wpPanel(st) {
   const wp = st.wp;
   if (!wp || !wp.verbunden) {
@@ -1279,9 +1315,9 @@ function openPanel(k) {
       ${st.entladelimit_grund ? `<dt>Grund</dt><dd>${st.entladelimit_grund}</dd>` : ""}</dl>`,
     pv: `<h3>PV-Erzeugung</h3>
       <dl><dt>E3DC (9,23 kWp)</dt><dd>${fmtFluss(st.p_pv_e3dc_w) ?? "0 W"}</dd>
-      <dt>Sungrow (5,64 kWp)</dt><dd>${fmtFluss(st.p_sungrow_w) ?? "geplant — Inbetriebnahme Ende 2026"}</dd>
+      <dt>Sungrow (5,64 kWp)</dt><dd>${fmtFluss(st.p_sungrow_w) ?? "0 W"}</dd>
       <dt>gesamt</dt><dd>${fmtFluss(st.p_pv_w) ?? "0 W"}</dd></dl>`,
-    sungrow: `<h3>PV Sungrow</h3><p class="note">Garagendach-Anlage (5,64 kWp O/W), AC-gekoppelt. Knoten ist vorbereitet — Werte kommen nach der Inbetriebnahme (Ende 2026).</p>`,
+    sungrow: sungrowPanel(st),
     wp: wpPanel(st),
     haus: `<h3>Hausverbrauch</h3>
       <dl><dt>aktuell</dt><dd>${fmtFluss(st.p_haus_w) ?? "0 W"}</dd>

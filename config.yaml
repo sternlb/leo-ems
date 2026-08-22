@@ -1,5 +1,5 @@
 name: Leo-EMS
-version: "0.10.0"
+version: "0.11.0"
 slug: leo_ems
 description: Energy Management System — koordiniert E3DC, go-e Wallbox, Enyaq und Vaillant WP
 url: https://github.com/sternlb/leo-ems
@@ -40,7 +40,11 @@ options:
   goe_host: ""
   skoda_user: ""
   skoda_password: ""
-  sungrow_host: ""
+  # Garagen-Wechselrichter über den WiNet-S-Dongle. Leerer Host = Stub (0 W).
+  # Die Unit-ID ist am Dongle NICHT ablesbar und musste abgetastet werden (= 1).
+  sungrow_host: "192.168.178.51"
+  sungrow_port: "502"
+  sungrow_unit_id: "1"
   lat: "49.48"
   lon: "11.25"
   # Wärmepumpe: leere ww-Entity = WP nicht angebunden.
@@ -58,6 +62,8 @@ schema:
   skoda_user: str?
   skoda_password: password?
   sungrow_host: str?
+  sungrow_port: str?
+  sungrow_unit_id: str?
   lat: str?
   lon: str?
   vaillant_ww_entity: str?

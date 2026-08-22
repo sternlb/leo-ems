@@ -8,6 +8,42 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.11.0
+
+**Die Garagen-Anlage ist da — 5,64 kWp mehr, jetzt auch im EMS sichtbar.**
+
+- **Sungrow SG 6.0RT angebunden** (REQ-042): Der Wechselrichter der neuen
+  Garagendach-Anlage wird per **Modbus TCP** gelesen, ohne Cloud. Seine Leistung
+  fließt in die Gesamterzeugung — das Dashboard zeigt ab sofort beide Anlagen.
+- **Neue Add-on-Optionen** `sungrow_port` und `sungrow_unit_id`. Die Unit-ID ist
+  am WiNet-S-Dongle nirgends ablesbar und musste abgetastet werden (hier: 1).
+  Als Option lässt sie sich bei einem Gerätetausch neu setzen, ohne das Add-on
+  neu zu bauen. Ein leerer `sungrow_host` bleibt der Stub mit 0 W.
+- **Strang-Diagnose im Status**: Spannung und Strom beider MPPT-Eingänge,
+  Tages- und Gesamtertrag, Innentemperatur, Netzfrequenz. Bei zwei gleich
+  bestückten Strings à 6 Modulen müssen beide Spannungen dicht beieinander
+  liegen — driften sie auseinander, ist ein String gestört.
+- **Der Sungrow-Wert geht bewusst NICHT in die Überschussformel.** Die Anlage
+  ist AC-gekoppelt und erscheint bereits im Netzzähler der E3DC. Doppelt gezählt
+  sähe das EMS einen Überschuss, den es nicht gibt, und gäbe zu viel
+  Ladeleistung frei.
+- **Fail-Safe E5 bleibt scharf**: Fällt der Wechselrichter aus, wird die
+  Erzeugung 0 und der Betrieb läuft unverändert weiter. Die Ertragszähler sind
+  davon ausgenommen — sie sind reine Anzeige und dürfen die Leistungsmessung
+  nicht mitreißen.
+- **Ohne pymodbus.** Gebraucht wird ein einziger Funktionscode; die ~40 Zeilen
+  Modbus-TCP stehen jetzt direkt im Adapter, gegen die reale Anlage verifiziert.
+  pymodbus hat den Slave-Parameter zwischen 3.7 und 3.9 umbenannt — diese
+  Fallhöhe entfällt damit, und das Image baut eine Abhängigkeit weniger.
+- **Einspeisebegrenzung geklärt** (REQ-043): Für die Neuanlage gilt **60 %**,
+  durchgesetzt über die E3DC am gemeinsamen Netzverknüpfungspunkt. Der Sungrow
+  läuft unbegrenzt — der ausgelesene Sollwert von 100 % ist der gewollte
+  Zustand. Damit vermeidet die lokale Überschussverwertung nicht mehr nur
+  Netzbezug, sondern **Abregelung**.
+
+17 neue Tests (162 gesamt, alle grün), darunter ein Ende-zu-Ende-Lauf gegen einen
+nachgebauten WiNet-S. Zusätzlich am 2026-08-22 gegen die reale Anlage verifiziert.
+
 ## 0.10.0
 
 **Die Fahrzeugbatterie wird geschützt — und die Hausbatterie darf das Auto laden, wenn du es willst.**

@@ -1,6 +1,6 @@
 # 05 — Umsetzungsstand & Testabdeckung
 
-**Stand:** 2026-08-13 (v0.10.0) · **Grundlage:** [01-requirements.md](01-requirements.md)
+**Stand:** 2026-08-22 (v0.11.0) · **Grundlage:** [01-requirements.md](01-requirements.md)
 
 Diese Datei ist die Brücke zwischen Anforderung und Beweis: pro Requirement, was
 umgesetzt ist, wo es im Code steht und **welcher Test es hält**. Sie ersetzt keine
@@ -14,11 +14,11 @@ Legende Abdeckung: **T** = automatisierter Test · **L** = am Live-System verifi
 
 | | Must (26) | Should (13) | Gesamt (39) |
 |---|---|---|---|
-| ✅ umgesetzt | 20 | 5 | **25** |
+| ✅ umgesetzt | 21 | 5 | **26** |
 | 🔵 teilweise | 4 | 4 | **8** |
-| ⚪ offen | 2 | 4 | **6** |
+| ⚪ offen | 1 | 4 | **5** |
 
-146 automatisierte Tests. **34 der 39 Requirements haben einen Nachweis** (Test,
+162 automatisierte Tests. **35 der 39 Requirements haben einen Nachweis** (Test,
 Live-Verifikation oder beides). Ohne jeden Nachweis sind nur REQ-008, 022, 023,
 030 und 031 — vier davon gehören zu Ausbaustufe 3, die es real noch nicht gibt.
 
@@ -86,7 +86,7 @@ Warmwasser-Seite ist im Realbetrieb bestätigt (siehe REQ-010/013).
 |---|---|---|---|
 | REQ-040 Gesamterzeugung beider Anlagen | ✅ | `core/loop.py` (`p_pv_w`) | **T** `test_status_enthaelt_energieverteilung_und_phaseninfo` · **L** |
 | REQ-041 Forecast.Solar in der Planung | 🔵 **Adapter fertig, aber nicht verdrahtet** | `devices/forecast.py` | **T** `test_forecast_erwartete_wh_zwischen` — die Regelschleife liest den Adapter **nicht**, die Garantieladung plant ohne Prognose |
-| REQ-042 Sungrow lokal (Modbus) | ⚪ Stub 0 W bis zur Installation | `devices/sungrow.py` | **T** `test_sungrow_stub_liefert_null` |
+| REQ-042 Sungrow lokal (Modbus) | ✅ Modbus TCP, 192.168.178.51:502, Unit-ID 1 | `devices/sungrow.py` | **T** `test_sungrow.py` (17 Tests: Dekodierung, Rahmenbau, Ende-zu-Ende gegen nachgebauten WiNet-S, Fail-Safe) + **L** am 2026-08-22 gegen die reale Anlage (1302 W AC / 1393 W DC, 12–19 ms je Tick) |
 | REQ-043 70 %: Überschuss lokal verwerten | ✅ (EV + WP) | Ladepfad + `heatpump.py` | **T** indirekt · Annahme „Wechselrichter regelt selbst" bei Inbetriebnahme prüfen |
 
 **Wichtigste Lücke der Stufe 1:** REQ-041. `plane_garantieladung()` bekommt keine

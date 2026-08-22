@@ -105,7 +105,11 @@ class ControlLoop:
         goe = self.adapters.get("goe")
         goe_data = await self._safe_read(goe, "goe")
 
-        # 3) Sungrow (E5): bei Ausfall Werte = 0 und weiter
+        # 3) Sungrow (E5): bei Ausfall Werte = 0 und weiter.
+        # Der Wert geht NUR in die Erzeugungsanzeige (REQ-040), nicht in die
+        # Überschussformel — die Garagen-Anlage ist AC-gekoppelt und erscheint
+        # bereits im Netzzähler der E3DC. Doppelt gezählt würde das EMS einen
+        # Überschuss sehen, den es gar nicht gibt.
         p_sungrow = 0.0
         sg = await self._safe_read(self.adapters.get("sungrow"), "sungrow")
         if sg is not None:
@@ -234,6 +238,23 @@ class ControlLoop:
                 **self.heatpump.status(wp_data),
                 # „nicht verbunden" allein hilft bei der Suche nicht weiter (v0.6.2)
                 "fehler": (self._geraete.get("vaillant") or {}).get("fehler"),
+            },
+            # Garagen-Anlage im Detail (REQ-051): Strang-Werte machen sichtbar,
+            # ob ein String ausgefallen ist — bei zwei gleich bestückten Strings
+            # à 6 Modulen müssen beide Spannungen dicht beieinander liegen.
+            "sungrow": {
+                "installiert": bool(sg and sg.get("installiert")),
+                "p_ac_w": round(p_sungrow),
+                "p_dc_w": round(sg.get("dc_leistung_w", 0.0)) if sg else 0,
+                "mppt1_v": (sg or {}).get("mppt1_v"),
+                "mppt1_a": (sg or {}).get("mppt1_a"),
+                "mppt2_v": (sg or {}).get("mppt2_v"),
+                "mppt2_a": (sg or {}).get("mppt2_a"),
+                "tagesertrag_kwh": (sg or {}).get("tagesertrag_kwh"),
+                "gesamtertrag_kwh": (sg or {}).get("gesamtertrag_kwh"),
+                "temperatur_c": (sg or {}).get("temperatur_c"),
+                "frequenz_hz": (sg or {}).get("frequenz_hz"),
+                "fehler": (self._geraete.get("sungrow") or {}).get("fehler"),
             },
             # Lese-Gesundheit aller Geräte (Diagnose, /api/v1/diag/devices)
             "geraete": self.geraete_status(),
