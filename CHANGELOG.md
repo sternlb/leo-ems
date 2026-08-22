@@ -8,6 +8,28 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.13.1
+
+**Der Historien-Import hat die Netzrichtung falsch bestimmt — am ersten
+Live-Lauf aufgefallen.**
+
+Ob `grid_power_in` in der E3DC-Historie den Bezug oder die Einspeisung meint,
+steht nirgends; v0.13.0 hat es deshalb aus der Bilanz erschlossen — aber am
+**ersten** Tag des Zeitraums. Der 23.08.2021 hatte 0,196 kWh Bezug gegen
+0,198 kWh Einspeisung: Beide Deutungen ergaben denselben Rest (2,28 gegen
+2,29 kWh), die Entscheidung fiel praktisch per Münzwurf und galt anschließend
+für alle 1800 Tage. Sie fiel falsch. Im Ergebnis stand für den 25.08.2021 ein
+Netzbezug von 35,7 kWh an einem Tag mit 50 kWh Eigenerzeugung — eine Zahl, die
+in einer Jahresauswertung niemandem auffällt.
+
+Der Import läuft jetzt in **zwei Phasen**: erst den ganzen Zeitraum lesen und im
+Speicher halten, dann die Richtung aus der **Summe** aller Tagesreste bestimmen,
+dann schreiben. Über 1800 Tage ist die Frage eindeutig (im Live-Lauf 74 kWh Rest
+gegen 3,7 kWh am selben Tag). Der Bericht weist beide Summen aus — liegen sie
+dicht beieinander, ist die Zuordnung nicht belegt und das ist jetzt ablesbar
+statt versteckt. Zwei Regressionstests halten den Fall mit den echten Zahlen
+fest. 189 Tests grün.
+
 ## 0.13.0
 
 **Der Hausverbrauch stimmt wieder — und die Energiebilanz wird jetzt dauerhaft

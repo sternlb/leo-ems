@@ -161,21 +161,31 @@ class ImportBericht:
     def __init__(self, von: str, bis: str):
         self.von, self.bis = von, bis
         self.laeuft = True
+        self.phase = "lesen"       # lesen → schreiben → fertig
         self.geprueft = 0
         self.geschrieben = 0
         self.uebersprungen = 0     # Tag liegt schon als EMS-Messung vor
         self.leer = 0              # E3DC hat für den Tag nichts
         self.fehler: str | None = None
         self.richtung: str | None = None
+        # Summierter Bilanz-Rest beider Deutungen — die Entscheidungsgrundlage
+        # für `richtung`, und zugleich das Qualitätsmaß des Imports: Der Rest
+        # der gewählten Richtung sollte klein sein (Wandlungsverluste), der der
+        # verworfenen um ein Vielfaches größer. Liegen beide dicht beieinander,
+        # ist die Zuordnung nicht belegt und die Zahl darf nicht geglaubt werden.
+        self.rest_direkt_kwh: float | None = None
+        self.rest_getauscht_kwh: float | None = None
         self.aktueller_tag: str | None = None
 
     def as_dict(self) -> dict:
         return {
-            "laeuft": self.laeuft, "von": self.von, "bis": self.bis,
+            "laeuft": self.laeuft, "phase": self.phase, "von": self.von, "bis": self.bis,
             "geprueft": self.geprueft, "geschrieben": self.geschrieben,
             "uebersprungen": self.uebersprungen, "leer": self.leer,
             "aktueller_tag": self.aktueller_tag,
             "netz_richtung": self.richtung, "fehler": self.fehler,
+            "rest_direkt_kwh": self.rest_direkt_kwh,
+            "rest_getauscht_kwh": self.rest_getauscht_kwh,
         }
 
 
@@ -245,12 +255,27 @@ async def importiere_e3dc_historie(adapter, store, von: date, bis: date,
 
     Eigene Messungen (`quelle='ems'`) werden **nie** überschrieben. Sie sind die
     bessere Quelle, sobald es die Garagen-Anlage gibt.
+
+    **Zwei Phasen, und warum das nötig ist.** Erst wird der ganze Zeitraum
+    gelesen und im Speicher gehalten, dann erst geschrieben. Grund ist die
+    Netzrichtung: Sie wird aus der Bilanz erschlossen (siehe `_bilanz_rest`),
+    und ein einzelner Tag taugt dafür nicht. Der erste Import am 22.08.2026 lief
+    genau da hinein — sein erster Tag hatte 0,196 kWh Bezug gegen 0,198 kWh
+    Einspeisung, beide Deutungen ergaben denselben Rest (2,28 gegen 2,29 kWh),
+    und die Entscheidung fiel praktisch per Münzwurf. Falsch. Zwei Tage später
+    lagen 35,7 kWh gegen 0,13 kWh an, dort hätte man es nicht verfehlen können.
+    Über den ganzen Zeitraum summiert ist die Frage eindeutig — deshalb wird sie
+    dort entschieden. 1800 Tagesdatensätze im Speicher sind dafür ein
+    vernachlässigbarer Preis.
     """
     bericht = bericht or ImportBericht(von.isoformat(), bis.isoformat())
     vorhanden_ems = store.energie_bekannte_tage("ems")
-    getauscht: bool | None = None
-    tag = von
     try:
+        # --- Phase 1: lesen ------------------------------------------------
+        bericht.phase = "lesen"
+        gelesen: list[tuple[date, dict]] = []
+        rest_direkt = rest_getauscht = 0.0
+        tag = von
         while tag <= bis:
             bericht.aktueller_tag = tag.isoformat()
             if tag.isoformat() in vorhanden_ems:
@@ -261,25 +286,36 @@ async def importiere_e3dc_historie(adapter, store, von: date, bis: date,
                 if roh is None or _leer(roh):
                     bericht.leer += 1
                 else:
-                    if getauscht is None:
-                        # Einmal je Import entscheiden, nicht je Tag: Eine
-                        # Anlage kehrt ihre Zählrichtung nicht mitten in der
-                        # Historie um, und ein einzelner unplausibler Tag
-                        # dürfte die Deutung aller anderen nicht kippen.
-                        getauscht = _bilanz_rest(roh, True) < _bilanz_rest(roh, False)
-                        bericht.richtung = "getauscht" if getauscht else "direkt"
-                    unvollstaendig = garage_seit is not None and tag >= garage_seit
-                    store.energie_tag_schreiben(
-                        tag.isoformat(), e3dc_tag_umrechnen(roh, getauscht),
-                        "e3dc-ohne-garage" if unvollstaendig else "e3dc",
-                    )
-                    bericht.geschrieben += 1
+                    gelesen.append((tag, roh))
+                    rest_direkt += _bilanz_rest(roh, False)
+                    rest_getauscht += _bilanz_rest(roh, True)
             tag += timedelta(days=1)
             if pause_s:
                 await asyncio.sleep(pause_s)
+
+        if not gelesen:
+            return bericht
+
+        getauscht = rest_getauscht < rest_direkt
+        bericht.richtung = "getauscht" if getauscht else "direkt"
+        bericht.rest_direkt_kwh = round(rest_direkt / 1000.0, 1)
+        bericht.rest_getauscht_kwh = round(rest_getauscht / 1000.0, 1)
+
+        # --- Phase 2: schreiben --------------------------------------------
+        # Reine Datenbankarbeit, kein Netz: läuft in Sekunden durch.
+        bericht.phase = "schreiben"
+        for tag, roh in gelesen:
+            bericht.aktueller_tag = tag.isoformat()
+            unvollstaendig = garage_seit is not None and tag >= garage_seit
+            store.energie_tag_schreiben(
+                tag.isoformat(), e3dc_tag_umrechnen(roh, getauscht),
+                "e3dc-ohne-garage" if unvollstaendig else "e3dc",
+            )
+            bericht.geschrieben += 1
     except Exception as exc:
         bericht.fehler = f"{type(exc).__name__}: {exc}"
     finally:
         bericht.laeuft = False
+        bericht.phase = "fertig" if bericht.fehler is None else "abgebrochen"
         bericht.aktueller_tag = None
     return bericht

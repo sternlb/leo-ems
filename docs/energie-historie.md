@@ -111,13 +111,23 @@ Drei Eigenschaften, die den Bestand ehrlich halten:
 
 1. **Eigene Messungen werden nie überschrieben.** `quelle='ems'` gewinnt — sie
    kennt die Garagen-Anlage, die E3DC-Historie nicht.
-2. **Die Netzrichtung wird geprüft, nicht geraten.** Ob `grid_power_in` Bezug
-   oder Einspeisung meint, ist aus dem Namen nicht zu entscheiden. Vertauscht
-   fällt das in einer Jahresauswertung niemandem auf und macht sie wertlos.
-   Der Import probiert deshalb beide Deutungen gegen den mitgelieferten
-   `consumption`-Wert und nimmt die, unter der die Bilanz aufgeht — einmal je
-   Import, nicht je Tag: Eine Anlage kehrt ihre Zählrichtung nicht mitten in
-   der Historie um.
+2. **Die Netzrichtung wird geprüft, nicht geraten — über den ganzen
+   Zeitraum.** Ob `grid_power_in` Bezug oder Einspeisung meint, ist aus dem
+   Namen nicht zu entscheiden. Vertauscht fällt das in einer Jahresauswertung
+   niemandem auf und macht sie wertlos. Der Import probiert deshalb beide
+   Deutungen gegen den mitgelieferten `consumption`-Wert und nimmt die, unter
+   der die Bilanz aufgeht.
+
+   Der erste Lauf am 22.08.2026 hat gezeigt, warum das **nicht** an einem
+   einzelnen Tag entschieden werden darf: Am 23.08.2021 standen 0,196 kWh
+   Bezug gegen 0,198 kWh Einspeisung, beide Deutungen ergaben denselben Rest
+   (2,28 gegen 2,29 kWh) — die Entscheidung fiel per Münzwurf und galt für
+   1800 Tage. Zwei Tage später lagen 35,7 kWh gegen 0,13 kWh an, dort wäre sie
+   nicht zu verfehlen gewesen. Deshalb läuft der Import in zwei Phasen: erst
+   den ganzen Zeitraum lesen, dann die Richtung aus der **Summe** aller
+   Tagesreste bestimmen, dann schreiben. Beide Summen stehen im Bericht
+   (`rest_direkt_kwh`, `rest_getauscht_kwh`); liegen sie dicht beieinander, ist
+   die Zuordnung nicht belegt.
 3. **Tage ab `pv_garage_seit` werden markiert.** Ab der Inbetriebnahme der
    Garagen-Anlage ist der E3DC-Hausverbrauch zu klein. Diese Tage als
    vollwertig auszuweisen wäre die stillste Art, die Auswertung zu verfälschen;

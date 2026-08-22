@@ -194,3 +194,58 @@ def test_leere_tage_vor_der_inbetriebnahme_erzeugen_keine_nullzeilen(store):
         sim, store, date(2020, 1, 1), date(2020, 1, 3), pause_s=0))
     assert bericht.leer == 3 and bericht.geschrieben == 0
     assert store.energie_tage() == []
+
+
+# Der Tag, an dem der erste echte Import am 22.08.2026 falsch abbog: Bezug und
+# Einspeisung liegen beide bei ~0,2 kWh, die Bilanz geht in beiden Deutungen
+# gleich gut auf. Als Entscheidungsgrundlage ist er wertlos.
+E3DC_TAG_MEHRDEUTIG = {
+    "solarProduction": 12774.0, "consumption": 8924.0,
+    "grid_power_in": 198.0, "grid_power_out": 196.0,
+    "bat_power_in": 7228.0, "bat_power_out": 5662.0,
+}
+# Zwei Tage später: 35,7 kWh Einspeisung gegen 0,13 kWh Bezug. Hier ist die
+# Richtung eindeutig — `grid_power_in` ist die EINSPEISUNG, also getauscht.
+E3DC_TAG_EINDEUTIG = {
+    "solarProduction": 50114.0, "consumption": 10050.0,
+    "grid_power_in": 35665.0, "grid_power_out": 132.0,
+    "bat_power_in": 8458.0, "bat_power_out": 7625.0,
+}
+
+
+def test_netzrichtung_entscheidet_der_ganze_zeitraum_nicht_der_erste_tag(store):
+    """Regression zum ersten Live-Import (22.08.2026).
+
+    Die Richtung wurde am ersten Tag festgelegt — und der war mehrdeutig
+    (2,28 gegen 2,29 kWh Rest). Die Entscheidung fiel damit zufällig und stand
+    für alle 1800 Tage. Ein vertauschter Netzbezug fällt in einer
+    Jahresauswertung niemandem auf: 35 kWh Bezug an einem Tag mit 50 kWh
+    Eigenerzeugung sieht nach einer Zahl aus, nicht nach einem Fehler.
+    """
+    from leo_ems.devices.e3dc import E3dcSimulator
+
+    sim = E3dcSimulator()
+    sim.historie = {"2021-08-23": E3DC_TAG_MEHRDEUTIG, "2021-08-25": E3DC_TAG_EINDEUTIG}
+    bericht = asyncio.run(importiere_e3dc_historie(
+        sim, store, date(2021, 8, 23), date(2021, 8, 25), pause_s=0))
+
+    assert bericht.richtung == "getauscht"
+    assert bericht.rest_getauscht_kwh < bericht.rest_direkt_kwh
+    # Und der eindeutige Tag steht danach richtig herum in der Tabelle.
+    z = store.energie_tag_lesen("2021-08-25")
+    assert z["netz_einspeisung_wh"] == 35665.0
+    assert z["netz_bezug_wh"] == 132.0
+
+
+def test_bericht_weist_die_belastbarkeit_der_zuordnung_aus(store):
+    """Der Rest beider Deutungen steht im Bericht. Liegen sie dicht beieinander,
+    ist die Netzrichtung nicht belegt — das muss ablesbar sein und nicht in
+    einem stillen `richtung`-Feld verschwinden."""
+    from leo_ems.devices.e3dc import E3dcSimulator
+
+    sim = E3dcSimulator()
+    sim.historie = {"2021-08-25": E3DC_TAG_EINDEUTIG}
+    b = asyncio.run(importiere_e3dc_historie(
+        sim, store, date(2021, 8, 25), date(2021, 8, 25), pause_s=0))
+    assert b.rest_direkt_kwh > 10 * b.rest_getauscht_kwh    # klar unterscheidbar
+    assert b.phase == "fertig"
