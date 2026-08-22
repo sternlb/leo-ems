@@ -24,6 +24,7 @@ from ..planner import (
     berechne_ueberschuss,
     plane_garantieladung,
 )
+from ..energy import Energiezaehler
 from ..ha_export import HaSensorExport
 from ..safety import SafetyGuard
 from ..store import Store
@@ -60,6 +61,11 @@ class ControlLoop:
         # Sensor-Export nach Home Assistant (v0.12.0). Optional: ohne HA-Zugang
         # meldet er nur `letzter_fehler` und die Regelung läuft unverändert.
         self.ha_export = HaSensorExport()
+        # Energiebilanz je Tag (Issue #13). Sie hängt am Tick, weil sie dessen
+        # Messbild braucht — und weil nur hier bekannt ist, wie lange der
+        # letzte Wert galt. Der Zähler wirft nie und schreibt höchstens
+        # minütlich; die Regelung merkt nichts von ihm.
+        self.energie = Energiezaehler(store)
         self.running = False
 
     # --- öffentlich --------------------------------------------------------
@@ -227,7 +233,12 @@ class ControlLoop:
             "soc_batterie": e_data["soc_batterie_pct"], "p_netz_w": e_data["p_netz_w"],
             "p_batterie_w": e_data["p_batterie_w"], "p_wallbox_w": p_lade,
             "p_pv_w": round(p_pv), "p_pv_e3dc_w": p_pv_e3dc, "p_sungrow_w": p_sungrow,
+            # `p_haus_w` ist der Hausverbrauch OHNE Wallbox — sie steht im
+            # Dashboard als eigener Verbraucher und wäre sonst doppelt gezählt.
+            # `p_haus_gesamt_w` ist die Größe, die der E3DC-Hausverbrauch meinte,
+            # und der Wert, aus dem der kWh-Zähler in HA gebildet wird.
             "p_haus_w": round(max(0.0, p_haus)),
+            "p_haus_gesamt_w": round(max(0.0, p_haus) + p_lade),
             "garantieladung": garantie,
             # Entladegrenze: `entladesperre` bleibt das grobe Ja/Nein für die
             # Anzeige, `entladelimit_*` zeigt, wie viel die Batterie decken darf.
@@ -282,6 +293,10 @@ class ControlLoop:
         # drosselt sich selbst auf 30 s. Der Export ist Anzeige — er darf die
         # Regelung weder aufhalten noch mit einem HA-Ausfall abbrechen.
         self.ha_export.push_nebenlaeufig(self._last_status, now)
+        # Tagesbilanz fortschreiben (Issue #13). Nach dem Status, weil sie ihn
+        # als Eingabe nimmt, und ohne await: der Zähler rechnet im Speicher und
+        # schreibt höchstens einmal je Minute in die lokale SQLite-Datei.
+        self.energie.tick(self._last_status, now)
 
     # --- Fail-Safe / Helfer ------------------------------------------------
     async def _failsafe_e1(self, now: datetime) -> None:

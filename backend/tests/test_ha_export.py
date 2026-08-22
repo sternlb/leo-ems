@@ -124,3 +124,25 @@ def test_push_ueberspringt_wenn_nicht_faellig_ohne_netzzugriff():
     ex._zuletzt = t0
     assert asyncio.run(ex.push(STATUS, t0 + timedelta(seconds=5))) == 0
     assert ex.letzter_fehler is None   # kein Versuch, also auch kein Fehler
+
+
+# --- Hausverbrauch (v0.13.0, Issue #13) --------------------------------------
+
+def test_hausverbrauch_wird_mit_und_ohne_wallbox_exportiert():
+    """Der E3DC-Sensor kennt die Garagen-Anlage nicht und meldet bei genug Sonne
+    0 W. Das EMS kennt beide Anlagen — und liefert beide Lesarten: ohne Wallbox
+    für die Flussdarstellung (sonst steht sie zweimal im Bild), mit Wallbox für
+    den kWh-Zähler."""
+    s = sensoren_aus_status({**STATUS, "p_haus_w": 480, "p_haus_gesamt_w": 3480})
+    assert s["sensor.hausverbrauch_leistung"]["state"] == 480
+    assert s["sensor.hausverbrauch_gesamt_leistung"]["state"] == 3480
+    assert s["sensor.hausverbrauch_leistung"]["attributes"]["state_class"] == "measurement"
+
+
+def test_ohne_hausverbrauch_im_status_kein_sensor():
+    """Fail-Safe E1 liefert ein Statusbild ohne Bilanz. Eine 0 zu schreiben
+    hieße „das Haus verbraucht nichts" — der Riemann-Integrator in HA würde das
+    als echte Messung integrieren und den Tageswert dauerhaft zu klein machen."""
+    s = sensoren_aus_status(STATUS)
+    assert "sensor.hausverbrauch_leistung" not in s
+    assert "sensor.hausverbrauch_gesamt_leistung" not in s

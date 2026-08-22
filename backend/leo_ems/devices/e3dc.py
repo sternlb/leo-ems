@@ -8,7 +8,7 @@ Mess-Mapping und Schreibbefehl (Entladesperre) sind mit dem Spike verifiziert
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from .base import DeviceAdapter
 
@@ -41,6 +41,22 @@ class E3dcAdapter(DeviceAdapter):
     def last_update(self) -> datetime | None:
         return self._last
 
+    async def historie_tag(self, tag: date) -> dict | None:
+        """Tagesbilanz aus der E3DC-Datenbank (Wh) — für den Nachimport (Issue #13).
+
+        Die Anlage führt ihre eigene Historie seit der Inbetriebnahme. Das ist
+        die einzige Quelle für die Jahre, in denen es das EMS noch nicht gab;
+        rekonstruieren lässt sie sich nirgendwo sonst.
+
+        Bewusst **keine** eigene Verbindung und kein Thread: `pye3dc` hält genau
+        eine RSCP-Sitzung, und ein zweiter Leser darin würde die Antworten der
+        Regelschleife durcheinanderbringen. Ein Aufruf ist ein vollständiges
+        Request/Response-Paar — solange der Import zwischen zwei Tagen die
+        Kontrolle abgibt (`energy.importiere_e3dc_historie`), kommt der Tick
+        sauber dazwischen.
+        """
+        return self._e3dc.get_db_data(startDate=tag, timespan="DAY", keepAlive=True)
+
     async def set_entladelimit(self, max_discharge_w: int | None) -> None:
         """Entladeleistung begrenzen (Spec §5.1).
 
@@ -70,6 +86,7 @@ class E3dcSimulator(DeviceAdapter):
         self.p_pv_w = p_pv_w
         self.available = True
         self.entladelimit_w: int | None = None
+        self.historie: dict[str, dict] = {}   # "YYYY-MM-DD" → E3DC-Tagesdatensatz
         self.commands: list[tuple] = []
         self._last: datetime | None = None
 
@@ -87,6 +104,10 @@ class E3dcSimulator(DeviceAdapter):
     @property
     def last_update(self) -> datetime | None:
         return self._last
+
+    async def historie_tag(self, tag: date) -> dict | None:
+        """Vorgegebene Tageswerte (Tests/Entwicklung); leer, wenn nichts hinterlegt."""
+        return self.historie.get(tag.isoformat())
 
     async def set_entladelimit(self, max_discharge_w: int | None) -> None:
         self.entladelimit_w = max_discharge_w

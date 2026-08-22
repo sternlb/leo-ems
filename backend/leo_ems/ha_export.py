@@ -67,6 +67,24 @@ def sensoren_aus_status(st: dict) -> dict[str, dict]:
         "sensor.pv_gesamt_leistung": leistung("PV gesamt", p_haus_pv + p_garage, "mdi:solar-power"),
     }
 
+    # Hausverbrauch (v0.13.0). `sensor.s10e_house_consumption` der E3DC-
+    # Integration ist seit der Garagen-Anlage falsch: Der Sungrow speist hinter
+    # dem Zähler ein, die E3DC kennt ihn nicht und rechnet ihren Hausverbrauch
+    # deshalb um dessen Erzeugung zu klein — bei genug Sonne wird die Bilanz
+    # negativ und die Anlage meldet 0 W. Das EMS kennt beide Anlagen und ist
+    # damit die einzige Stelle, die den Wert richtig bilden kann.
+    #
+    # Zwei Sensoren, weil zwei verschiedene Fragen dahinterstehen: Das
+    # Dashboard zeichnet die Wallbox als eigenen Verbraucher und braucht den
+    # Hausverbrauch OHNE sie (sonst steht ihre Leistung zweimal im Bild); der
+    # kWh-Zähler und das HA-Energie-Dashboard wollen den Gesamtverbrauch.
+    if "p_haus_w" in st:
+        sensoren["sensor.hausverbrauch_leistung"] = leistung(
+            "Hausverbrauch (ohne Wallbox)", float(st["p_haus_w"]), "mdi:home-lightning-bolt")
+    if "p_haus_gesamt_w" in st:
+        sensoren["sensor.hausverbrauch_gesamt_leistung"] = leistung(
+            "Hausverbrauch gesamt", float(st["p_haus_gesamt_w"]), "mdi:home-lightning-bolt-outline")
+
     # Zählerstand der Garagen-Anlage — damit sie im HA-Energie-Dashboard
     # auftauchen kann. `total_increasing` ist richtig: der Zähler im
     # Wechselrichter läuft monoton und wird nie zurückgesetzt.

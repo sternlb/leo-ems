@@ -8,6 +8,57 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.13.0
+
+**Der Hausverbrauch stimmt wieder — und die Energiebilanz wird jetzt dauerhaft
+mitgeschrieben.**
+
+*Der Fehler.* Seit die Garagen-Anlage läuft, kann die E3DC den Hausverbrauch
+nicht mehr richtig ausweisen. Der Sungrow ist AC-gekoppelt und speist hinter
+ihrem Zähler ein; sie sieht davon nur weniger Bezug bzw. mehr Einspeisung und
+rechnet ihren Hausverbrauch deshalb um die Garagen-Erzeugung zu klein. Wird die
+Bilanz negativ, meldet sie schlicht **0 W** — genau so stand es am 22.08.2026 im
+HA-Dashboard. Betroffen ist alles, was auf `sensor.s10e_house_consumption`
+aufsetzt, auch rückwirkend in der E3DC-App.
+
+*Neue Sensoren.* Das EMS kennt beide Anlagen und ist damit die einzige Stelle,
+die den Wert bilden kann:
+
+| Entity | Inhalt |
+|---|---|
+| `sensor.hausverbrauch_leistung` | Hausverbrauch **ohne** Wallbox, W |
+| `sensor.hausverbrauch_gesamt_leistung` | Hausverbrauch **mit** Wallbox, W |
+
+Zwei Werte, weil zwei Fragen dahinterstehen: Die Flussdarstellung zeichnet die
+Wallbox als eigenen Verbraucher und darf sie nicht doppelt zählen, der kWh-
+Zähler im HA-Energie-Dashboard will dagegen den Gesamtverbrauch. Fällt die
+Bilanz aus (Fail-Safe E1), wird **kein** Wert geschrieben statt einer 0 — eine
+gemeldete Null würde der Riemann-Integrator in HA als echte Messung integrieren.
+
+*Energie-Historie (Issue #13).* Neue Tabelle `energie_tag` in der Add-on-
+Datenbank: je Tag eine Zeile mit PV Haus, PV Garage, Netzbezug, Einspeisung,
+Batterie laden/entladen, Hausverbrauch und Wallbox. Der Zähler integriert die
+Tick-Leistungen im Speicher und schreibt höchstens minütlich; Messlücken über
+zwei Minuten werden **nicht** überbrückt, sondern gezählt. Neue Endpunkte:
+
+| Endpunkt | Inhalt |
+|---|---|
+| `GET /api/v1/energie/tage?von=&bis=` | Tageswerte in kWh |
+| `GET /api/v1/energie/monate?jahr=` | Monatssummen |
+| `GET /api/v1/energie/jahre` | Jahressummen |
+| `GET /api/v1/energie/export.csv?ebene=` | CSV (Semikolon, Dezimalkomma) |
+| `POST /api/v1/energie/import?von=&bis=` | Historie aus der E3DC nachladen |
+| `GET /api/v1/energie/import` | Fortschritt des laufenden Imports |
+
+Der Import holt die Jahre vor dem EMS aus der E3DC-eigenen Datenbank, Tag für
+Tag im Hintergrund. Er überschreibt **nie** eine eigene Messung, erkennt die
+Bedeutung von `grid_power_in/out` aus der Bilanz statt sie zu raten, und
+markiert Tage ab `pv_garage_seit` als `e3dc-ohne-garage` — dort ist der
+Hausverbrauch aus dem gleichen Grund zu klein wie oben.
+
+Im Dashboard: neue Sektion **Energie-Historie** mit Monats-/Jahrestabelle,
+CSV-Download und dem Import-Knopf. 187 Tests grün.
+
 ## 0.12.0
 
 **Die PV-Werte stehen jetzt auch in Home Assistant — als eigene Sensoren.**

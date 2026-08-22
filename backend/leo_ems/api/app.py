@@ -8,20 +8,22 @@ bereits durch die Home-Assistant-Anmeldung geschützt → kein Token nötig.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import os
 from dataclasses import asdict
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..config import DATA_DIR, TOKEN_FILE, RegelConfig, save_config
+from ..energy import KANAELE, ImportBericht, importiere_e3dc_historie
 from ..planner.rules import ChargingRule
 from ..store import Store
 
@@ -252,5 +254,103 @@ def create_app(
     async def observation_snapshots(limit: int = 1000):
         """Rohdaten (je Tick ein Messbild), chronologisch — für Verlaufscharts."""
         return store.snapshots_recent(limit)
+
+    # --- Energiebilanz: Tag / Monat / Jahr (Issue #13) ---------------------------
+    # Getrennt von /observation, obwohl beides „Historie" ist: Snapshots sind
+    # Ticks für die Beobachtungsphase und werden irgendwann entsorgt, die
+    # Energiebilanz ist der dauerhafte Bestand, aus dem Leo Jahre vergleicht.
+
+    def _kwh(zeilen: list[dict]) -> list[dict]:
+        """Wh → kWh direkt an der Schnittstelle.
+
+        Intern wird in Wh gerechnet, weil die E3DC Wh liefert und Rundung auf
+        kWh je Tag sich über ein Jahr zu spürbaren Beträgen summiert. Nach außen
+        geht kWh — in dieser Einheit steht es auf der Rechnung und im Dashboard.
+        """
+        raus = []
+        for z in zeilen:
+            neu_z = {k: v for k, v in z.items() if k not in KANAELE}
+            for k in KANAELE:
+                neu_z[k[:-3] + "_kwh"] = round(float(z.get(k) or 0.0) / 1000.0, 3)
+            raus.append(neu_z)
+        return raus
+
+    @app.get("/api/v1/energie/tage", dependencies=[auth])
+    async def energie_tage(von: str | None = None, bis: str | None = None):
+        return _kwh(store.energie_tage(von, bis))
+
+    @app.get("/api/v1/energie/monate", dependencies=[auth])
+    async def energie_monate(jahr: str | None = None):
+        return _kwh(store.energie_gruppiert("monat", jahr))
+
+    @app.get("/api/v1/energie/jahre", dependencies=[auth])
+    async def energie_jahre():
+        return _kwh(store.energie_gruppiert("jahr"))
+
+    @app.get("/api/v1/energie/export.csv", dependencies=[auth])
+    async def energie_export(ebene: Literal["tag", "monat", "jahr"] = "tag",
+                             jahr: str | None = None):
+        """CSV, weil es die Ablage ist, die überall aufgeht — Excel, LibreOffice,
+        Python. Semikolon als Trenner und Komma als Dezimalzeichen: Excel in
+        deutscher Ländereinstellung zerlegt eine Punkt-Komma-Datei sonst in eine
+        einzige Spalte, und genau dort landet die Datei."""
+        zeilen = _kwh(store.energie_tage() if ebene == "tag"
+                      else store.energie_gruppiert(ebene, jahr))
+        if not zeilen:
+            return PlainTextResponse("", media_type="text/csv")
+        spalten = list(zeilen[0].keys())
+
+        def feld(w) -> str:
+            return str(w).replace(".", ",") if isinstance(w, float) else str(w if w is not None else "")
+
+        kopf = ";".join(spalten)
+        koerper = "\n".join(";".join(feld(z.get(c)) for c in spalten) for z in zeilen)
+        text = kopf + "\n" + koerper
+        return PlainTextResponse(text, media_type="text/csv", headers={
+            "Content-Disposition": f'attachment; filename="leo-ems-energie-{ebene}.csv"'})
+
+    @app.post("/api/v1/energie/import", dependencies=[auth])
+    async def energie_import(von: str | None = None, bis: str | None = None):
+        """Historie aus der E3DC nachladen (Issue #13).
+
+        Läuft als Hintergrund-Task und antwortet sofort: Drei Jahre sind über
+        tausend RSCP-Abrufe, und ein HTTP-Request, der Minuten offen steht,
+        läuft in jedem Proxy dazwischen in einen Timeout. Der Fortschritt steht
+        unter GET /api/v1/energie/import.
+
+        Nur ein Import gleichzeitig — zwei parallele Läufe würden sich dieselbe
+        RSCP-Sitzung teilen und einander die Antworten wegnehmen.
+        """
+        if control is None:
+            raise HTTPException(status_code=503, detail="Regelschleife nicht aktiv")
+        adapter = getattr(control, "adapters", {}).get("e3dc")
+        if adapter is None or not hasattr(adapter, "historie_tag"):
+            raise HTTPException(status_code=503, detail="E3DC-Adapter kann keine Historie liefern")
+        laufend = getattr(control, "energie_import", None)
+        if laufend is not None and laufend.laeuft:
+            raise HTTPException(status_code=409, detail="Es läuft bereits ein Import")
+
+        # Default-Fenster: ab dem Tag nach der letzten bekannten Zeile zurück
+        # bis maximal fünf Jahre. Ohne Angabe soll ein Klick genügen und der
+        # zweite Klick darf nicht alles noch einmal holen.
+        heute = date.today()
+        d_von = date.fromisoformat(von) if von else heute - timedelta(days=5 * 365)
+        d_bis = date.fromisoformat(bis) if bis else heute - timedelta(days=1)
+        if d_von > d_bis:
+            raise HTTPException(status_code=400, detail="'von' liegt nach 'bis'")
+
+        bericht = ImportBericht(d_von.isoformat(), d_bis.isoformat())
+        control.energie_import = bericht
+        garage = getattr(cfg, "pv_garage_seit", None)
+        asyncio.get_running_loop().create_task(importiere_e3dc_historie(
+            adapter, store, d_von, d_bis, bericht,
+            garage_seit=date.fromisoformat(garage) if garage else None,
+        ))
+        return bericht.as_dict()
+
+    @app.get("/api/v1/energie/import", dependencies=[auth])
+    async def energie_import_status():
+        bericht = getattr(control, "energie_import", None) if control else None
+        return bericht.as_dict() if bericht else {"laeuft": False, "hinweis": "noch kein Import gelaufen"}
 
     return app

@@ -40,6 +40,19 @@ CREATE TABLE IF NOT EXISTS snapshots (       -- je Regel-Tick ein Messbild (Cock
     entladelimit_w REAL                      -- Entladegrenze Hausbatterie; NULL = keine (Spec §5.1)
 );
 CREATE INDEX IF NOT EXISTS idx_snap_ts ON snapshots(ts);
+CREATE TABLE IF NOT EXISTS energie_tag (   -- Tagesbilanz je Kanal in Wh (Issue #13)
+    tag TEXT PRIMARY KEY,                  -- YYYY-MM-DD, Ortszeit
+    pv_haus_wh REAL NOT NULL DEFAULT 0,
+    pv_garage_wh REAL NOT NULL DEFAULT 0,
+    netz_bezug_wh REAL NOT NULL DEFAULT 0,
+    netz_einspeisung_wh REAL NOT NULL DEFAULT 0,
+    batt_laden_wh REAL NOT NULL DEFAULT 0,
+    batt_entladen_wh REAL NOT NULL DEFAULT 0,
+    haus_wh REAL NOT NULL DEFAULT 0,       -- Hausverbrauch OHNE Wallbox
+    wallbox_wh REAL NOT NULL DEFAULT 0,
+    quelle TEXT NOT NULL,                  -- 'ems' | 'e3dc' | 'e3dc-ohne-garage'
+    aktualisiert TEXT NOT NULL
+);
 """
 
 # Spalten, die nach der ersten Auslieferung dazugekommen sind. CREATE TABLE
@@ -170,3 +183,87 @@ class Store:
             {"ts": r[0], "regel": r[1], "inputs": json.loads(r[2]), "befehl": r[3], "ergebnis": r[4]}
             for r in rows
         ]
+
+    # --- Energie-Tagesbilanz (Issue #13) -------------------------------------
+    # Die Tabelle ist das Gedächtnis für Monats- und Jahresauswertungen. Sie
+    # hält **Tageswerte**, keine Ticks: Ticks liegen schon in `snapshots` und
+    # werden dort nach Tagen gelöscht; die Jahresübersicht muss aber auch in
+    # fünf Jahren noch da sein. Ein Tag ist die kleinste Einheit, in der Leo
+    # laut Issue #13 auswerten will, und ~365 Zeilen/Jahr bleiben winzig.
+
+    ENERGIE_KANAELE = (
+        "pv_haus_wh", "pv_garage_wh", "netz_bezug_wh", "netz_einspeisung_wh",
+        "batt_laden_wh", "batt_entladen_wh", "haus_wh", "wallbox_wh",
+    )
+
+    def energie_tag_schreiben(self, tag: str, werte: dict, quelle: str,
+                              jetzt: datetime | None = None) -> None:
+        """Eine Tageszeile setzen (UPSERT, absolute Werte).
+
+        Absolut statt inkrementell, weil der Zähler seinen Tagesstand ohnehin im
+        Speicher führt: Ein verpasster oder doppelter Schreibvorgang verfälscht
+        so nichts, während `SET x = x + ?` bei jedem Wiederholungslauf addieren
+        würde. Der Preis ist, dass der Aufrufer den vollen Tagesstand kennen
+        muss — genau das tut `Energiezaehler`.
+        """
+        spalten = ", ".join(self.ENERGIE_KANAELE)
+        platz = ", ".join("?" * len(self.ENERGIE_KANAELE))
+        setzt = ", ".join(f"{s}=excluded.{s}" for s in self.ENERGIE_KANAELE)
+        werte_liste = [float(werte.get(s) or 0.0) for s in self.ENERGIE_KANAELE]
+        ts = (jetzt or datetime.now()).isoformat(timespec="seconds")
+        self._db.execute(
+            f"INSERT INTO energie_tag (tag, {spalten}, quelle, aktualisiert)"
+            f" VALUES (?, {platz}, ?, ?)"
+            f" ON CONFLICT(tag) DO UPDATE SET {setzt},"
+            f" quelle=excluded.quelle, aktualisiert=excluded.aktualisiert",
+            [tag] + werte_liste + [quelle, ts],
+        )
+        self._db.commit()
+
+    def energie_tag_lesen(self, tag: str) -> dict | None:
+        cur = self._db.execute("SELECT * FROM energie_tag WHERE tag=?", (tag,))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return dict(zip([c[0] for c in cur.description], row))
+
+    def energie_tage(self, von: str | None = None, bis: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM energie_tag"
+        bed, args = [], []
+        if von:
+            bed.append("tag >= ?"); args.append(von)
+        if bis:
+            bed.append("tag <= ?"); args.append(bis)
+        if bed:
+            sql += " WHERE " + " AND ".join(bed)
+        cur = self._db.execute(sql + " ORDER BY tag", args)
+        cols = [c[0] for c in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    def energie_gruppiert(self, ebene: str, jahr: str | None = None) -> list[dict]:
+        """Monats- oder Jahressummen (Issue #13).
+
+        Aggregiert wird in SQL statt in Python: Für „beliebige Jahre" müssten
+        sonst alle Tageszeilen durch den Prozess wandern, nur um summiert zu
+        werden. `substr` auf dem ISO-Datum ist dafür ausreichend — das Format
+        ist beim Schreiben festgelegt, nicht geraten.
+        """
+        laenge = {"monat": 7, "jahr": 4}[ebene]
+        summen = ", ".join(f"ROUND(SUM({s}), 1) AS {s}" for s in self.ENERGIE_KANAELE)
+        sql = (f"SELECT substr(tag, 1, {laenge}) AS periode, COUNT(*) AS tage,"
+               f" {summen}, GROUP_CONCAT(DISTINCT quelle) AS quellen FROM energie_tag")
+        args: list = []
+        if jahr:
+            sql += " WHERE substr(tag, 1, 4) = ?"
+            args.append(jahr)
+        cur = self._db.execute(sql + " GROUP BY periode ORDER BY periode", args)
+        cols = [c[0] for c in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    def energie_bekannte_tage(self, quelle: str | None = None) -> set[str]:
+        """Welche Tage stehen schon in der Tabelle? Für den Nachimport."""
+        if quelle:
+            rows = self._db.execute("SELECT tag FROM energie_tag WHERE quelle=?", (quelle,)).fetchall()
+        else:
+            rows = self._db.execute("SELECT tag FROM energie_tag").fetchall()
+        return {r[0] for r in rows}

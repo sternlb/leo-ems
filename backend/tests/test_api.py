@@ -121,3 +121,49 @@ def test_dashboard_wird_ausgeliefert():
     """GET / liefert das Web-Dashboard (ohne Auth — reine Statik ohne Geheimnisse)."""
     r = make_client().get("/")
     assert r.status_code == 200 and "Leo-EMS" in r.text
+
+
+# --- Energie-Endpunkte (Issue #13) -------------------------------------------
+
+def _client_mit_energie() -> tuple[TestClient, Store]:
+    cfg = RegelConfig()
+    store = Store(Path(tempfile.mkdtemp()) / "energie.db")
+    store.energie_tag_schreiben("2026-07-30", {"pv_haus_wh": 12345.0, "haus_wh": 8000.0}, "e3dc")
+    store.energie_tag_schreiben("2026-08-01", {"pv_haus_wh": 20000.0, "haus_wh": 9000.0}, "ems")
+    return TestClient(create_app(store, cfg, TOKEN, control=FakeLoop(cfg))), store
+
+
+def test_energie_wird_in_kwh_ausgeliefert():
+    """Gerechnet wird in Wh (so liefert die E3DC), ausgeliefert in kWh — die
+    Einheit, in der Leo denkt und in der es auf der Stromrechnung steht."""
+    c, _ = _client_mit_energie()
+    tage = c.get("/api/v1/energie/tage", headers={"Authorization": f"Bearer {TOKEN}"}).json()
+    assert tage[0]["pv_haus_kwh"] == 12.345
+    assert "pv_haus_wh" not in tage[0]
+
+
+def test_energie_monate_und_jahre_summieren():
+    c, _ = _client_mit_energie()
+    h = {"Authorization": f"Bearer {TOKEN}"}
+    monate = c.get("/api/v1/energie/monate?jahr=2026", headers=h).json()
+    assert [m["periode"] for m in monate] == ["2026-07", "2026-08"]
+    assert c.get("/api/v1/energie/jahre", headers=h).json()[0]["pv_haus_kwh"] == 32.345
+
+
+def test_energie_csv_nutzt_semikolon_und_dezimalkomma():
+    """Die Datei landet in Excel mit deutscher Ländereinstellung. Mit Komma als
+    Trenner und Punkt als Dezimalzeichen stünde dort alles in einer Spalte."""
+    c, _ = _client_mit_energie()
+    r = c.get("/api/v1/energie/export.csv", headers={"Authorization": f"Bearer {TOKEN}"})
+    zeilen = r.text.splitlines()
+    assert zeilen[0].startswith("tag;")
+    assert "12,345" in zeilen[1]
+    assert "attachment" in r.headers["content-disposition"]
+
+
+def test_energie_import_ohne_faehigen_adapter_meldet_das():
+    """Der Simulator im Testaufbau hat keine Historie — das muss als klare
+    Absage kommen und nicht als leerer, scheinbar erfolgreicher Import."""
+    c, _ = _client_mit_energie()
+    r = c.post("/api/v1/energie/import", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert r.status_code == 503

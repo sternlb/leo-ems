@@ -113,6 +113,14 @@ class RegelConfig:
     wp_aus_entprellung_s: int = 300    # Bedingungszeit vor dem Zurückstellen
     wp_cloud_min_gap_s: int = 900      # Mindestabstand Cloud-Schreibzugriffe (REQ-014)
 
+    # --- Energie-Historie (Issue #13) ---------------------------------------
+    # Tag der Inbetriebnahme der Garagen-Anlage, ISO-Datum oder None. Ab diesem
+    # Tag ist die E3DC-eigene Historie beim Hausverbrauch zu klein — der Sungrow
+    # speist hinter ihrem Zähler ein und fehlt ihr in der Bilanz. Importierte
+    # Tage ab hier werden deshalb als 'e3dc-ohne-garage' markiert statt still
+    # als vollwertig ausgegeben. Davor stimmt die E3DC-Historie.
+    pv_garage_seit: str | None = None
+
 
 def load_config() -> RegelConfig:
     if CONFIG_FILE.exists():

@@ -840,6 +840,38 @@
     </div>
   </section>
 
+  <!-- Energie-Historie (Issue #13) -->
+  <section class="collapsible" id="sect-energie">
+    <h2>Energie-Historie</h2>
+    <div class="card">
+      <div class="form-grid" style="align-items:end">
+        <label class="f"><span>Ebene</span>
+          <select id="en-ebene"><option value="monat">Monate</option><option value="jahr">Jahre</option><option value="tag">Tage</option></select>
+        </label>
+        <label class="f"><span>Jahr (nur Monate)</span><input type="text" id="en-jahr" placeholder="2026" style="text-transform:none"></label>
+        <div><button class="btn" id="en-laden">Anzeigen</button></div>
+        <div><a class="btn" id="en-csv" href="#" download>CSV herunterladen</a></div>
+      </div>
+      <div id="en-hinweis" style="opacity:.7; margin:.6rem 0 0; font-size:.85rem"></div>
+      <div style="overflow-x:auto; margin-top:1rem">
+        <table id="en-tab">
+          <thead><tr>
+            <th>Zeitraum</th><th>PV Haus</th><th>PV Garage</th><th>Netzbezug</th>
+            <th>Einspeisung</th><th>Batt. laden</th><th>Batt. entladen</th>
+            <th>Haus</th><th>Wallbox</th><th>Quelle</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="form-grid" style="align-items:end; margin-top:1.2rem">
+        <label class="f"><span>Nachimport von</span><input type="date" id="en-von"></label>
+        <label class="f"><span>bis</span><input type="date" id="en-bis"></label>
+        <div><button class="btn" id="en-import">Historie aus der E3DC holen</button></div>
+      </div>
+      <div id="en-import-status" style="opacity:.7; margin-top:.5rem; font-size:.85rem"></div>
+    </div>
+  </section>
+
   <!-- Protokoll -->
   <section class="collapsible" id="sect-log">
     <h2>Protokoll</h2>
@@ -1639,6 +1671,72 @@ $("add-rule").onclick = async () => {
   ladeRegeln();
 };
 
+// --- Energie-Historie (Issue #13) ------------------------------------------------
+// Die Tabelle liest bewusst dieselben Endpunkte, die auch der CSV-Export nutzt.
+// Was auf dem Bildschirm steht, ist damit exakt das, was in der Datei landet —
+// eine zweite Aufbereitung im Frontend hätte irgendwann davon abgewichen.
+const EN_SPALTEN = ["pv_haus_kwh","pv_garage_kwh","netz_bezug_kwh","netz_einspeisung_kwh",
+                    "batt_laden_kwh","batt_entladen_kwh","haus_kwh","wallbox_kwh"];
+
+function enPfad(ebene, jahr) {
+  if (ebene === "tag") return "api/v1/energie/tage";
+  if (ebene === "jahr") return "api/v1/energie/jahre";
+  return "api/v1/energie/monate" + (jahr ? "?jahr=" + encodeURIComponent(jahr) : "");
+}
+
+async function ladeEnergie() {
+  const ebene = $("en-ebene").value, jahr = $("en-jahr").value.trim();
+  $("en-csv").href = "api/v1/energie/export.csv?ebene=" + ebene + (jahr && ebene === "monat" ? "&jahr=" + jahr : "");
+  let zeilen;
+  try { zeilen = await api(enPfad(ebene, jahr)); }
+  catch (e) { $("en-hinweis").textContent = "Konnte die Historie nicht laden: " + e; return; }
+
+  const tb = $("en-tab").querySelector("tbody");
+  tb.innerHTML = "";
+  for (const z of zeilen) {
+    const tr = document.createElement("tr");
+    const quelle = z.quelle || z.quellen || "";
+    tr.innerHTML = "<td>" + (z.periode || z.tag) + "</td>"
+      + EN_SPALTEN.map(k => "<td>" + (z[k] ?? 0).toFixed(1) + "</td>").join("")
+      + '<td style="opacity:.65">' + quelle + "</td>";
+    tb.appendChild(tr);
+  }
+  // Tage aus der E3DC-Historie, die nach der Garagen-Inbetriebnahme liegen,
+  // haben einen zu kleinen Hausverbrauch. Das gehört sichtbar an die Zahl und
+  // nicht in eine Fußnote, die niemand liest.
+  const unvollstaendig = zeilen.some(z => String(z.quelle || z.quellen || "").includes("ohne-garage"));
+  $("en-hinweis").textContent = zeilen.length === 0
+    ? "Noch keine Daten. Unten die Historie aus der E3DC holen — das EMS zählt ab jetzt selbst mit."
+    : (unvollstaendig ? "Hinweis: Zeiträume mit Quelle „e3dc-ohne-garage“ stammen aus der E3DC-Historie "
+        + "und kennen die Garagen-Anlage nicht — dort ist der Hausverbrauch zu klein." : "");
+}
+
+async function importStatus() {
+  try {
+    const b = await api("api/v1/energie/import");
+    if (b.hinweis) { $("en-import-status").textContent = ""; return false; }
+    $("en-import-status").textContent = b.laeuft
+      ? `läuft … ${b.aktueller_tag || ""} (${b.geschrieben} Tage geschrieben, ${b.uebersprungen} übersprungen)`
+      : (b.fehler ? "Import abgebrochen: " + b.fehler
+         : `Import fertig: ${b.geschrieben} Tage geschrieben, ${b.uebersprungen} eigene Messungen behalten, ${b.leer} leer.`);
+    return b.laeuft;
+  } catch { return false; }
+}
+
+$("en-laden").onclick = ladeEnergie;
+$("en-ebene").onchange = ladeEnergie;
+$("en-import").onclick = async () => {
+  const von = $("en-von").value, bis = $("en-bis").value;
+  const q = [von && "von=" + von, bis && "bis=" + bis].filter(Boolean).join("&");
+  try { await api("api/v1/energie/import" + (q ? "?" + q : ""), { method: "POST" }); }
+  catch (e) { $("en-import-status").textContent = "Import nicht gestartet: " + e; return; }
+  // Alle 5 s nachfragen, solange er läuft — der Import dauert bei mehreren
+  // Jahren Minuten, und ein stummer Fortschrittsbalken sieht aus wie ein Hänger.
+  const ticker = setInterval(async () => {
+    if (!await importStatus()) { clearInterval(ticker); ladeEnergie(); }
+  }, 5000);
+};
+
 // --- Protokoll + Polling --------------------------------------------------------
 async function ladeHistorie() {
   const h = await api("api/v1/history?limit=15");
@@ -1675,6 +1773,7 @@ $("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = f
   try { await ladeConfig(); } catch {}
   try { await ladeRegeln(); } catch {}
   try { await ladeHistorie(); } catch {}
+  try { await ladeEnergie(); await importStatus(); } catch {}
   setInterval(poll, 5000);
   setInterval(ladeHistorie, 30000);
   setInterval(renderPhasen, 1000);   // Countdown zwischen den Polls lokal weiterzählen
