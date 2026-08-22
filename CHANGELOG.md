@@ -8,6 +8,22 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.11.1
+
+**Die Garagen-Anlage leuchtet jetzt mit.**
+
+- Auf dem Garagendach standen im Szenenbild **gar keine Module** — die Anlage
+  erschien nur als Chip, während das Hausdach bei Erzeugung glimmte. Jetzt
+  liegt dort eine Ost/West-Aufständerung mit sechs Zacken: ein Modulpaar je
+  Zacke, zwölf Module, je Flanke ein String an einem MPPT-Eingang.
+- Eigener Leuchtzustand `.sg-an` mit eigener Intensität `--sg-i` aus der
+  Sungrow-Leistung. Bezugswert sind 4 kW statt der 6 kW des Hausdachs: 5,64 kWp
+  Ost/West erreichen wegen der geteilten Ausrichtung real kaum mehr; mit dem
+  größeren Nenner bliebe die Garage dauerhaft blasser, obwohl sie voll läuft.
+- Zwei Funken statt vier — die Modulfläche im Bild ist kleiner, vier wirkten
+  darauf wie ein Blinklicht. Einbrennschutz und `prefers-reduced-motion` gelten
+  unverändert auch für den neuen Zustand.
+
 ## 0.11.0
 
 **Die Garagen-Anlage ist da — 5,64 kWp mehr, jetzt auch im EMS sichtbar.**

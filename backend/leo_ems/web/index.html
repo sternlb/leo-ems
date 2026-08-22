@@ -167,6 +167,27 @@
     84%           { opacity: calc(var(--pv-i, .5) * 1); }
   }
 
+  /* --- Garagendach-Anlage (v0.11.0) ----------------------------------------
+     Gleiche Bildsprache wie das Hausdach, eigener Zustand: `--sg-i` kommt aus
+     der Sungrow-Leistung, nicht aus der E3DC. Bis v0.10.0 war das Garagendach
+     leer — die Anlage erschien nur als Chip, während das Hausdach glimmte.
+     Die Funken sind hier bewusst zwei statt vier: die Modulfläche im Bild ist
+     kleiner, vier Funken darauf wirken wie ein Blinklicht. */
+  #sg_module { transition: filter .8s ease; }
+  .sg-an #sg_module { filter: drop-shadow(0 0 4px rgba(163,230,53,.75)); }
+  #sg_glow, .sg-funke { opacity: 0; }
+  .sg-an #sg_glow { animation: sgatmen 6s ease-in-out infinite; }
+  @keyframes sgatmen {
+    0%, 100% { opacity: calc(var(--sg-i, .5) * .28); }
+    50%      { opacity: calc(var(--sg-i, .5) * .55); }
+  }
+  .sg-an .sg-funke { animation: sgfunkeln 3.4s ease-in-out infinite; }
+  .sg-an .sg-funke:nth-of-type(2) { animation-delay: 1.7s; }
+  @keyframes sgfunkeln {   /* eigene Kurve, weil sie an --sg-i hängt, nicht an --pv-i */
+    0%, 74%, 100% { opacity: 0; }
+    84%           { opacity: calc(var(--sg-i, .5) * 1); }
+  }
+
   /* --- Tiefe: Parallax-Ebenen + Sonnenlicht auf den Ostflächen --------------
      Jede .lyr trägt ihre Tiefe als data-d (0 = Horizont, 1 = ganz vorn); das
      JS setzt daraus den transform. Nur waagerecht, damit unten nie eine Lücke
@@ -192,6 +213,8 @@
     .flow-pfeil.on { opacity: .95; }
     .pv-an #pv_glow { animation: none; opacity: calc(var(--pv-i, .5) * .45); }
     .pv-an #pv_shimmer, .pv-an .pv-funke { animation: none; opacity: 0; }
+    .sg-an #sg_glow { animation: none; opacity: calc(var(--sg-i, .5) * .45); }
+    .sg-an .sg-funke { animation: none; opacity: 0; }
     .wp-fan { animation: none; }
   }
 
@@ -394,6 +417,38 @@
 
           <!-- Garage (freistehend, 6 m x 3 m, Flachdach ohne Überstand) -->
           <g class="lyr" data-d=".70">
+          <!-- PV-Anlage Garagendach (v0.11.0): Ost/West-Aufständerung, 15°.
+               Sechs Zacken = sechs Modulpaare = die 12 realen Module, je Flanke
+               ein String an einem MPPT-Eingang. Die Ostflanken (links steigend)
+               sind heller, weil sie im Bild der Vormittagssonne zugewandt sind —
+               dieselbe Lichtlogik wie .ostlicht an der Fassade. -->
+          <g id="sg_module">
+            <g fill="#2F3E46" stroke="#1F2A30" stroke-width=".6">
+              <polygon points="44,330 44,327 62,314 62,317"/>
+              <polygon points="83,330 83,327 101,314 101,317"/>
+              <polygon points="122,330 122,327 140,314 140,317"/>
+              <polygon points="161,330 161,327 179,314 179,317"/>
+              <polygon points="200,330 200,327 218,314 218,317"/>
+              <polygon points="239,330 239,327 257,314 257,317"/>
+            </g>
+            <g fill="#26333A" stroke="#1F2A30" stroke-width=".6">
+              <polygon points="62,314 62,317 80,330 80,327"/>
+              <polygon points="101,314 101,317 119,330 119,327"/>
+              <polygon points="140,314 140,317 158,330 158,327"/>
+              <polygon points="179,314 179,317 197,330 197,327"/>
+              <polygon points="218,314 218,317 236,330 236,327"/>
+              <polygon points="257,314 257,317 275,330 275,327"/>
+            </g>
+            <!-- Ständerfüße: ohne sie schwebt das Zickzack über dem Dach -->
+            <g stroke="#7C8A7E" stroke-width="1" opacity=".65">
+              <line x1="62" y1="317" x2="62" y2="330"/><line x1="101" y1="317" x2="101" y2="330"/>
+              <line x1="140" y1="317" x2="140" y2="330"/><line x1="179" y1="317" x2="179" y2="330"/>
+              <line x1="218" y1="317" x2="218" y2="330"/><line x1="257" y1="317" x2="257" y2="330"/>
+            </g>
+          </g>
+          <rect id="sg_glow" x="42" y="310" width="236" height="22" fill="url(#pvleucht)"/>
+          <path class="sg-funke" d="M108,318 l2,4.6 4.6,2 -4.6,2 -2,4.6 -2,-4.6 -4.6,-2 4.6,-2 Z"/>
+          <path class="sg-funke" d="M224,320 l1.8,4.2 4.2,1.8 -4.2,1.8 -1.8,4.2 -1.8,-4.2 -4.2,-1.8 4.2,-1.8 Z"/>
           <rect x="40" y="330" width="240" height="14" fill="url(#dach)" stroke="#9AA69A" stroke-width="1"/>
           <rect x="40" y="344" width="240" height="126" fill="url(#fassade)" stroke="#B9C4B6" stroke-width="1.5"/>
           <rect x="40" y="344" width="240" height="9" fill="url(#traufe)"/>
@@ -1045,6 +1100,15 @@ function updateScene(st) {
   const pvAn = hysterese("pv", pvW) && !e3dcWeg(st);
   scene.classList.toggle("pv-an", pvAn);
   scene.style.setProperty("--pv-i", pvAn ? (0.35 + 0.6 * Math.min(1, Math.abs(pvW) / 6000)).toFixed(2) : "0");
+
+  // Garagendach genauso (v0.11.0). Eigener Bezugswert: 5,64 kWp Ost/West
+  // erreichen wegen der geteilten Ausrichtung real kaum über ~4 kW — mit dem
+  // 6-kW-Nenner der Hausanlage bliebe die Garage dauerhaft blasser, obwohl sie
+  // voll läuft. Kein e3dcWeg()-Vorbehalt: der Sungrow hängt nicht an der E3DC.
+  const sgW = st.p_sungrow_w || 0;
+  const sgAn = hysterese("sungrow", sgW) && !(st.sungrow && st.sungrow.fehler);
+  scene.classList.toggle("sg-an", sgAn);
+  scene.style.setProperty("--sg-i", sgAn ? (0.35 + 0.6 * Math.min(1, Math.abs(sgW) / 4000)).toFixed(2) : "0");
 
   // Wärmepumpe: Lüfter dreht, solange die Anlage läuft; im Überschuss-Boost schneller.
   const wp = st.wp || {};
