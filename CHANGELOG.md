@@ -8,6 +8,39 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.12.0
+
+**Die PV-Werte stehen jetzt auch in Home Assistant — als eigene Sensoren.**
+
+Neue Entities, im Takt von 30 s vom EMS geschrieben:
+
+| Entity | Inhalt |
+|---|---|
+| `sensor.pv_haus_leistung` | Hausdach-Anlage (E3DC), W |
+| `sensor.pv_garage_leistung` | Garagendach-Anlage (Sungrow), W |
+| `sensor.pv_gesamt_leistung` | beide zusammen, W |
+| `sensor.pv_garage_ertrag_gesamt` | Zählerstand der Garagen-Anlage, kWh |
+
+- **Warum das EMS pusht, statt HA selbst lesen zu lassen:** Der WiNet-S-Dongle
+  nimmt nur **eine** Modbus-Verbindung an. Eine zusätzliche HA-Modbus-Integration
+  würde sich mit dem EMS um dieselbe Verbindung streiten und beide bekämen
+  Aussetzer. Es gibt genau einen Modbus-Leser, und der reicht weiter.
+- Auch die Hausdach-Anlage wird exportiert, obwohl es `sensor.s10e_solar_production`
+  längst gibt: In einem gemeinsamen Diagramm müssen die Linien denselben
+  Zeitraster haben, sonst treppen sie gegeneinander. Aus einer Quelle gepusht
+  tragen sie denselben Zeitstempel.
+- Der Ertragszähler ist `total_increasing` — damit kann die Garagen-Anlage im
+  **HA-Energie-Dashboard** auftauchen.
+- **Der Export läuft nebenläufig und hält den Regeltick nie auf.** Beim ersten
+  Entwurf wartete der Tick auf die HTTP-Antwort: Bei hängendem Home Assistant
+  hätte das die Regelschleife bis zu 12 s pro Tick angehalten — bei 10 s
+  Tick-Intervall hätte die Anzeige die Steuerung ausgebremst. Aufgefallen ist es
+  daran, dass die Testsuite von 4 s auf 174 s sprang.
+- Ohne `SUPERVISOR_TOKEN` (Entwicklung am PC) ist der Export inaktiv statt in
+  vergebliche Verbindungsversuche zu laufen.
+
+170 Tests grün (8 neue).
+
 ## 0.11.1
 
 **Die Garagen-Anlage leuchtet jetzt mit.**

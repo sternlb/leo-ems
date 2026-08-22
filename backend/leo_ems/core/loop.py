@@ -24,6 +24,7 @@ from ..planner import (
     berechne_ueberschuss,
     plane_garantieladung,
 )
+from ..ha_export import HaSensorExport
 from ..safety import SafetyGuard
 from ..store import Store
 
@@ -56,6 +57,9 @@ class ControlLoop:
         self._geraete: dict[str, dict] = {}          # Lese-Gesundheit je Adapter (Diagnose)
         self._limit_hw_w: int | None = None   # zuletzt an die E3DC geschriebene Grenze
         self._last_status: dict = {"state": "start", "grund": "Regelschleife initialisiert"}
+        # Sensor-Export nach Home Assistant (v0.12.0). Optional: ohne HA-Zugang
+        # meldet er nur `letzter_fehler` und die Regelung läuft unverändert.
+        self.ha_export = HaSensorExport()
         self.running = False
 
     # --- öffentlich --------------------------------------------------------
@@ -273,6 +277,11 @@ class ControlLoop:
             garantie=garantie, read_only=self.cfg.read_only,
             entladelimit_w=entscheid.limit_w,
         )
+        # PV-Werte als HA-Sensoren veröffentlichen (v0.12.0). Ganz am Ende des
+        # Ticks und ausdrücklich OHNE await: der Push läuft nebenläufig und
+        # drosselt sich selbst auf 30 s. Der Export ist Anzeige — er darf die
+        # Regelung weder aufhalten noch mit einem HA-Ausfall abbrechen.
+        self.ha_export.push_nebenlaeufig(self._last_status, now)
 
     # --- Fail-Safe / Helfer ------------------------------------------------
     async def _failsafe_e1(self, now: datetime) -> None:
