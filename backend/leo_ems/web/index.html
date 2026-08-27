@@ -364,6 +364,13 @@
   .en-nav .fenster { font-family: var(--mono); font-size: .85rem; color: var(--forest);
     min-width: 9ch; text-align: center; }
   .en-nav .btn { padding: .45em .8em; }
+  /* Direktwahl des Zeitraums. Bewusst ein `type="date"` für Tag, Woche und
+     Monat statt `type="week"`/`type="month"`: die beiden gibt es auf iOS nicht
+     und fallen dort auf ein nacktes Textfeld zurück. Ein Datum versteht jedes
+     Gerät; welche Woche bzw. welcher Monat daraus wird, steht daneben im
+     Fenstertitel. */
+  .en-pick { background: var(--deep); border: 1px solid var(--line); border-radius: var(--r);
+    color: var(--off); font-family: var(--mono); font-size: .8rem; padding: .4em .5em; }
 
   /* Kennzahlen über den Diagrammen — kompakter als die Statuskacheln */
   .kpis { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
@@ -942,9 +949,11 @@
           <button type="button" data-e="jahr">Jahr</button>
         </div>
         <div class="en-nav">
-          <button class="btn ghost" id="en-zurueck" type="button" title="Fenster zurück" aria-label="Fenster zurück">←</button>
+          <button class="btn ghost" id="en-zurueck" type="button" title="Zeitraum zurück" aria-label="Zeitraum zurück">←</button>
           <span class="fenster" id="en-fenster">–</span>
-          <button class="btn ghost" id="en-vor" type="button" title="Fenster vor" aria-label="Fenster vor">→</button>
+          <button class="btn ghost" id="en-vor" type="button" title="Zeitraum vor" aria-label="Zeitraum vor">→</button>
+          <input type="date" class="en-pick" id="en-datum" aria-label="Zeitraum wählen">
+          <select class="en-pick hidden" id="en-jahr" aria-label="Jahr wählen"></select>
           <button class="btn ghost" id="en-jetzt" type="button">Heute</button>
         </div>
       </div>
@@ -1609,6 +1618,7 @@ function zeigeTab(name) {
   localStorage.setItem("leoems_tab", name);
   if (name === "hist" && !histGeladen) {
     histGeladen = true;
+    enJahreFuellen();
     ladeEnergie().catch(e => $("en-hinweis").textContent = "Konnte die Historie nicht laden: " + e);
     importStatus();
   } else if (name === "hist") {
@@ -1885,48 +1895,107 @@ const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0
                  + "-" + String(d.getDate()).padStart(2, "0");
 const MONATE = ["Januar","Februar","März","April","Mai","Juni",
                 "Juli","August","September","Oktober","November","Dezember"];
+const TAGE_KURZ = ["Mo","Di","Mi","Do","Fr","Sa","So"];
 
 // Zustand der Historie-Ansicht. `anker` ist irgendein Tag im sichtbaren
 // Fenster — welcher, ist egal, das Fenster wird daraus abgeleitet. Das ist
 // einfacher zu bewegen als ein Von/Bis-Paar, das beim Blättern konsistent
 // bleiben müsste.
-const enState = { ebene: "monat", anker: new Date(), zeilen: [] };
+const enState = { ebene: "monat", anker: new Date(), alleJahre: false, zeilen: [] };
 
-// Welches Fenster gehört zu einer Ebene? Tage schaut man einen Monat lang an,
-// Wochen und Monate ein Jahr lang, Jahre gar nicht eingeschränkt — sonst
-// stünden entweder 1800 Säulen nebeneinander oder drei.
+// Eine Ansicht heißt nach dem Zeitraum, den man **wählt**, nicht nach der
+// Säule: „Tag" heißt „ein Tag, aufgeteilt in Stunden". Vorher war es genau
+// umgekehrt — „Tag" zeigte einen ganzen Monat in Tagessäulen, und die Auswahl
+// rechts bot deshalb nur Monate an. Daher die Tabelle: je Ansicht das Fenster
+// (Schrittweite der Pfeile) und die Säulenbreite, die die API dafür liefert.
+const EN_EBENEN = {
+  tag:   { saeule: "stunde", schritt: "tag" },
+  woche: { saeule: "tag",    schritt: "woche" },
+  monat: { saeule: "tag",    schritt: "monat" },
+  jahr:  { saeule: "monat",  schritt: "jahr" },
+};
+
+// Welche Säulen liefert die API für die aktuelle Ansicht? Nur „alle Jahre"
+// schert aus: dort ist die Säule selbst ein Jahr.
+const enSaeule = () => (enState.ebene === "jahr" && enState.alleJahre)
+  ? "jahr" : EN_EBENEN[enState.ebene].saeule;
+
+// Montag derselben Woche. Sonntag ist getDay() === 0, deshalb der Versatz.
+function enMontag(d) {
+  const a = new Date(d);
+  a.setDate(a.getDate() - ((a.getDay() + 6) % 7));
+  a.setHours(0, 0, 0, 0);
+  return a;
+}
+
+const enTagTitel = d => TAGE_KURZ[(d.getDay() + 6) % 7] + ", " + d.getDate() + ". "
+                        + MONATE[d.getMonth()] + " " + d.getFullYear();
+
+// Fenster der aktuellen Ansicht: von/bis als Tage, dazu die Beschriftung.
 function enFenster() {
-  const a = enState.anker, j = a.getFullYear();
+  const a = enState.anker, j = a.getFullYear(), m = a.getMonth();
   if (enState.ebene === "tag") {
-    const m = a.getMonth();
+    const t = iso(a);
+    return { von: t, bis: t, titel: enTagTitel(a) };
+  }
+  if (enState.ebene === "woche") {
+    const mo = enMontag(a), so = new Date(mo);
+    so.setDate(mo.getDate() + 6);
+    const kurz = d => d.getDate() + ". " + MONATE[d.getMonth()].slice(0, 3);
+    return { von: iso(mo), bis: iso(so),
+             titel: kurz(mo) + " – " + kurz(so) + " " + so.getFullYear() };
+  }
+  if (enState.ebene === "monat") {
     return { von: iso(new Date(j, m, 1)), bis: iso(new Date(j, m + 1, 0)),
              titel: MONATE[m] + " " + j };
   }
-  if (enState.ebene === "jahr") return { von: null, bis: null, titel: "alle Jahre" };
+  if (enState.alleJahre) return { von: null, bis: null, titel: "alle Jahre" };
   return { von: iso(new Date(j, 0, 1)), bis: iso(new Date(j, 11, 31)), titel: String(j) };
 }
 
 function enSchritt(richtung) {
   const a = new Date(enState.anker);
-  if (enState.ebene === "tag") a.setMonth(a.getMonth() + richtung, 1);
+  const s = EN_EBENEN[enState.ebene].schritt;
+  if (s === "tag") a.setDate(a.getDate() + richtung);
+  else if (s === "woche") a.setDate(a.getDate() + 7 * richtung);
+  // Beim Monat auf den Ersten springen: sonst wird aus dem 31. März der
+  // 2. März (setMonth rollt einen zu kurzen Zielmonat über).
+  else if (s === "monat") a.setMonth(a.getMonth() + richtung, 1);
   else a.setFullYear(a.getFullYear() + richtung, 0, 1);
   enState.anker = a;
   ladeEnergie();
 }
 
+// Periodenschlüssel der API → Datum. "2026", "2026-03", "2026-03-05" und
+// "2026-03-05 14" werden alle als **Ortszeit** gelesen; `new Date(string)`
+// nähme ISO-Datumsteile als UTC und verschöbe damit je nach Zeitzone den Tag.
+function enDatumAus(periode) {
+  const p = String(periode);
+  return new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7) || 1) - 1,
+                  Number(p.slice(8, 10) || 1), Number(p.slice(11, 13) || 0));
+}
+
 // Beschriftung der X-Achse. Die Periode kommt als ISO-Schlüssel aus der
 // Datenbank; hier wird daraus etwas Lesbares, ohne die Sortierung anzutasten.
 function enLabel(periode) {
-  if (enState.ebene === "tag") return String(Number(periode.slice(8, 10)));
-  if (enState.ebene === "woche") return periode.slice(8, 10) + "." + periode.slice(5, 7) + ".";
-  if (enState.ebene === "monat") return MONATE[Number(periode.slice(5, 7)) - 1].slice(0, 3);
-  return periode;
+  const s = enSaeule();
+  if (s === "stunde") return String(Number(periode.slice(11, 13)));
+  if (s === "monat") return MONATE[Number(periode.slice(5, 7)) - 1].slice(0, 3);
+  if (s === "jahr") return periode;
+  // Tagessäulen: in der Woche sagt der Wochentag mehr als die Zahl, im Monat
+  // ist die Zahl kürzer und passt öfter nebeneinander.
+  if (enState.ebene === "woche") return TAGE_KURZ[(enDatumAus(periode).getDay() + 6) % 7];
+  return String(Number(periode.slice(8, 10)));
 }
 
 function enTitel(z) {
-  if (enState.ebene === "woche") return "Woche ab " + z.periode + " (" + z.tage + " Tage)";
-  if (enState.ebene === "tag") return z.periode;
-  if (enState.ebene === "monat") return MONATE[Number(z.periode.slice(5, 7)) - 1]
+  const s = enSaeule();
+  if (s === "stunde") {
+    const h = Number(z.periode.slice(11, 13));
+    return String(h).padStart(2, "0") + ":00 – " + String(h + 1).padStart(2, "0") + ":00 Uhr";
+  }
+  if (s === "tag") return enTagTitel(enDatumAus(z.periode));
+  if (s === "monat") return MONATE[Number(z.periode.slice(5, 7)) - 1]
     + " " + z.periode.slice(0, 4) + " (" + z.tage + " Tage)";
   return z.periode + " (" + z.tage + " Tage)";
 }
@@ -2042,23 +2111,58 @@ const S_NETZ = [{ key: "netz_bezug_kwh", name: "Bezug", farbe: F.netz },
 
 const summe = (zeilen, k) => zeilen.reduce((a, z) => a + (Number(z[k]) || 0), 0);
 
-// Drill-down: eine Säule anklicken heißt „zeig mir das genauer". Jahr → Monate
-// dieses Jahres, Monat/Woche → Tage dieses Zeitraums. Auf der Tagesebene gibt
-// es nichts Feineres, dort passiert nichts.
+// Drill-down: eine Säule anklicken heißt „zeig mir das genauer". Die
+// angeklickte Säule wird zum neuen Fenster — aus einem Monatsbalken im Jahr
+// wird der Monat in Tagen, aus einem Tagesbalken der Tag in Stunden. Auf der
+// Stundenebene gibt es nichts Feineres, dort passiert nichts.
 function enDrill(z) {
+  if (enState.ebene === "jahr" && enState.alleJahre) {
+    enState.alleJahre = false;
+    enState.anker = enDatumAus(z.periode);
+    enBedienung();
+    ladeEnergie();
+    return;
+  }
   const ziel = { jahr: "monat", monat: "tag", woche: "tag" }[enState.ebene];
   if (!ziel) return;
-  enState.anker = new Date(enState.ebene === "jahr" ? z.periode + "-01-01" : z.periode);
+  enState.anker = enDatumAus(z.periode);
   enState.ebene = ziel;
   for (const b of $("en-ebene").children) b.classList.toggle("active", b.dataset.e === ziel);
+  enBedienung();
   ladeEnergie();
+}
+
+// Die Bedienelemente rechts an die Ansicht anpassen: Tag/Woche/Monat wählt man
+// über ein Datum, das Jahr über eine Liste — dort steht auch „alle Jahre", das
+// sonst mit der neuen Fensterlogik keinen Platz mehr hätte.
+function enBedienung() {
+  const jahrEbene = enState.ebene === "jahr";
+  $("en-datum").classList.toggle("hidden", jahrEbene);
+  $("en-jahr").classList.toggle("hidden", !jahrEbene);
+  const a = enState.ebene === "woche" ? enMontag(enState.anker) : enState.anker;
+  $("en-datum").value = iso(a);
+  if (jahrEbene) $("en-jahr").value = enState.alleJahre ? "alle" : String(a.getFullYear());
+  $("en-zurueck").disabled = $("en-vor").disabled = jahrEbene && enState.alleJahre;
+}
+
+// Die Jahresliste kommt aus den Daten und nicht aus einem festen Bereich —
+// sonst stünden Jahre zur Wahl, in denen nie etwas gemessen wurde.
+async function enJahreFuellen() {
+  let jahre = [];
+  try { jahre = (await api("api/v1/energie/jahre")).map(z => z.periode); } catch { /* leer ist ok */ }
+  const jetzt = String(new Date().getFullYear());
+  if (!jahre.includes(jetzt)) jahre.push(jetzt);
+  jahre.sort().reverse();
+  $("en-jahr").innerHTML = '<option value="alle">alle Jahre</option>'
+    + jahre.map(j => `<option value="${j}">${j}</option>`).join("");
+  enBedienung();
 }
 
 async function ladeEnergie() {
   const f = enFenster();
   $("en-fenster").textContent = f.titel;
-  $("en-zurueck").disabled = $("en-vor").disabled = enState.ebene === "jahr";
-  const q = ["ebene=" + enState.ebene, f.von && "von=" + f.von, f.bis && "bis=" + f.bis]
+  enBedienung();
+  const q = ["ebene=" + enSaeule(), f.von && "von=" + f.von, f.bis && "bis=" + f.bis]
     .filter(Boolean).join("&");
   $("en-csv").href = "api/v1/energie/export.csv?" + q;
 
@@ -2089,7 +2193,9 @@ async function ladeEnergie() {
   $("k-bezug").textContent = kwh(bez); $("k-einspeisung").textContent = kwh(ein);
   $("k-autarkie").textContent = quote(verbr - bez, verbr);
   $("k-eigen").textContent = quote(erz - ein, erz);
-  $("k-tage").textContent = zeilen.reduce((a, z) => a + (z.tage || 0), 0) + " Tage";
+  $("k-tage").textContent = enSaeule() === "stunde"
+    ? zeilen.length + (zeilen.length === 1 ? " Stunde" : " Stunden")
+    : zeilen.reduce((a, z) => a + (z.tage || 0), 0) + " Tage";
   $("k-spanne").textContent = zeilen.length
     ? zeilen[0].periode + " – " + zeilen[zeilen.length - 1].periode : "–";
 
@@ -2097,7 +2203,7 @@ async function ladeEnergie() {
   legende("ch1-leg", S_ERZEUGUNG.concat(S_VERBRAUCH));
   legende("ch2-leg", S_DECKUNG);
   legende("ch3-leg", S_NETZ);
-  const drill = enState.ebene === "tag" ? null : enDrill;
+  const drill = enSaeule() === "stunde" ? null : enDrill;
   chartZeichnen("ch1", "ch1-leer", zeilen,
     [{ name: "Erzeugung", serien: S_ERZEUGUNG }, { name: "Verbrauch", serien: S_VERBRAUCH }], { drill });
   chartZeichnen("ch2", "ch2-leer", zeilen, [{ name: "Deckung", serien: S_DECKUNG }], { drill });
@@ -2118,10 +2224,17 @@ async function ladeEnergie() {
   // haben einen zu kleinen Hausverbrauch. Das gehört sichtbar an die Zahl und
   // nicht in eine Fußnote, die niemand liest.
   const unvollstaendig = zeilen.some(z => String(z.quellen || "").includes("ohne-garage"));
-  $("en-hinweis").textContent = zeilen.length === 0
-    ? "Keine Daten in diesem Zeitraum. Unten die Historie aus der E3DC holen — das EMS zählt ab jetzt selbst mit."
-    : (unvollstaendig ? "Hinweis: Zeiträume mit Quelle „e3dc-ohne-garage“ stammen aus der E3DC-Historie "
-        + "und kennen die Garagen-Anlage nicht — dort ist der Hausverbrauch zu klein." : "");
+  const stundenLeer = zeilen.length === 0 && enSaeule() === "stunde";
+  $("en-hinweis").textContent = stundenLeer
+    // Stundenwerte lassen sich nicht nachtragen: die Ticks in `snapshots`
+    // führen weder die Dach-PV noch den Hausverbrauch, und die E3DC-Historie
+    // liefert Tagessummen. Das gehört hier hin und nicht in eine Fußnote.
+    ? "Für diesen Tag gibt es keine Stundenwerte. Das EMS schreibt sie erst seit v0.15 mit — "
+      + "ältere Tage stehen als Tagessumme in Woche, Monat und Jahr."
+    : (zeilen.length === 0
+      ? "Keine Daten in diesem Zeitraum. Unten die Historie aus der E3DC holen — das EMS zählt ab jetzt selbst mit."
+      : (unvollstaendig ? "Hinweis: Zeiträume mit Quelle „e3dc-ohne-garage“ stammen aus der E3DC-Historie "
+          + "und kennen die Garagen-Anlage nicht — dort ist der Hausverbrauch zu klein." : ""));
 }
 
 async function importStatus() {
@@ -2143,7 +2256,25 @@ for (const b of $("en-ebene").children) b.onclick = () => {
 };
 $("en-zurueck").onclick = () => enSchritt(-1);
 $("en-vor").onclick = () => enSchritt(1);
-$("en-jetzt").onclick = () => { enState.anker = new Date(); ladeEnergie(); };
+$("en-jetzt").onclick = () => {
+  enState.anker = new Date();
+  enState.alleJahre = false;
+  ladeEnergie();
+};
+// Ein leeres Datumsfeld (Nutzer löscht den Inhalt) darf den Anker nicht auf
+// „Invalid Date" setzen — dann bliebe die ganze Historie leer.
+$("en-datum").onchange = () => {
+  const d = enDatumAus($("en-datum").value || "");
+  if (isNaN(d)) { enBedienung(); return; }
+  enState.anker = d;
+  ladeEnergie();
+};
+$("en-jahr").onchange = () => {
+  const w = $("en-jahr").value;
+  enState.alleJahre = w === "alle";
+  if (!enState.alleJahre) enState.anker = new Date(Number(w), 0, 1);
+  ladeEnergie();
+};
 
 // Die Säulenbreite hängt an der Kartenbreite — beim Drehen des Tablets neu
 // zeichnen, sonst bleibt das Diagramm in der alten Breite stehen.

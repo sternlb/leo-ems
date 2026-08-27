@@ -75,6 +75,10 @@ class Energiezaehler:
         self._intervall = timedelta(seconds=schreib_intervall_s)
         self._tag: str | None = None
         self._stand: dict[str, float] = {}
+        # Zweiter Zähler mit derselben Mechanik, nur feiner: die Tagesansicht
+        # zeigt den Tag über 24 Stunden und braucht dafür Stundenzeilen (v0.15).
+        self._stunde: str | None = None
+        self._stand_h: dict[str, float] = {}
         self._letzter_tick: datetime | None = None
         self._letzte_schrift: datetime | None = None
         self.luecken = 0          # übersprungene Integrationen (Diagnose)
@@ -90,9 +94,13 @@ class Energiezaehler:
 
     def _tick(self, st: dict, jetzt: datetime) -> None:
         tag = jetzt.date().isoformat()
+        stunde = jetzt.strftime("%Y-%m-%d %H")
         if self._tag is None:
             self._tag = tag
             self._stand = self._tag_laden(tag)
+        if self._stunde is None:
+            self._stunde = stunde
+            self._stand_h = self._stunde_laden(stunde)
 
         # ERST integrieren, DANN den Tag wechseln. Das Intervall, das über
         # Mitternacht läuft, gehört damit vollständig zum alten Tag. Andersherum
@@ -108,14 +116,22 @@ class Energiezaehler:
             else:
                 faktor = dt_s / 3600.0
                 for kanal, watt in leistungen_aus_status(st).items():
-                    self._stand[kanal] = self._stand.get(kanal, 0.0) + watt * faktor
+                    zuwachs = watt * faktor
+                    self._stand[kanal] = self._stand.get(kanal, 0.0) + zuwachs
+                    self._stand_h[kanal] = self._stand_h.get(kanal, 0.0) + zuwachs
 
-        if tag != self._tag:
-            # Tageswechsel: den alten Tag ein letztes Mal festschreiben, sonst
-            # verfallen die Stunden seit dem letzten Schreibtakt im Speicher.
+        if tag != self._tag or stunde != self._stunde:
+            # Perioden­wechsel: die alte Periode ein letztes Mal festschreiben,
+            # sonst verfallen die Minuten seit dem letzten Schreibtakt im
+            # Speicher. Ein Tageswechsel ist immer auch ein Stundenwechsel;
+            # beide werden deshalb in derselben Verzweigung behandelt, damit
+            # der Tageswechsel den Stundenwechsel nicht überspringt.
             self._schreiben(jetzt)
-            self._tag = tag
-            self._stand = self._tag_laden(tag)
+            if tag != self._tag:
+                self._tag = tag
+                self._stand = self._tag_laden(tag)
+            self._stunde = stunde
+            self._stand_h = self._stunde_laden(stunde)
             self._letzte_schrift = None
             return
 
@@ -126,6 +142,8 @@ class Energiezaehler:
         if self._tag is None:
             return
         self.store.energie_tag_schreiben(self._tag, self._stand, "ems", jetzt)
+        if self._stunde is not None:
+            self.store.energie_stunde_schreiben(self._stunde, self._stand_h, jetzt)
         self._letzte_schrift = jetzt
         self.geschrieben += 1
 
@@ -138,6 +156,18 @@ class Energiezaehler:
         """
         zeile = self.store.energie_tag_lesen(tag)
         if zeile is None or zeile.get("quelle") != "ems":
+            return {k: 0.0 for k in KANAELE}
+        return {k: float(zeile.get(k) or 0.0) for k in KANAELE}
+
+    def _stunde_laden(self, stunde: str) -> dict[str, float]:
+        """Stundenstand zurückholen (Neustart mitten in der Stunde).
+
+        Kein Quellen-Vorbehalt wie beim Tag: Stundenzeilen entstehen
+        ausschließlich hier, es gibt keinen Import, der sie überschreiben
+        könnte.
+        """
+        zeile = self.store.energie_stunde_lesen(stunde)
+        if zeile is None:
             return {k: 0.0 for k in KANAELE}
         return {k: float(zeile.get(k) or 0.0) for k in KANAELE}
 

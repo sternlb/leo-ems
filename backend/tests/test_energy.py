@@ -159,6 +159,72 @@ def test_tagesebene_liefert_dieselbe_zeilenform_wie_die_summen(store):
     assert zeile["quellen"] == "ems"
 
 
+# --- Stundenbilanz (v0.15) --------------------------------------------------
+
+def test_stundenzeilen_entstehen_neben_der_tageszeile(store):
+    """Die Tagesansicht zeigt den Tag über 24 Stunden. Der Tageswert bleibt
+    dabei die Summe der Stunden — sonst widersprächen sich zwei Ansichten
+    derselben Messung."""
+    z = Energiezaehler(store, schreib_intervall_s=0)
+    t0 = datetime(2026, 8, 22, 10, 0, 0)
+    for i in range(121):                     # 2 h à 60 Schritte
+        z.tick(STATUS, t0 + timedelta(seconds=60 * i))
+    stunden = store.energie_stunden(von="2026-08-22", bis="2026-08-22")
+    assert [s["periode"] for s in stunden] == ["2026-08-22 10", "2026-08-22 11"]
+    assert stunden[0]["pv_haus_wh"] == pytest.approx(3000.0, rel=1e-6)
+    summe = sum(s["pv_haus_wh"] for s in stunden)
+    assert summe == pytest.approx(store.energie_tag_lesen("2026-08-22")["pv_haus_wh"], rel=1e-6)
+
+
+def test_stundenwechsel_schreibt_die_alte_stunde_fest(store):
+    """Wie beim Tageswechsel: die Minuten vor dem vollen Stundenschlag dürfen
+    nicht im Speicher verfallen, wenn der Schreibtakt gerade träge ist."""
+    z = Energiezaehler(store, schreib_intervall_s=3600)
+    t0 = datetime(2026, 8, 22, 10, 59, 0)
+    z.tick(STATUS, t0)
+    z.tick(STATUS, t0 + timedelta(seconds=60))          # 11:00 → neue Stunde
+    zeile = store.energie_stunde_lesen("2026-08-22 10")
+    assert zeile is not None and zeile["pv_haus_wh"] > 0
+
+
+def test_tageswechsel_schliesst_auch_die_stunde_ab(store):
+    """Ein Tageswechsel ist immer auch ein Stundenwechsel. Behandelte man ihn
+    in einem eigenen Zweig mit `return`, verlöre die letzte Stunde des Tages
+    ihre letzten Minuten."""
+    z = Energiezaehler(store, schreib_intervall_s=3600)
+    t0 = datetime(2026, 8, 22, 23, 59, 0)
+    z.tick(STATUS, t0)
+    z.tick(STATUS, t0 + timedelta(seconds=60))          # 00:00 → neuer Tag
+    assert store.energie_stunde_lesen("2026-08-22 23")["pv_haus_wh"] > 0
+    # Die neue Stunde beginnt bei null und nicht mit dem Stand der alten.
+    z.tick(STATUS, t0 + timedelta(seconds=120))
+    assert store.energie_stunde_lesen("2026-08-23 00")["pv_haus_wh"] < 100.0
+
+
+def test_neustart_zaehlt_die_stunde_weiter_statt_neu(store):
+    """Dieselbe Falle wie beim Tag: ohne Rückladen begänne die laufende Stunde
+    nach einem Add-on-Update wieder bei null."""
+    t0 = datetime(2026, 8, 22, 10, 0, 0)
+    z1 = Energiezaehler(store, schreib_intervall_s=0)
+    for i in range(11):
+        z1.tick(STATUS, t0 + timedelta(seconds=60 * i))
+    z2 = Energiezaehler(store, schreib_intervall_s=0)   # „Neustart" in derselben Stunde
+    t1 = t0 + timedelta(minutes=20)
+    for i in range(11):
+        z2.tick(STATUS, t1 + timedelta(seconds=60 * i))
+    # 10 + 10 Minuten à 3000 W = 1000 Wh; ohne Rückladen stünden hier 500.
+    assert store.energie_stunde_lesen("2026-08-22 10")["pv_haus_wh"] == pytest.approx(1000.0, rel=1e-6)
+
+
+def test_stundenfenster_schneidet_am_tagesrand(store):
+    """`von`/`bis` sind Tage, die Schlüssel aber 'YYYY-MM-DD HH'. Ohne den
+    Zuschlag am oberen Rand fiele jede Stunde des Bis-Tages heraus."""
+    for s in ("2026-08-21 23", "2026-08-22 00", "2026-08-22 23", "2026-08-23 00"):
+        store.energie_stunde_schreiben(s, {"pv_haus_wh": 100.0})
+    zeilen = store.energie_stunden(von="2026-08-22", bis="2026-08-22")
+    assert [z["periode"] for z in zeilen] == ["2026-08-22 00", "2026-08-22 23"]
+
+
 # --- E3DC-Import ------------------------------------------------------------
 
 # Ein plausibler Tag: 20 kWh PV, davon 8 eingespeist, 3 aus dem Netz geholt,

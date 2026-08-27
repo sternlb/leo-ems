@@ -53,6 +53,18 @@ CREATE TABLE IF NOT EXISTS energie_tag (   -- Tagesbilanz je Kanal in Wh (Issue 
     quelle TEXT NOT NULL,                  -- 'ems' | 'e3dc' | 'e3dc-ohne-garage'
     aktualisiert TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS energie_stunde ( -- Stundenbilanz je Kanal in Wh (v0.15)
+    stunde TEXT PRIMARY KEY,               -- 'YYYY-MM-DD HH', Ortszeit
+    pv_haus_wh REAL NOT NULL DEFAULT 0,
+    pv_garage_wh REAL NOT NULL DEFAULT 0,
+    netz_bezug_wh REAL NOT NULL DEFAULT 0,
+    netz_einspeisung_wh REAL NOT NULL DEFAULT 0,
+    batt_laden_wh REAL NOT NULL DEFAULT 0,
+    batt_entladen_wh REAL NOT NULL DEFAULT 0,
+    haus_wh REAL NOT NULL DEFAULT 0,       -- Hausverbrauch OHNE Wallbox
+    wallbox_wh REAL NOT NULL DEFAULT 0,
+    aktualisiert TEXT NOT NULL
+);
 """
 
 # Spalten, die nach der ersten Auslieferung dazugekommen sind. CREATE TABLE
@@ -226,6 +238,72 @@ class Store:
         if row is None:
             return None
         return dict(zip([c[0] for c in cur.description], row))
+
+    # --- Energie-Stundenbilanz (v0.15) ---------------------------------------
+    # Damit die Tagesansicht den Tag über 24 Stunden zeigen kann, reicht die
+    # Tageszeile nicht — sie ist genau eine Säule. Die Stundentabelle wird vom
+    # selben Zähler gefüllt und nach denselben Regeln (absolute Stände, UPSERT).
+    #
+    # Kein Nachtrag für die Vergangenheit möglich: `snapshots` führt weder
+    # `p_pv_e3dc_w` noch `p_haus_w`, und die E3DC-Historie liefert Tagessummen.
+    # Stunden gibt es deshalb erst ab dem Tag, an dem diese Version läuft — die
+    # Ansicht sagt das offen, statt eine flache Kurve zu erfinden.
+
+    def energie_stunde_schreiben(self, stunde: str, werte: dict,
+                                 jetzt: datetime | None = None) -> None:
+        """Eine Stundenzeile setzen (UPSERT, absolute Werte wie beim Tag)."""
+        spalten = ", ".join(self.ENERGIE_KANAELE)
+        platz = ", ".join("?" * len(self.ENERGIE_KANAELE))
+        setzt = ", ".join(f"{s}=excluded.{s}" for s in self.ENERGIE_KANAELE)
+        werte_liste = [float(werte.get(s) or 0.0) for s in self.ENERGIE_KANAELE]
+        ts = (jetzt or datetime.now()).isoformat(timespec="seconds")
+        self._db.execute(
+            f"INSERT INTO energie_stunde (stunde, {spalten}, aktualisiert)"
+            f" VALUES (?, {platz}, ?)"
+            f" ON CONFLICT(stunde) DO UPDATE SET {setzt},"
+            f" aktualisiert=excluded.aktualisiert",
+            [stunde] + werte_liste + [ts],
+        )
+        self._db.commit()
+
+    def energie_stunde_lesen(self, stunde: str) -> dict | None:
+        cur = self._db.execute("SELECT * FROM energie_stunde WHERE stunde=?", (stunde,))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return dict(zip([c[0] for c in cur.description], row))
+
+    def energie_stunden(self, von: str | None = None,
+                        bis: str | None = None) -> list[dict]:
+        """Stundenzeilen eines Tagesfensters, in der Form der Diagrammreihe.
+
+        `von`/`bis` sind **Tage** (YYYY-MM-DD) wie überall in der Historie; der
+        Vergleich läuft trotzdem sauber, weil 'YYYY-MM-DD HH' mit dem Tag
+        beginnt und lexikografisch sortiert. `bis` bekommt darum ein
+        angehängtes 'Z', damit die letzte Stunde des Tages noch hineinfällt.
+
+        Ausgegeben wird `periode` (nicht `stunde`), damit Diagramme, Tabelle
+        und CSV-Export dieselbe Zeilenform sehen wie bei Tag/Woche/Monat/Jahr.
+        `tage` gibt es hier nicht — eine Stunde ist kein Tag, und eine Spalte
+        voller Nullen im Export wäre nur eine Einladung, sie zu summieren.
+        """
+        sql = "SELECT * FROM energie_stunde"
+        bed, args = [], []
+        if von:
+            bed.append("stunde >= ?"); args.append(von)
+        if bis:
+            bed.append("stunde <= ?"); args.append(bis + "Z")
+        if bed:
+            sql += " WHERE " + " AND ".join(bed)
+        cur = self._db.execute(sql + " ORDER BY stunde", args)
+        cols = [c[0] for c in cur.description]
+        zeilen = []
+        for r in cur.fetchall():
+            roh = dict(zip(cols, r))
+            z = {"periode": roh["stunde"], "stunden": 1, "quellen": "ems"}
+            z.update({k: roh.get(k) for k in self.ENERGIE_KANAELE})
+            zeilen.append(z)
+        return zeilen
 
     def energie_tage(self, von: str | None = None, bis: str | None = None) -> list[dict]:
         sql = "SELECT * FROM energie_tag"

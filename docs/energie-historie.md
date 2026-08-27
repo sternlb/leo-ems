@@ -157,17 +157,47 @@ Die Historie ist kein Teil des Statusblicks: Sie wird gezielt aufgesucht und
 lädt eigene Daten. Sie liegt deshalb hinter einem Reiter neben „Übersicht" und
 lädt erst beim ersten Öffnen.
 
-**Vier Ebenen** — Tag, Woche, Monat, Jahr. Die Woche wird über den **Montag als
-Datum** gruppiert und nicht über eine Kalenderwochennummer: SQLites `%W` zählt
-ab dem ersten Montag des Jahres, alles davor landet in Woche 00, und zum
-Jahreswechsel gehören Tage zweier Jahre in dieselbe Woche.
+**Vier Ansichten — benannt nach dem Zeitraum, den man wählt** (v0.15). Bis
+v0.14 meinten die Knöpfe die *Säulenbreite*: „Tag" zeigte einen ganzen Monat in
+Tagessäulen, „Woche" ein ganzes Jahr in Wochensäulen. Das war nicht nur
+verwirrend, es machte die Navigation daneben unbrauchbar — auf „Tag" ließ sich
+nur ein Monat wählen, auf „Woche" nur ein Jahr. Jetzt gilt:
 
-**Fenster statt Vollauszug.** Tage werden monatsweise gezeigt, Wochen und
-Monate jahrweise, Jahre alle; ← / → blättern. Ohne das stünden entweder 1800
-Säulen nebeneinander oder drei. Das Fenster grenzt auf **Tagesebene** ein, nicht
-auf Periodenebene — eine angeschnittene Randwoche ist die Summe ihrer Tage im
-Fenster. Die Spalte `tage` weist aus, wie viele das waren; sonst läse man eine
-kurze Randsäule als schlechten Ertrag.
+| Ansicht | Fenster | Säulen | ← / → |
+|---|---|---|---|
+| Tag | ein Tag | 24 Stunden | ± 1 Tag |
+| Woche | Mo – So | die 7 Tage | ± 1 Woche |
+| Monat | 1. – Monatsende | die Tage | ± 1 Monat |
+| Jahr | 1.1. – 31.12. | die Monate | ± 1 Jahr |
+
+Die Wochenansicht gruppiert über den **Montag als Datum** und nicht über eine
+Kalenderwochennummer: SQLites `%W` zählt ab dem ersten Montag des Jahres, alles
+davor landet in Woche 00, und zum Jahreswechsel gehören Tage zweier Jahre in
+dieselbe Woche.
+
+**Direktwahl.** Rechts neben den Pfeilen steht ein Datumsfeld (Tag, Woche,
+Monat) bzw. eine Jahresliste. Bewusst ein `type="date"` und kein
+`type="week"`/`type="month"`: die beiden gibt es auf iOS nicht und fallen dort
+auf ein nacktes Textfeld zurück. Ein Datum versteht jedes Gerät; welche Woche
+bzw. welcher Monat daraus wird, steht daneben im Fenstertitel. Der erste
+Eintrag der Jahresliste ist **alle Jahre** — die frühere Gesamtübersicht, die
+sonst mit der neuen Fensterlogik keinen Platz mehr hätte.
+
+**Fenster statt Vollauszug.** Ohne die Begrenzung stünden entweder 1800 Säulen
+nebeneinander oder drei; ← / → blättern. Das Fenster grenzt auf **Tagesebene**
+ein, nicht auf Periodenebene — eine angeschnittene Randwoche ist die Summe
+ihrer Tage im Fenster. Die Spalte `tage` weist aus, wie viele das waren; sonst
+läse man eine kurze Randsäule als schlechten Ertrag.
+
+**Stundenwerte (v0.15).** Die Tagesansicht braucht eine Auflösung, die
+`energie_tag` nicht hat. Der Zähler schreibt deshalb parallel eine zweite
+Tabelle `energie_stunde` — dieselbe Mechanik (absolute Stände, UPSERT,
+Rückladen beim Neustart), nur mit dem Schlüssel `YYYY-MM-DD HH`. Ein
+Tageswechsel ist immer auch ein Stundenwechsel und schließt beide Perioden ab.
+**Nachtragen geht nicht:** die Ticks in `snapshots` führen weder `p_pv_e3dc_w`
+noch `p_haus_w`, und die E3DC-Historie liefert Tagessummen. Für Tage vor der
+Umstellung sagt die Ansicht das offen an — eine flache Kurve wäre erfunden.
+24 Zeilen/Tag sind ~8.800/Jahr und bleiben damit so klein wie die Tagestabelle.
 
 **Drei Diagramme**, selbst gezeichnetes SVG statt einer Bibliothek: Das Add-on
 liefert sein Dashboard offline aus dem Container aus, ein CDN-Skript wäre dort
@@ -187,18 +217,23 @@ steht; eine zweite Messung wiche früher oder später davon ab. Der Clamp fängt
 Zeiträume ab, in denen Wandlungsverluste die Bilanz leicht kippen — eine
 negative Säule wäre dort kein Erkenntnisgewinn, sondern Rauschen.
 
-Ein Klick auf eine Säule geht eine Ebene tiefer: Jahr → Monate, Monat oder
-Woche → Tage.
+Ein Klick auf eine Säule macht sie zum neuen Fenster: alle Jahre → ein Jahr,
+Jahr → ein Monat, Monat oder Woche → ein Tag (in Stunden). Auf der
+Stundenebene passiert nichts mehr.
 
 **Ein Endpunkt für alle Ebenen:**
 
 ```
-GET /api/v1/energie/reihe?ebene=tag|woche|monat|jahr[&jahr=][&von=][&bis=]
+GET /api/v1/energie/reihe?ebene=stunde|tag|woche|monat|jahr[&jahr=][&von=][&bis=]
 ```
 
 Immer dieselben Felder (`periode`, `tage`, die acht Kanäle in kWh, `quellen`),
 damit das Diagramm seine Achse nicht von der Ebene abhängig machen muss. Die
 älteren `/tage`, `/monate`, `/jahre` bleiben unverändert.
+
+`ebene=stunde` kommt aus der eigenen Stundentabelle statt aus einer weiteren
+GROUP-BY-Ebene — aus Tageszeilen lassen sich Stunden nicht herleiten. Die
+Zeilen tragen dort `stunden: 1` statt `tage`; `von`/`bis` bleiben Tage.
 
 ## Ablageformat und Export
 
@@ -206,7 +241,7 @@ Der Bestand liegt in der Add-on-Datenbank (`/data/leo_ems.db`) und ist damit im
 HA-Backup enthalten. Für alles außerhalb: CSV.
 
 ```
-GET /api/v1/energie/export.csv?ebene=tag|woche|monat|jahr[&jahr=][&von=][&bis=]
+GET /api/v1/energie/export.csv?ebene=stunde|tag|woche|monat|jahr[&jahr=][&von=][&bis=]
 ```
 
 Semikolon als Trenner, Komma als Dezimalzeichen — die Datei landet in Excel mit

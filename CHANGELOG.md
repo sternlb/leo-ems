@@ -8,6 +8,37 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.15.0
+
+**Die Historie zeigt jetzt den Zeitraum, den man auswählt — und der Tag
+zerfällt in seine 24 Stunden.**
+
+*Der Fehler.* Die vier Knöpfe hießen Tag/Woche/Monat/Jahr, meinten aber die
+**Säulenbreite** und nicht den Zeitraum: „Tag" zeigte einen ganzen Monat in
+Tagessäulen, „Woche" ein ganzes Jahr in Wochensäulen. Entsprechend bot die
+Navigation rechts auf „Tag" nur Monate an und auf „Woche" nur Jahre — genau
+Leos Beobachtung. Jetzt heißt eine Ansicht nach dem Zeitraum, den man wählt:
+**Tag** = ein Tag über 0–24 Uhr, **Woche** = die sieben Tage dieser Woche,
+**Monat** = die Tage dieses Monats, **Jahr** = die Monate dieses Jahres. Die
+Pfeile springen um genau eine dieser Einheiten weiter.
+
+*Direktwahl.* Neben den Pfeilen steht ein Datumsfeld (Tag/Woche/Monat) bzw.
+eine Jahresliste. Bewusst ein `type="date"` und kein `type="week"`/`"month"`:
+die beiden gibt es auf iOS nicht und fallen dort auf ein nacktes Textfeld
+zurück. Welche Woche bzw. welcher Monat aus dem Datum wird, steht daneben im
+Fenstertitel. Die frühere Übersicht über **alle Jahre** ist als erster
+Eintrag der Jahresliste erhalten geblieben.
+
+*Stundenwerte.* Für „ein Tag über 24 Stunden" gab es schlicht keine Daten:
+`energie_tag` ist auf den Tag genau, und die Ticks in `snapshots` führen
+weder `p_pv_e3dc_w` noch `p_haus_w`. Neue Tabelle `energie_stunde`, gefüllt
+vom selben Zähler nach denselben Regeln (absolute Stände, UPSERT, Rückladen
+beim Neustart). Nachtragen lässt sich das **nicht** — die E3DC-Historie
+liefert Tagessummen. Stundensäulen gibt es deshalb erst ab dem Tag, an dem
+diese Version läuft; für ältere Tage sagt die Ansicht das offen, statt eine
+flache Kurve zu erfinden. Neu ist dafür `ebene=stunde` in
+`/api/v1/energie/reihe` und im CSV-Export.
+
 ## 0.14.0
 
 **Der Tagesertrag steht jetzt auf der Startseite, und die Historie hat einen
