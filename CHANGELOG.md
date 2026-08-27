@@ -8,6 +8,65 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.14.0
+
+**Der Tagesertrag steht jetzt auf der Startseite, und die Historie hat einen
+eigenen Reiter mit Diagrammen.**
+
+*Heute.* Bis hierher zeigte das Dashboard ausschließlich Leistungen — was in
+diesem Augenblick fließt. Die Frage „wie viel ist heute zusammengekommen?"
+war damit nur in der E3DC-App oder im HA-Energie-Dashboard zu beantworten,
+und dort steht seit der Garagen-Anlage der falsche Hausverbrauch (siehe
+0.13.0). Der Energiezähler rechnet den richtigen Wert längst mit; er stand
+bloß nirgends. `/api/v1/status` liefert ihn jetzt als `energie_heute` mit,
+und darunter steht eine eigene Kachelreihe: Ertrag (Haus/Garage), Verbrauch
+(Haus/Wallbox), Netzbezug und Einspeisung, Batterie, Autarkie mit Balken.
+Bewusst eine **eigene Reihe** und nicht in die Leistungskacheln gemischt —
+kW und kWh nebeneinander in derselben Zeile liest man unweigerlich falsch.
+
+*Historie als Reiter.* Die Energie-Historie war eine weitere einklappbare
+Sektion am Ende eines ohnehin langen Scrolls. Sie wird aber nicht im
+Vorbeigehen gelesen, sondern gezielt aufgesucht, und sie lädt Daten, die der
+Statusblick nicht braucht. Sie ist deshalb jetzt ein eigener Reiter neben
+„Übersicht", und sie lädt erst beim ersten Öffnen.
+
+*Vier Ebenen, drei Diagramme.* Tag, Woche, Monat, Jahr — jeweils mit
+Kennzahlen des Zeitraums (Erzeugung, Verbrauch, Netz, Autarkie,
+Eigenverbrauch) und drei Balkendiagrammen:
+
+- **Erzeugung und Verbrauch** — je Zeitraum zwei gestapelte Säulen
+  nebeneinander, links PV Haus + Garage, rechts Haus + Wallbox.
+- **Woher der Verbrauch gedeckt wurde** — ein Stapel aus PV direkt,
+  Batterie und Netz. Der PV-Direktanteil ist der Rest, der nach Netzbezug
+  und Batterieentladung bleibt: aus der Bilanz abgeleitet statt separat
+  gemessen, damit sich der Stapel exakt auf den Verbrauch summiert.
+- **Netzaustausch** — Bezug nach oben, Einspeisung nach unten, gleiche Skala.
+
+Ein Klick auf eine Säule geht eine Ebene tiefer (Jahr → Monate, Monat oder
+Woche → Tage). Die Diagramme sind selbst gezeichnetes SVG und keine
+Bibliothek: Das Add-on liefert sein Dashboard offline aus dem Container aus,
+ein CDN-Skript wäre dort schlicht nicht erreichbar, und eine mitgelieferte
+Bibliothek wiegt mehr als die drei Balkentypen, um die es geht.
+
+*Woche als neue Ebene.* Gruppiert wird über den **Montag als Datum**, nicht
+über eine Kalenderwochennummer: SQLites `%W` zählt ab dem ersten Montag des
+Jahres, alles davor landet in Woche 00, und zum Jahreswechsel gehören Tage
+zweier Jahre in dieselbe Woche — ein Nummernpaar wäre dort mehrdeutig.
+
+*Fenster statt Vollauszug.* Tage werden monatsweise gezeigt, Wochen und
+Monate jahrweise, Jahre alle. Ohne das stünden entweder 1800 Säulen
+nebeneinander oder drei. Das Fenster grenzt auf **Tagesebene** ein, nicht auf
+Periodenebene; eine angeschnittene Randwoche ist die Summe ihrer Tage im
+Fenster, und die neue Spalte `tage` weist aus, wie viele das waren — sonst
+läse man eine kurze Randsäule als schlechten Ertrag. Der CSV-Export folgt
+demselben Fenster: Eine Datei, die stillschweigend mehr enthält als das
+Diagramm darüber, führt beim Nachrechnen in die Irre.
+
+Neu: `GET /api/v1/energie/reihe?ebene=tag|woche|monat|jahr&von=&bis=&jahr=`
+— eine Zeilenform für alle vier Ebenen, damit das Diagramm seine Achse nicht
+von der Ebene abhängig machen muss. Die älteren `/tage`, `/monate`, `/jahre`
+bleiben unverändert. 196 Tests grün.
+
 ## 0.13.1
 
 **Der Historien-Import hat die Netzrichtung falsch bestimmt — am ersten

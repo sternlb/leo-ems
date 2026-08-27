@@ -295,6 +295,10 @@
     /* WP-Schalter sind Bedienelemente, keine Badges — volles Touch-Ziel (Issue #1) */
     .wp-split .badge.switch { min-height: 44px; display: inline-flex; align-items: center; padding: 0 .9em; }
 
+    /* Tabs: zwei Reiter dürfen die Breite ruhig teilen */
+    .tabs button { flex: 1; padding: .7em .4em; font-size: .72rem; letter-spacing: .06em; }
+    .en-nav { margin-left: 0; width: 100%; justify-content: space-between; }
+
     /* Protokoll: umbrechen statt seitlich scrollen */
     .hist { white-space: normal; overflow-x: visible; line-height: 1.7; }
 
@@ -316,6 +320,56 @@
     .collapsible.collapsed > h2::after { transform: rotate(-90deg); }
     .collapsible.collapsed > :not(h2) { display: none; }
   }
+  /* --- Tabs (v0.14) ---------------------------------------------------------
+     Die Historie ist ein eigener Ort, keine weitere Sektion im selben langen
+     Scroll: Sie wird nicht im Vorbeigehen gelesen, sondern gezielt aufgesucht,
+     und sie lädt Daten, die der Statusblick nicht braucht. */
+  .tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--line); margin-bottom: .2rem; }
+  .tabs button { font-family: var(--mono); font-size: .78rem; text-transform: uppercase;
+    letter-spacing: .1em; background: none; border: 0; border-bottom: 2px solid transparent;
+    color: var(--dim); padding: .7em 1.1em; cursor: pointer; min-height: 44px; }
+  .tabs button[aria-selected="true"] { color: var(--forest); border-bottom-color: var(--lime); font-weight: 700; }
+  .tabpane[hidden] { display: none; }
+
+  /* --- Tageskacheln: kWh statt W --------------------------------------------
+     Bewusst eine eigene Reihe und nicht in die Leistungskacheln gemischt: kW
+     und kWh nebeneinander in derselben Zeile liest man unweigerlich falsch. */
+  .kwh { font-family: var(--mono); font-size: 1.55rem; }
+  .kwh small { font-size: .8rem; color: var(--dim); }
+  .heute-hint { font-size: .75rem; color: var(--dim); font-family: var(--mono); margin-left: .5rem; }
+
+  /* --- Diagramme (v0.14) ----------------------------------------------------
+     Eigene SVG-Zeichnung statt einer Chart-Bibliothek: Das Add-on liefert sein
+     Dashboard offline aus dem Container aus, ein CDN-Skript wäre dort schlicht
+     nicht erreichbar, und eine mitgelieferte Bibliothek wiegt mehr als die
+     drei Balkentypen, um die es hier geht. */
+  .chart-box { overflow-x: auto; margin-top: .3rem; }
+  .chart-box svg { display: block; }
+  .ch-grid { stroke: var(--line); stroke-width: 1; }
+  .ch-null { stroke: var(--dim); stroke-width: 1; }
+  .ch-ax { font-family: var(--mono); font-size: 10px; fill: var(--dim); }
+  .ch-ax.mitte { text-anchor: middle; }
+  .ch-ax.rechts { text-anchor: end; }
+  .ch-grp { cursor: default; }
+  .ch-grp.drill { cursor: pointer; }
+  .ch-grp:hover rect { opacity: .78; }
+  .ch-leer { padding: 1.6rem 0; text-align: center; color: var(--dim); font-family: var(--mono); font-size: .8rem; }
+  .ch-titel { font-family: var(--disp); font-size: .95rem; margin-bottom: .15rem; }
+  .ch-note { font-size: .78rem; color: var(--dim); margin-bottom: .5rem; line-height: 1.45; }
+  .chart-card + .chart-card { margin-top: .75rem; }
+
+  /* Werkzeugleiste der Historie: Ebene links, Fenster-Navigation rechts */
+  .en-bar { display: flex; gap: .6rem 1rem; flex-wrap: wrap; align-items: center; }
+  .en-nav { display: flex; gap: .35rem; align-items: center; margin-left: auto; }
+  .en-nav .fenster { font-family: var(--mono); font-size: .85rem; color: var(--forest);
+    min-width: 9ch; text-align: center; }
+  .en-nav .btn { padding: .45em .8em; }
+
+  /* Kennzahlen über den Diagrammen — kompakter als die Statuskacheln */
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .kpis .card { padding: .7rem .8rem; }
+  .kpis .kwh { font-size: 1.25rem; }
+
   footer { margin-top: 2.5rem; font-family: var(--mono); font-size: .68rem; color: var(--dim); display: flex; justify-content: space-between; }
 </style>
 </head>
@@ -331,6 +385,13 @@
   </header>
 
   <div id="offline" class="offline hidden">Keine Verbindung zum EMS – nächster Versuch läuft …</div>
+
+  <nav class="tabs" role="tablist" aria-label="Ansicht">
+    <button id="tabbtn-live" role="tab" aria-selected="true" aria-controls="tab-live" data-tab="live">Übersicht</button>
+    <button id="tabbtn-hist" role="tab" aria-selected="false" aria-controls="tab-hist" data-tab="hist">Historie</button>
+  </nav>
+
+<div class="tabpane" id="tab-live" role="tabpanel" aria-labelledby="tabbtn-live">
 
   <!-- Lastverteilung -->
   <section>
@@ -716,6 +777,24 @@
     </div>
   </section>
 
+  <!-- Heute: die Tagesbilanz, die der Regelblick oben nicht zeigt -->
+  <section>
+    <h2>Heute <span class="heute-hint" id="heute-tag">–</span></h2>
+    <div class="grid tiles">
+      <div class="card"><h3>Ertrag</h3><div class="kwh lime" id="d-ertrag">–</div>
+        <div class="sub">Haus <b id="d-pv-haus">–</b> · Garage <b id="d-pv-garage">–</b></div></div>
+      <div class="card"><h3>Verbrauch</h3><div class="kwh" id="d-verbrauch">–</div>
+        <div class="sub">Haus <b id="d-haus">–</b> · Wallbox <b id="d-wallbox">–</b></div></div>
+      <div class="card"><h3>Netz</h3><div class="kwh" id="d-bezug">–</div>
+        <div class="sub">bezogen · eingespeist <b id="d-einspeisung">–</b></div></div>
+      <div class="card"><h3>Batterie</h3><div class="kwh" id="d-batt-laden">–</div>
+        <div class="sub">geladen · entladen <b id="d-batt-entladen">–</b></div></div>
+      <div class="card"><h3>Autarkie</h3><div class="kwh" id="d-autarkie">–</div>
+        <div class="socbar-t laedt" id="d-autarkie-bar"><div></div></div>
+        <div class="sub">Eigenverbrauch <b id="d-eigen">–</b></div></div>
+    </div>
+  </section>
+
   <!-- Wärmepumpe: zweigeteilt Warmwasser / Heizkreis (Issue #1) -->
   <section>
     <h2>Wärmepumpe</h2>
@@ -841,18 +920,84 @@
   </section>
 
   <!-- Energie-Historie (Issue #13) -->
-  <section class="collapsible" id="sect-energie">
+  <!-- Protokoll -->
+  <section class="collapsible" id="sect-log">
+    <h2>Protokoll</h2>
+    <div class="card"><div class="hist" id="hist">–</div></div>
+  </section>
+
+</div><!-- /tab-live -->
+
+<div class="tabpane" id="tab-hist" role="tabpanel" aria-labelledby="tabbtn-hist" hidden>
+
+  <!-- Historische Energiedaten: Tag / Woche / Monat / Jahr -->
+  <section>
     <h2>Energie-Historie</h2>
     <div class="card">
-      <div class="form-grid" style="align-items:end">
-        <label class="f"><span>Ebene</span>
-          <select id="en-ebene"><option value="monat">Monate</option><option value="jahr">Jahre</option><option value="tag">Tage</option></select>
-        </label>
-        <label class="f"><span>Jahr (nur Monate)</span><input type="text" id="en-jahr" placeholder="2026" style="text-transform:none"></label>
-        <div><button class="btn" id="en-laden">Anzeigen</button></div>
-        <div><a class="btn" id="en-csv" href="#" download>CSV herunterladen</a></div>
+      <div class="en-bar">
+        <div class="modes" id="en-ebene">
+          <button type="button" data-e="tag">Tag</button>
+          <button type="button" data-e="woche">Woche</button>
+          <button type="button" data-e="monat" class="active">Monat</button>
+          <button type="button" data-e="jahr">Jahr</button>
+        </div>
+        <div class="en-nav">
+          <button class="btn ghost" id="en-zurueck" type="button" title="Fenster zurück" aria-label="Fenster zurück">←</button>
+          <span class="fenster" id="en-fenster">–</span>
+          <button class="btn ghost" id="en-vor" type="button" title="Fenster vor" aria-label="Fenster vor">→</button>
+          <button class="btn ghost" id="en-jetzt" type="button">Heute</button>
+        </div>
       </div>
-      <div id="en-hinweis" style="opacity:.7; margin:.6rem 0 0; font-size:.85rem"></div>
+      <div id="en-hinweis" style="opacity:.75; margin:.7rem 0 0; font-size:.85rem"></div>
+    </div>
+
+    <!-- Summen des sichtbaren Fensters. Sie stehen über den Diagrammen, weil
+         die Frage „wie viel war es insgesamt?" fast immer zuerst kommt. -->
+    <div class="grid tiles kpis" style="margin-top:.75rem">
+      <div class="card"><h3>Erzeugung</h3><div class="kwh lime" id="k-erzeugung">–</div>
+        <div class="sub">Haus <b id="k-pv-haus">–</b> · Garage <b id="k-pv-garage">–</b></div></div>
+      <div class="card"><h3>Verbrauch</h3><div class="kwh" id="k-verbrauch">–</div>
+        <div class="sub">Haus <b id="k-haus">–</b> · Wallbox <b id="k-wallbox">–</b></div></div>
+      <div class="card"><h3>Netzbezug</h3><div class="kwh rotc" id="k-bezug">–</div>
+        <div class="sub">Einspeisung <b id="k-einspeisung">–</b></div></div>
+      <div class="card"><h3>Autarkie</h3><div class="kwh" id="k-autarkie">–</div>
+        <div class="sub">Eigenverbrauch <b id="k-eigen">–</b></div></div>
+      <div class="card"><h3>Zeitraum</h3><div class="kwh" id="k-tage">–</div>
+        <div class="sub" id="k-spanne">–</div></div>
+    </div>
+
+    <div class="card chart-card" style="margin-top:.75rem">
+      <div class="ch-titel">Erzeugung und Verbrauch</div>
+      <div class="ch-note" id="ch1-note">Je Zeitraum zwei Säulen: links, was die Anlagen erzeugt haben, rechts, was das Haus gebraucht hat.</div>
+      <div class="legend" id="ch1-leg"></div>
+      <div class="chart-box"><svg id="ch1"></svg></div>
+      <div class="ch-leer hidden" id="ch1-leer">Keine Daten in diesem Zeitraum.</div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="ch-titel">Woher der Verbrauch gedeckt wurde</div>
+      <div class="ch-note">Jede Säule ist der Verbrauch des Zeitraums, aufgeteilt nach Herkunft.
+        Der PV-Direktanteil ist der Rest, der nach Netzbezug und Batterieentladung bleibt — die
+        Zerlegung folgt damit der Bilanz und nicht einer zweiten Messung.</div>
+      <div class="legend" id="ch2-leg"></div>
+      <div class="chart-box"><svg id="ch2"></svg></div>
+      <div class="ch-leer hidden" id="ch2-leer">Keine Daten in diesem Zeitraum.</div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="ch-titel">Netzaustausch</div>
+      <div class="ch-note">Nach oben der Bezug, nach unten die Einspeisung — gleiche Skala, damit
+        sich beide Seiten direkt vergleichen lassen.</div>
+      <div class="legend" id="ch3-leg"></div>
+      <div class="chart-box"><svg id="ch3"></svg></div>
+      <div class="ch-leer hidden" id="ch3-leer">Keine Daten in diesem Zeitraum.</div>
+    </div>
+  </section>
+
+  <section class="collapsible" id="sect-entabelle">
+    <h2>Tabelle und Export</h2>
+    <div class="card">
+      <div><a class="btn" id="en-csv" href="#" download>CSV herunterladen</a></div>
       <div style="overflow-x:auto; margin-top:1rem">
         <table id="en-tab">
           <thead><tr>
@@ -863,8 +1008,14 @@
           <tbody></tbody>
         </table>
       </div>
-      <div class="form-grid" style="align-items:end; margin-top:1.2rem">
-        <label class="f"><span>Nachimport von</span><input type="date" id="en-von"></label>
+    </div>
+  </section>
+
+  <section class="collapsible" id="sect-enimport">
+    <h2>Nachimport aus der E3DC</h2>
+    <div class="card">
+      <div class="form-grid" style="align-items:end">
+        <label class="f"><span>von</span><input type="date" id="en-von"></label>
         <label class="f"><span>bis</span><input type="date" id="en-bis"></label>
         <div><button class="btn" id="en-import">Historie aus der E3DC holen</button></div>
       </div>
@@ -872,11 +1023,7 @@
     </div>
   </section>
 
-  <!-- Protokoll -->
-  <section class="collapsible" id="sect-log">
-    <h2>Protokoll</h2>
-    <div class="card"><div class="hist" id="hist">–</div></div>
-  </section>
+</div><!-- /tab-hist -->
 
   <footer><span id="f-ver">Leo-EMS</span><span>basel<span style="color:var(--lime-ink)">AI</span> · lokal, kein Cloud-Zwang</span></footer>
 
@@ -1449,6 +1596,27 @@ $("scene-toggle").addEventListener("click", () =>
   setSceneOpen($("scene-card").classList.contains("scene-collapsed")));
 setSceneOpen(localStorage.getItem("leoems_scene_open") === "1");  // Default: eingeklappt
 
+// --- Tabs (v0.14) -----------------------------------------------------------
+// Die Historie lädt erst beim ersten Öffnen: Sie holt eine eigene Reihe vom
+// Server, und wer nur nach dem Ladezustand schaut, soll dafür nicht zahlen.
+let histGeladen = false;
+function zeigeTab(name) {
+  for (const b of document.querySelectorAll(".tabs button")) {
+    const an = b.dataset.tab === name;
+    b.setAttribute("aria-selected", an ? "true" : "false");
+    $("tab-" + b.dataset.tab).hidden = !an;
+  }
+  localStorage.setItem("leoems_tab", name);
+  if (name === "hist" && !histGeladen) {
+    histGeladen = true;
+    ladeEnergie().catch(e => $("en-hinweis").textContent = "Konnte die Historie nicht laden: " + e);
+    importStatus();
+  } else if (name === "hist") {
+    ladeEnergie();   // beim Zurückkehren die Zahlen auffrischen
+  }
+}
+for (const b of document.querySelectorAll(".tabs button")) b.onclick = () => zeigeTab(b.dataset.tab);
+
 // Sektionen ein-/ausklappen (Handy, Punkt 6). Default eingeklappt für den
 // Status-Blick, Zustand je Sektion gemerkt. Auf Desktop ohne sichtbaren Effekt.
 document.querySelectorAll(".collapsible").forEach(sec => {
@@ -1508,6 +1676,7 @@ function render(st) {
   $("t-wb-detail").textContent = st.laedt ? `${st.strom_a} A · ${st.phasen}-phasig` : "lädt nicht";
   $("t-soc-v").textContent = st.soc_fahrzeug == null ? "–" : pct(st.soc_fahrzeug) + " / " + pct(st.fahrzeug_limit_soc);
 
+  renderHeute(st);
   updateScene(st);
   renderWp(st);
 
@@ -1517,6 +1686,35 @@ function render(st) {
 
   for (const b of $("modes").children) b.classList.toggle("active", b.dataset.m === st.modus);
   renderPhasen();
+}
+
+// Tagesbilanz (v0.14). Die Leistungskacheln darüber beantworten „was passiert
+// gerade", diese Reihe „was ist heute zusammengekommen" — die Frage, für die
+// Leo bisher in die E3DC-App oder ins HA-Energie-Dashboard wechseln musste.
+function renderHeute(st) {
+  const e = st.energie_heute, k = (e && e.stand_kwh) || {};
+  $("heute-tag").textContent = e && e.tag ? e.tag : "–";
+  const pvH = k.pv_haus_wh || 0, pvG = k.pv_garage_wh || 0;
+  const haus = k.haus_wh || 0, wb = k.wallbox_wh || 0;
+  const bez = k.netz_bezug_wh || 0, ein = k.netz_einspeisung_wh || 0;
+  const erz = pvH + pvG, verbr = haus + wb;
+  $("d-ertrag").textContent = kwh(erz);
+  $("d-pv-haus").textContent = kwh(pvH);
+  $("d-pv-garage").textContent = kwh(pvG);
+  $("d-verbrauch").textContent = kwh(verbr);
+  $("d-haus").textContent = kwh(haus);
+  $("d-wallbox").textContent = kwh(wb);
+  $("d-bezug").textContent = kwh(bez);
+  $("d-einspeisung").textContent = kwh(ein);
+  $("d-batt-laden").textContent = kwh(k.batt_laden_wh || 0);
+  $("d-batt-entladen").textContent = kwh(k.batt_entladen_wh || 0);
+  // Autarkie = Anteil des Verbrauchs, der nicht aus dem Netz kam. Vor den
+  // ersten Kilowattstunden des Tages ist der Quotient Rauschen, deshalb erst
+  // ab 0,05 kWh — sonst stünde nachts um vier eine wackelnde Prozentzahl da.
+  const a = verbr > 0.05 ? Math.max(0, Math.min(100, 100 * (verbr - bez) / verbr)) : null;
+  $("d-autarkie").textContent = a == null ? "–" : Math.round(a) + " %";
+  $("d-autarkie-bar").firstElementChild.style.width = (a || 0) + "%";
+  $("d-eigen").textContent = quote(erz - ein, erz);
 }
 
 function renderPhasen() {
@@ -1671,42 +1869,257 @@ $("add-rule").onclick = async () => {
   ladeRegeln();
 };
 
-// --- Energie-Historie (Issue #13) ------------------------------------------------
-// Die Tabelle liest bewusst dieselben Endpunkte, die auch der CSV-Export nutzt.
-// Was auf dem Bildschirm steht, ist damit exakt das, was in der Datei landet —
-// eine zweite Aufbereitung im Frontend hätte irgendwann davon abgewichen.
+// --- Energie-Historie (Issue #13, Diagramme seit v0.14) --------------------------
+// Tabelle und Diagramme lesen bewusst dieselbe Reihe, die auch der CSV-Export
+// nutzt. Was auf dem Bildschirm steht, ist damit exakt das, was in der Datei
+// landet — eine zweite Aufbereitung im Frontend wäre irgendwann davon
+// abgewichen.
 const EN_SPALTEN = ["pv_haus_kwh","pv_garage_kwh","netz_bezug_kwh","netz_einspeisung_kwh",
                     "batt_laden_kwh","batt_entladen_kwh","haus_kwh","wallbox_kwh"];
 
-function enPfad(ebene, jahr) {
-  if (ebene === "tag") return "api/v1/energie/tage";
-  if (ebene === "jahr") return "api/v1/energie/jahre";
-  return "api/v1/energie/monate" + (jahr ? "?jahr=" + encodeURIComponent(jahr) : "");
+const kwh = v => v == null ? "–" : (Math.abs(v) >= 1000
+  ? (v / 1000).toFixed(1).replace(".", ",") + " MWh"
+  : v.toFixed(1).replace(".", ",") + " kWh");
+const quote = (teil, ganz) => ganz > 0.05 ? Math.round(100 * teil / ganz) + " %" : "–";
+const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")
+                 + "-" + String(d.getDate()).padStart(2, "0");
+const MONATE = ["Januar","Februar","März","April","Mai","Juni",
+                "Juli","August","September","Oktober","November","Dezember"];
+
+// Zustand der Historie-Ansicht. `anker` ist irgendein Tag im sichtbaren
+// Fenster — welcher, ist egal, das Fenster wird daraus abgeleitet. Das ist
+// einfacher zu bewegen als ein Von/Bis-Paar, das beim Blättern konsistent
+// bleiben müsste.
+const enState = { ebene: "monat", anker: new Date(), zeilen: [] };
+
+// Welches Fenster gehört zu einer Ebene? Tage schaut man einen Monat lang an,
+// Wochen und Monate ein Jahr lang, Jahre gar nicht eingeschränkt — sonst
+// stünden entweder 1800 Säulen nebeneinander oder drei.
+function enFenster() {
+  const a = enState.anker, j = a.getFullYear();
+  if (enState.ebene === "tag") {
+    const m = a.getMonth();
+    return { von: iso(new Date(j, m, 1)), bis: iso(new Date(j, m + 1, 0)),
+             titel: MONATE[m] + " " + j };
+  }
+  if (enState.ebene === "jahr") return { von: null, bis: null, titel: "alle Jahre" };
+  return { von: iso(new Date(j, 0, 1)), bis: iso(new Date(j, 11, 31)), titel: String(j) };
+}
+
+function enSchritt(richtung) {
+  const a = new Date(enState.anker);
+  if (enState.ebene === "tag") a.setMonth(a.getMonth() + richtung, 1);
+  else a.setFullYear(a.getFullYear() + richtung, 0, 1);
+  enState.anker = a;
+  ladeEnergie();
+}
+
+// Beschriftung der X-Achse. Die Periode kommt als ISO-Schlüssel aus der
+// Datenbank; hier wird daraus etwas Lesbares, ohne die Sortierung anzutasten.
+function enLabel(periode) {
+  if (enState.ebene === "tag") return String(Number(periode.slice(8, 10)));
+  if (enState.ebene === "woche") return periode.slice(8, 10) + "." + periode.slice(5, 7) + ".";
+  if (enState.ebene === "monat") return MONATE[Number(periode.slice(5, 7)) - 1].slice(0, 3);
+  return periode;
+}
+
+function enTitel(z) {
+  if (enState.ebene === "woche") return "Woche ab " + z.periode + " (" + z.tage + " Tage)";
+  if (enState.ebene === "tag") return z.periode;
+  if (enState.ebene === "monat") return MONATE[Number(z.periode.slice(5, 7)) - 1]
+    + " " + z.periode.slice(0, 4) + " (" + z.tage + " Tage)";
+  return z.periode + " (" + z.tage + " Tage)";
+}
+
+// ---------- Balkendiagramm ------------------------------------------------------
+// Ein Renderer für alle drei Diagramme: je Zeile eine oder zwei Säulengruppen,
+// jede Gruppe ein Stapel aus Serien. Werte dürfen negativ sein (Netzaustausch),
+// dann liegt die Nulllinie im Bild statt am Boden.
+const CH_H = 250, CH_OBEN = 12, CH_UNTEN = 26, CH_LINKS = 46, CH_RECHTS = 8;
+
+// „Runde" Achsenschritte: 1 / 2 / 5 mal Zehnerpotenz. Ohne das stünden an der
+// Achse Zahlen wie 3,7 — ablesen kann man daran nichts.
+function chSchritt(spanne, ziel) {
+  const roh = spanne / Math.max(1, ziel);
+  const p = Math.pow(10, Math.floor(Math.log10(roh || 1)));
+  const r = roh / p;
+  return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * p;
+}
+
+/** @param gruppen [{name, serien:[{key,name,farbe,vz}]}] — vz = -1 zeichnet nach unten. */
+function chartZeichnen(svgId, leerId, zeilen, gruppen, opt = {}) {
+  const svg = $(svgId);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  $(leerId).classList.toggle("hidden", zeilen.length > 0);
+  svg.classList.toggle("hidden", zeilen.length === 0);
+  if (!zeilen.length) return;
+
+  // Jede Säule braucht Mindestbreite, sonst wird ein Jahr in Tagen zu Mus. Ist
+  // die Summe breiter als die Karte, scrollt der Kasten waagerecht — lieber
+  // schieben als unlesbar quetschen.
+  const platz = Math.max(280, svg.parentElement.clientWidth || 640);
+  const proGruppe = gruppen.length > 1 ? 11 : 16;
+  const breite = Math.max(platz, CH_LINKS + CH_RECHTS + zeilen.length * (gruppen.length * proGruppe + 8));
+  svg.setAttribute("width", breite);
+  svg.setAttribute("height", CH_H);
+  svg.setAttribute("viewBox", `0 0 ${breite} ${CH_H}`);
+
+  // Skala über beide Richtungen: Stapelhöhe je Gruppe, getrennt nach Vorzeichen.
+  let max = 0, min = 0;
+  zeilen.forEach(z => gruppen.forEach(g => {
+    let plus = 0, minus = 0;
+    for (const s of g.serien) {
+      const v = Math.abs(Number(z[s.key]) || 0);
+      if ((s.vz || 1) < 0) minus += v; else plus += v;
+    }
+    max = Math.max(max, plus); min = Math.min(min, -minus);
+  }));
+  if (max === 0 && min === 0) max = 1;
+
+  const flaeche = CH_H - CH_OBEN - CH_UNTEN;
+  const skala = flaeche / ((max - min) || 1);
+  const y0 = CH_OBEN + max * skala;                      // Bildkoordinate der Null
+  const schritt = chSchritt(max - min, 4);
+
+  // Gitter + Achsenbeschriftung
+  for (let v = Math.ceil(min / schritt) * schritt; v <= max + 1e-9; v += schritt) {
+    const y = y0 - v * skala;
+    sEl("line", { class: Math.abs(v) < 1e-9 ? "ch-null" : "ch-grid",
+                  x1: CH_LINKS, x2: breite - CH_RECHTS, y1: y, y2: y }, svg);
+    sEl("text", { class: "ch-ax rechts", x: CH_LINKS - 6, y: y + 3.5 }, svg)
+      .textContent = Math.round(v * 10) / 10;
+  }
+
+  const zellBreite = (breite - CH_LINKS - CH_RECHTS) / zeilen.length;
+  const gBreite = Math.min(28, (zellBreite - 4) / gruppen.length);
+  // Nicht jede Tages-Beschriftung passt nebeneinander — jede n-te reicht.
+  const nth = Math.max(1, Math.ceil(zeilen.length / Math.floor((breite - CH_LINKS) / 34)));
+
+  zeilen.forEach((z, i) => {
+    const mitte = CH_LINKS + zellBreite * (i + 0.5);
+    const links = mitte - (gBreite * gruppen.length) / 2;
+    gruppen.forEach((g, gi) => {
+      const grp = sEl("g", { class: "ch-grp" + (opt.drill ? " drill" : "") }, svg);
+      let oben = 0, unten = 0;
+      for (const s of g.serien) {
+        const v = Math.abs(Number(z[s.key]) || 0);
+        if (v <= 0) continue;
+        const h = v * skala;
+        const y = (s.vz || 1) < 0 ? (y0 + unten) : (y0 - oben - h);
+        if ((s.vz || 1) < 0) unten += h; else oben += h;
+        sEl("rect", { x: links + gi * gBreite + 0.5, y, width: Math.max(1, gBreite - 1),
+                      height: Math.max(0.5, h), fill: s.farbe }, grp);
+      }
+      // Nativer Tooltip statt eigenem Overlay: er funktioniert auf Desktop
+      // sofort und stört auf dem Handy nicht, wo ohnehin die Tabelle hilft.
+      sEl("title", {}, grp).textContent = enTitel(z) + "\n" + g.name + "\n"
+        + g.serien.map(s => "  " + s.name + ": " + kwh(Math.abs(Number(z[s.key]) || 0))).join("\n");
+      if (opt.drill) grp.addEventListener("click", () => opt.drill(z));
+    });
+    if (i % nth === 0)
+      sEl("text", { class: "ch-ax mitte", x: mitte, y: CH_H - 9 }, svg).textContent = enLabel(z.periode);
+  });
+}
+
+function legende(id, serien) {
+  $(id).innerHTML = serien.map(s =>
+    `<span><span class="dot" style="background:${s.farbe}"></span>${s.name}</span>`).join("");
+}
+
+// Farben aus der Basel-AI-Palette: Grüntöne für alles Selbsterzeugte, Rot fürs
+// Netz, Gelb für die Batterie — dieselbe Zuordnung wie in der Energy-Flow-Szene.
+const F = { pvHaus: "#65A30D", pvGarage: "#A3E635", haus: "#14532D", wallbox: "#4D7C4F",
+            netz: "#DC2626", einspeisung: "#65A30D", batt: "#EAB308" };
+const S_ERZEUGUNG = [{ key: "pv_haus_kwh", name: "PV Haus", farbe: F.pvHaus },
+                     { key: "pv_garage_kwh", name: "PV Garage", farbe: F.pvGarage }];
+const S_VERBRAUCH = [{ key: "haus_kwh", name: "Haus", farbe: F.haus },
+                     { key: "wallbox_kwh", name: "Wallbox", farbe: F.wallbox }];
+const S_DECKUNG = [{ key: "pv_direkt_kwh", name: "PV direkt", farbe: F.pvHaus },
+                   { key: "batt_entladen_kwh", name: "Batterie", farbe: F.batt },
+                   { key: "netz_bezug_kwh", name: "Netz", farbe: F.netz }];
+const S_NETZ = [{ key: "netz_bezug_kwh", name: "Bezug", farbe: F.netz },
+                { key: "netz_einspeisung_kwh", name: "Einspeisung", farbe: F.einspeisung, vz: -1 }];
+
+const summe = (zeilen, k) => zeilen.reduce((a, z) => a + (Number(z[k]) || 0), 0);
+
+// Drill-down: eine Säule anklicken heißt „zeig mir das genauer". Jahr → Monate
+// dieses Jahres, Monat/Woche → Tage dieses Zeitraums. Auf der Tagesebene gibt
+// es nichts Feineres, dort passiert nichts.
+function enDrill(z) {
+  const ziel = { jahr: "monat", monat: "tag", woche: "tag" }[enState.ebene];
+  if (!ziel) return;
+  enState.anker = new Date(enState.ebene === "jahr" ? z.periode + "-01-01" : z.periode);
+  enState.ebene = ziel;
+  for (const b of $("en-ebene").children) b.classList.toggle("active", b.dataset.e === ziel);
+  ladeEnergie();
 }
 
 async function ladeEnergie() {
-  const ebene = $("en-ebene").value, jahr = $("en-jahr").value.trim();
-  $("en-csv").href = "api/v1/energie/export.csv?ebene=" + ebene + (jahr && ebene === "monat" ? "&jahr=" + jahr : "");
+  const f = enFenster();
+  $("en-fenster").textContent = f.titel;
+  $("en-zurueck").disabled = $("en-vor").disabled = enState.ebene === "jahr";
+  const q = ["ebene=" + enState.ebene, f.von && "von=" + f.von, f.bis && "bis=" + f.bis]
+    .filter(Boolean).join("&");
+  $("en-csv").href = "api/v1/energie/export.csv?" + q;
+
   let zeilen;
-  try { zeilen = await api(enPfad(ebene, jahr)); }
+  try { zeilen = await api("api/v1/energie/reihe?" + q); }
   catch (e) { $("en-hinweis").textContent = "Konnte die Historie nicht laden: " + e; return; }
 
+  // PV-Direktanteil: der Rest des Verbrauchs, den weder Netz noch Batterie
+  // gedeckt haben. Bewusst aus der Bilanz abgeleitet und nicht separat
+  // gemessen — so summiert sich der Stapel exakt auf den Verbrauch. Der
+  // Clamp fängt Zeiträume ab, in denen Wandlungsverluste die Bilanz leicht
+  // kippen; eine negative Säule wäre dort keine Erkenntnis, sondern Rauschen.
+  for (const z of zeilen) {
+    const v = (z.haus_kwh || 0) + (z.wallbox_kwh || 0);
+    z.pv_direkt_kwh = Math.max(0, v - (z.netz_bezug_kwh || 0) - (z.batt_entladen_kwh || 0));
+  }
+  enState.zeilen = zeilen;
+
+  // --- Kennzahlen des Fensters
+  const pvH = summe(zeilen, "pv_haus_kwh"), pvG = summe(zeilen, "pv_garage_kwh");
+  const haus = summe(zeilen, "haus_kwh"), wb = summe(zeilen, "wallbox_kwh");
+  const bez = summe(zeilen, "netz_bezug_kwh"), ein = summe(zeilen, "netz_einspeisung_kwh");
+  const erz = pvH + pvG, verbr = haus + wb;
+  $("k-erzeugung").textContent = kwh(erz);
+  $("k-pv-haus").textContent = kwh(pvH); $("k-pv-garage").textContent = kwh(pvG);
+  $("k-verbrauch").textContent = kwh(verbr);
+  $("k-haus").textContent = kwh(haus); $("k-wallbox").textContent = kwh(wb);
+  $("k-bezug").textContent = kwh(bez); $("k-einspeisung").textContent = kwh(ein);
+  $("k-autarkie").textContent = quote(verbr - bez, verbr);
+  $("k-eigen").textContent = quote(erz - ein, erz);
+  $("k-tage").textContent = zeilen.reduce((a, z) => a + (z.tage || 0), 0) + " Tage";
+  $("k-spanne").textContent = zeilen.length
+    ? zeilen[0].periode + " – " + zeilen[zeilen.length - 1].periode : "–";
+
+  // --- Diagramme
+  legende("ch1-leg", S_ERZEUGUNG.concat(S_VERBRAUCH));
+  legende("ch2-leg", S_DECKUNG);
+  legende("ch3-leg", S_NETZ);
+  const drill = enState.ebene === "tag" ? null : enDrill;
+  chartZeichnen("ch1", "ch1-leer", zeilen,
+    [{ name: "Erzeugung", serien: S_ERZEUGUNG }, { name: "Verbrauch", serien: S_VERBRAUCH }], { drill });
+  chartZeichnen("ch2", "ch2-leer", zeilen, [{ name: "Deckung", serien: S_DECKUNG }], { drill });
+  chartZeichnen("ch3", "ch3-leer", zeilen, [{ name: "Netz", serien: S_NETZ }], { drill });
+
+  // --- Tabelle
   const tb = $("en-tab").querySelector("tbody");
   tb.innerHTML = "";
   for (const z of zeilen) {
     const tr = document.createElement("tr");
-    const quelle = z.quelle || z.quellen || "";
-    tr.innerHTML = "<td>" + (z.periode || z.tag) + "</td>"
+    tr.innerHTML = "<td>" + z.periode + "</td>"
       + EN_SPALTEN.map(k => "<td>" + (z[k] ?? 0).toFixed(1) + "</td>").join("")
-      + '<td style="opacity:.65">' + quelle + "</td>";
+      + '<td style="opacity:.65">' + (z.quellen || "") + "</td>";
     tb.appendChild(tr);
   }
+
   // Tage aus der E3DC-Historie, die nach der Garagen-Inbetriebnahme liegen,
   // haben einen zu kleinen Hausverbrauch. Das gehört sichtbar an die Zahl und
   // nicht in eine Fußnote, die niemand liest.
-  const unvollstaendig = zeilen.some(z => String(z.quelle || z.quellen || "").includes("ohne-garage"));
+  const unvollstaendig = zeilen.some(z => String(z.quellen || "").includes("ohne-garage"));
   $("en-hinweis").textContent = zeilen.length === 0
-    ? "Noch keine Daten. Unten die Historie aus der E3DC holen — das EMS zählt ab jetzt selbst mit."
+    ? "Keine Daten in diesem Zeitraum. Unten die Historie aus der E3DC holen — das EMS zählt ab jetzt selbst mit."
     : (unvollstaendig ? "Hinweis: Zeiträume mit Quelle „e3dc-ohne-garage“ stammen aus der E3DC-Historie "
         + "und kennen die Garagen-Anlage nicht — dort ist der Hausverbrauch zu klein." : "");
 }
@@ -1723,8 +2136,24 @@ async function importStatus() {
   } catch { return false; }
 }
 
-$("en-laden").onclick = ladeEnergie;
-$("en-ebene").onchange = ladeEnergie;
+for (const b of $("en-ebene").children) b.onclick = () => {
+  enState.ebene = b.dataset.e;
+  for (const o of $("en-ebene").children) o.classList.toggle("active", o === b);
+  ladeEnergie();
+};
+$("en-zurueck").onclick = () => enSchritt(-1);
+$("en-vor").onclick = () => enSchritt(1);
+$("en-jetzt").onclick = () => { enState.anker = new Date(); ladeEnergie(); };
+
+// Die Säulenbreite hängt an der Kartenbreite — beim Drehen des Tablets neu
+// zeichnen, sonst bleibt das Diagramm in der alten Breite stehen.
+let chTimer = null;
+addEventListener("resize", () => {
+  if (!enState.zeilen.length || $("tab-hist").hidden) return;
+  clearTimeout(chTimer);
+  chTimer = setTimeout(ladeEnergie, 250);
+});
+
 $("en-import").onclick = async () => {
   const von = $("en-von").value, bis = $("en-bis").value;
   const q = [von && "von=" + von, bis && "bis=" + bis].filter(Boolean).join("&");
@@ -1773,7 +2202,7 @@ $("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = f
   try { await ladeConfig(); } catch {}
   try { await ladeRegeln(); } catch {}
   try { await ladeHistorie(); } catch {}
-  try { await ladeEnergie(); await importStatus(); } catch {}
+  zeigeTab(localStorage.getItem("leoems_tab") === "hist" ? "hist" : "live");
   setInterval(poll, 5000);
   setInterval(ladeHistorie, 30000);
   setInterval(renderPhasen, 1000);   // Countdown zwischen den Polls lokal weiterzählen

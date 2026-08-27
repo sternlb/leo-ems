@@ -142,10 +142,15 @@ class Energiezaehler:
         return {k: float(zeile.get(k) or 0.0) for k in KANAELE}
 
     def status(self) -> dict:
-        """Für /api/v1/status und die Diagnose."""
+        """Für /api/v1/status und die Diagnose.
+
+        `stand_kwh` enthält **immer alle** Kanäle, auch vor dem ersten Tick.
+        Sonst müsste jede Anzeige zwischen „Kanal fehlt" und „Kanal ist null"
+        unterscheiden, obwohl das für einen Tagesstand dasselbe bedeutet.
+        """
         return {
             "tag": self._tag,
-            "stand_kwh": {k: round(v / 1000.0, 3) for k, v in self._stand.items()},
+            "stand_kwh": {k: round(self._stand.get(k, 0.0) / 1000.0, 3) for k in KANAELE},
             "luecken": self.luecken,
             "schreibvorgaenge": self.geschrieben,
         }

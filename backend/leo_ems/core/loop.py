@@ -80,8 +80,15 @@ class ControlLoop:
         return self.cfg.ev_limit_soc
 
     def status(self) -> dict:
-        """Live-Zustand für die API (REQ-050)."""
-        return self._last_status
+        """Live-Zustand für die API (REQ-050) plus die laufende Tagesbilanz.
+
+        Die Tageswerte werden hier **angehängt** und nicht in `_last_status`
+        geschrieben: dieses Dict ist die Eingabe des Energiezählers und des
+        HA-Exports. Stünde die Bilanz mit drin, ginge das Ergebnis der
+        Integration wieder in die Integration hinein — harmlos, solange
+        niemand danach greift, aber eine Falle für den nächsten Leser.
+        """
+        return {**self._last_status, "energie_heute": self.energie.status()}
 
     async def run(self) -> None:
         self.running = True

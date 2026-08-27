@@ -126,6 +126,39 @@ def test_monats_und_jahressummen(store):
     assert store.energie_gruppiert("jahr")[0]["pv_haus_wh"] == 6000.0
 
 
+def test_wochen_gruppieren_auf_den_montag(store):
+    """v0.14: Die Woche wird über ihren Montag identifiziert, nicht über eine
+    Kalenderwochennummer — die ist zum Jahreswechsel mehrdeutig.
+
+    2026-08-30 ist ein Sonntag, 2026-08-31 der Montag danach. Beide müssen in
+    verschiedenen Wochen landen, obwohl sie im selben Monat liegen.
+    """
+    for tag, wh in (("2026-08-25", 1000.0), ("2026-08-30", 2000.0), ("2026-08-31", 4000.0)):
+        store.energie_tag_schreiben(tag, {"pv_haus_wh": wh}, "ems")
+    wochen = {w["periode"]: w for w in store.energie_gruppiert("woche")}
+    assert sorted(wochen) == ["2026-08-24", "2026-08-31"]
+    assert wochen["2026-08-24"]["pv_haus_wh"] == 3000.0   # Di + So derselben Woche
+    assert wochen["2026-08-31"]["tage"] == 1
+
+
+def test_fenster_grenzt_auf_tagesebene_ein(store):
+    """`von`/`bis` schneiden Tage ab, nicht Perioden: Eine Randwoche erscheint
+    mit den Tagen, die ins Fenster fallen — und `tage` sagt, wie viele das waren."""
+    for tag in ("2026-08-30", "2026-08-31", "2026-09-01"):
+        store.energie_tag_schreiben(tag, {"pv_haus_wh": 1000.0}, "ems")
+    wochen = store.energie_gruppiert("woche", von="2026-08-31", bis="2026-12-31")
+    assert [w["periode"] for w in wochen] == ["2026-08-31"]
+    assert wochen[0]["tage"] == 2 and wochen[0]["pv_haus_wh"] == 2000.0
+
+
+def test_tagesebene_liefert_dieselbe_zeilenform_wie_die_summen(store):
+    """Das Diagramm soll seine Achse nicht von der Ebene abhängig machen müssen."""
+    store.energie_tag_schreiben("2026-08-22", {"pv_haus_wh": 1000.0}, "ems")
+    zeile = store.energie_gruppiert("tag")[0]
+    assert zeile["periode"] == "2026-08-22" and zeile["tage"] == 1
+    assert zeile["quellen"] == "ems"
+
+
 # --- E3DC-Import ------------------------------------------------------------
 
 # Ein plausibler Tag: 20 kWh PV, davon 8 eingespeist, 3 aus dem Netz geholt,

@@ -1,2 +1,9 @@
 # Cockpit-Zugangsdaten (docs/cockpit.md) — niemals committen
 cockpit.env
+
+# Lokale Entwicklungs-Artefakte von `uv run --extra dev pytest`. Das Add-on-Image
+# baut mit `pip install .[devices]` (Dockerfile) und liest die Lock-Datei nie —
+# sie zu committen hieße eine Reproduzierbarkeit zu behaupten, die für das
+# ausgelieferte Image gar nicht gilt.
+backend/.venv/
+backend/uv.lock

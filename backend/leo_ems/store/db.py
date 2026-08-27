@@ -240,22 +240,52 @@ class Store:
         cols = [c[0] for c in cur.description]
         return [dict(zip(cols, r)) for r in cur.fetchall()]
 
-    def energie_gruppiert(self, ebene: str, jahr: str | None = None) -> list[dict]:
-        """Monats- oder Jahressummen (Issue #13).
+    # Periodenschlüssel je Ebene (v0.14: Woche und Tag kamen dazu, damit die
+    # Diagramme alle vier Ebenen aus derselben Abfrage bekommen).
+    #
+    # „woche" ist bewusst der **Montag als Datum** und keine Kalenderwochen-
+    # nummer: SQLites `%W` zählt ab dem ersten Montag des Jahres, alles davor
+    # landet in Woche 00, und zum Jahreswechsel gehören Tage zweier Jahre in
+    # dieselbe Woche — ein Nummernpaar wäre dort mehrdeutig. Ein Datum ist
+    # eindeutig, sortiert von allein richtig und lässt sich in der Anzeige
+    # beschriften, wie man will. `date(tag,'-6 days','weekday 1')` liefert für
+    # jeden Wochentag den Montag derselben Woche (SQLite bleibt bei `weekday`
+    # stehen, wenn das Datum schon der gesuchte Tag ist).
+    ENERGIE_PERIODE = {
+        "tag": "tag",
+        "woche": "date(tag, '-6 days', 'weekday 1')",
+        "monat": "substr(tag, 1, 7)",
+        "jahr": "substr(tag, 1, 4)",
+    }
+
+    def energie_gruppiert(self, ebene: str, jahr: str | None = None,
+                          von: str | None = None, bis: str | None = None) -> list[dict]:
+        """Summen je Tag / Woche / Monat / Jahr (Issue #13).
 
         Aggregiert wird in SQL statt in Python: Für „beliebige Jahre" müssten
         sonst alle Tageszeilen durch den Prozess wandern, nur um summiert zu
-        werden. `substr` auf dem ISO-Datum ist dafür ausreichend — das Format
-        ist beim Schreiben festgelegt, nicht geraten.
+        werden.
+
+        `von`/`bis` grenzen auf **Tagesebene** ein, nicht auf Periodenebene —
+        das Diagramm zeigt immer ein Fenster (ein Monat in Tagen, ein Jahr in
+        Wochen), und dessen Ränder sind Tage. Eine angeschnittene Randwoche ist
+        damit die Summe ihrer Tage *innerhalb* des Fensters; `tage` weist aus,
+        wie viele das waren, damit eine kurze Randsäule als solche erkennbar
+        bleibt statt als schlechter Ertrag.
         """
-        laenge = {"monat": 7, "jahr": 4}[ebene]
+        schluessel = self.ENERGIE_PERIODE[ebene]
         summen = ", ".join(f"ROUND(SUM({s}), 1) AS {s}" for s in self.ENERGIE_KANAELE)
-        sql = (f"SELECT substr(tag, 1, {laenge}) AS periode, COUNT(*) AS tage,"
+        sql = (f"SELECT {schluessel} AS periode, COUNT(*) AS tage,"
                f" {summen}, GROUP_CONCAT(DISTINCT quelle) AS quellen FROM energie_tag")
-        args: list = []
+        bed, args = [], []
         if jahr:
-            sql += " WHERE substr(tag, 1, 4) = ?"
-            args.append(jahr)
+            bed.append("substr(tag, 1, 4) = ?"); args.append(jahr)
+        if von:
+            bed.append("tag >= ?"); args.append(von)
+        if bis:
+            bed.append("tag <= ?"); args.append(bis)
+        if bed:
+            sql += " WHERE " + " AND ".join(bed)
         cur = self._db.execute(sql + " GROUP BY periode ORDER BY periode", args)
         cols = [c[0] for c in cur.description]
         return [dict(zip(cols, r)) for r in cur.fetchall()]

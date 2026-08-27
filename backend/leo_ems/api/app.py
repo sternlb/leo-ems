@@ -287,15 +287,34 @@ def create_app(
     async def energie_jahre():
         return _kwh(store.energie_gruppiert("jahr"))
 
+    @app.get("/api/v1/energie/reihe", dependencies=[auth])
+    async def energie_reihe(ebene: Literal["tag", "woche", "monat", "jahr"] = "monat",
+                            jahr: str | None = None,
+                            von: str | None = None, bis: str | None = None):
+        """Eine Datenreihe für die Diagramme — alle vier Ebenen, ein Format.
+
+        Die älteren `/tage`, `/monate`, `/jahre` bleiben, weil sie schon
+        benutzt werden; sie liefern aber drei verschiedene Zeilenformen
+        (`tag`+`quelle` gegen `periode`+`quellen`). Das Diagramm soll seine
+        Achse nicht von der Ebene abhängig machen müssen, deshalb hier eine
+        Reihe mit immer denselben Feldern: `periode`, `tage`, die acht Kanäle
+        in kWh, `quellen`.
+        """
+        return _kwh(store.energie_gruppiert(ebene, jahr, von, bis))
+
     @app.get("/api/v1/energie/export.csv", dependencies=[auth])
-    async def energie_export(ebene: Literal["tag", "monat", "jahr"] = "tag",
-                             jahr: str | None = None):
+    async def energie_export(ebene: Literal["tag", "woche", "monat", "jahr"] = "tag",
+                             jahr: str | None = None,
+                             von: str | None = None, bis: str | None = None):
         """CSV, weil es die Ablage ist, die überall aufgeht — Excel, LibreOffice,
         Python. Semikolon als Trenner und Komma als Dezimalzeichen: Excel in
         deutscher Ländereinstellung zerlegt eine Punkt-Komma-Datei sonst in eine
         einzige Spalte, und genau dort landet die Datei."""
-        zeilen = _kwh(store.energie_tage() if ebene == "tag"
-                      else store.energie_gruppiert(ebene, jahr))
+        # Der Export folgt dem, was auf dem Bildschirm steht — inklusive des
+        # eingestellten Zeitfensters. Eine CSV, die stillschweigend mehr
+        # enthält als das Diagramm darüber, führt beim Nachrechnen in die Irre.
+        zeilen = _kwh(store.energie_tage(von, bis) if ebene == "tag"
+                      else store.energie_gruppiert(ebene, jahr, von, bis))
         if not zeilen:
             return PlainTextResponse("", media_type="text/csv")
         spalten = list(zeilen[0].keys())

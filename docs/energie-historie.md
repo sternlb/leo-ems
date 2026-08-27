@@ -137,17 +137,82 @@ Was der Import **nicht** kann: die Wallbox aus dem historischen Hausverbrauch
 heraustrennen. Sie steckt dort mit drin (`wallbox_wh = 0`). Eine geschätzte
 Aufteilung wäre schlimmer als eine ehrlich zusammengefasste Zahl.
 
+## Anzeige im Dashboard (seit v0.14.0)
+
+### Heute — auf der Übersicht
+
+Die Statuskacheln zeigen Leistungen; die Frage „wie viel ist heute
+zusammengekommen?" beantwortet eine eigene Kachelreihe darunter: Ertrag
+(Haus/Garage), Verbrauch (Haus/Wallbox), Netz, Batterie, Autarkie. Die Werte
+kommen aus dem laufenden Tagesstand des Zählers, den `/api/v1/status` als
+`energie_heute` mitliefert — dieselbe Rechnung, die abends in die Tageszeile
+geschrieben wird, also kein zweiter Weg zum selben Wert.
+
+Bewusst eine **eigene Reihe** und nicht in die Leistungskacheln gemischt: kW
+und kWh nebeneinander in derselben Zeile liest man unweigerlich falsch.
+
+### Historie — eigener Reiter
+
+Die Historie ist kein Teil des Statusblicks: Sie wird gezielt aufgesucht und
+lädt eigene Daten. Sie liegt deshalb hinter einem Reiter neben „Übersicht" und
+lädt erst beim ersten Öffnen.
+
+**Vier Ebenen** — Tag, Woche, Monat, Jahr. Die Woche wird über den **Montag als
+Datum** gruppiert und nicht über eine Kalenderwochennummer: SQLites `%W` zählt
+ab dem ersten Montag des Jahres, alles davor landet in Woche 00, und zum
+Jahreswechsel gehören Tage zweier Jahre in dieselbe Woche.
+
+**Fenster statt Vollauszug.** Tage werden monatsweise gezeigt, Wochen und
+Monate jahrweise, Jahre alle; ← / → blättern. Ohne das stünden entweder 1800
+Säulen nebeneinander oder drei. Das Fenster grenzt auf **Tagesebene** ein, nicht
+auf Periodenebene — eine angeschnittene Randwoche ist die Summe ihrer Tage im
+Fenster. Die Spalte `tage` weist aus, wie viele das waren; sonst läse man eine
+kurze Randsäule als schlechten Ertrag.
+
+**Drei Diagramme**, selbst gezeichnetes SVG statt einer Bibliothek: Das Add-on
+liefert sein Dashboard offline aus dem Container aus, ein CDN-Skript wäre dort
+nicht erreichbar, und eine mitgelieferte Bibliothek wiegt mehr als die drei
+Balkentypen, um die es geht.
+
+| Diagramm | Inhalt |
+|---|---|
+| Erzeugung und Verbrauch | je Zeitraum zwei gestapelte Säulen: PV Haus + Garage gegen Haus + Wallbox |
+| Woher der Verbrauch gedeckt wurde | ein Stapel aus PV direkt, Batterie, Netz — summiert sich exakt auf den Verbrauch |
+| Netzaustausch | Bezug nach oben, Einspeisung nach unten, gleiche Skala |
+
+Der **PV-Direktanteil** wird aus der Bilanz abgeleitet (`Verbrauch − Netzbezug
+− Batterieentladung`, bei ≥ 0 gekappt) und nicht separat gemessen. Nur so
+summiert sich der Stapel auf genau den Verbrauch, der in der Kachel darüber
+steht; eine zweite Messung wiche früher oder später davon ab. Der Clamp fängt
+Zeiträume ab, in denen Wandlungsverluste die Bilanz leicht kippen — eine
+negative Säule wäre dort kein Erkenntnisgewinn, sondern Rauschen.
+
+Ein Klick auf eine Säule geht eine Ebene tiefer: Jahr → Monate, Monat oder
+Woche → Tage.
+
+**Ein Endpunkt für alle Ebenen:**
+
+```
+GET /api/v1/energie/reihe?ebene=tag|woche|monat|jahr[&jahr=][&von=][&bis=]
+```
+
+Immer dieselben Felder (`periode`, `tage`, die acht Kanäle in kWh, `quellen`),
+damit das Diagramm seine Achse nicht von der Ebene abhängig machen muss. Die
+älteren `/tage`, `/monate`, `/jahre` bleiben unverändert.
+
 ## Ablageformat und Export
 
 Der Bestand liegt in der Add-on-Datenbank (`/data/leo_ems.db`) und ist damit im
 HA-Backup enthalten. Für alles außerhalb: CSV.
 
 ```
-GET /api/v1/energie/export.csv?ebene=tag|monat|jahr[&jahr=2026]
+GET /api/v1/energie/export.csv?ebene=tag|woche|monat|jahr[&jahr=][&von=][&bis=]
 ```
 
 Semikolon als Trenner, Komma als Dezimalzeichen — die Datei landet in Excel mit
 deutscher Ländereinstellung, und dort zerlegt eine Punkt-Komma-Datei alles in
 eine einzige Spalte. Im Dashboard hängt der Knopf „CSV herunterladen" direkt an
-diesem Endpunkt, mit denselben Filtern wie die Tabelle darüber: Was auf dem
-Bildschirm steht, ist exakt das, was in der Datei landet.
+diesem Endpunkt, mit **demselben Zeitfenster** wie die Diagramme darüber: Was
+auf dem Bildschirm steht, ist exakt das, was in der Datei landet. Eine Datei,
+die stillschweigend mehr enthält als das Diagramm darüber, führt beim
+Nachrechnen in die Irre.

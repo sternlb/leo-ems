@@ -261,6 +261,27 @@ def test_status_enthaelt_energieverteilung_und_phaseninfo(tmp_path):
     assert {"entprellung_aktiv", "umschaltsperre_aktiv", "umschaltsperre_rest_s"} <= pi.keys()
 
 
+def test_status_traegt_die_tagesbilanz_mit(tmp_path):
+    """v0.14: Das Dashboard zeigt neben der Leistung auch, was heute
+    zusammengekommen ist. Nach einem einzelnen Tick steht der Tag da, aber noch
+    keine Energie — integriert wird erst über die Spanne zwischen zwei Ticks."""
+    cfg = RegelConfig(read_only=False)
+    store = Store(tmp_path / "test.db")
+    e3dc = E3dcSimulator(p_netz_w=-3000, p_batterie_w=0, soc_pct=60, p_pv_w=6000)
+    loop = ControlLoop(cfg, SafetyGuard(cfg), store, {"e3dc": e3dc})
+    asyncio.run(loop.tick(T0))
+    e = loop.status()["energie_heute"]
+    assert e["tag"] == T0.date().isoformat()
+    # alle Kanäle vorhanden, damit die Anzeige nicht zwischen „fehlt" und
+    # „ist null" unterscheiden muss
+    assert e["stand_kwh"]["pv_haus_wh"] == 0.0 and len(e["stand_kwh"]) == 8
+
+    # Eine Minute später: 6 kW über 60 s = 0,1 kWh. Längere Sprünge werden als
+    # Lücke verworfen (MAX_LUECKE_S) und dürften hier gar nichts zählen.
+    asyncio.run(loop.tick(T0 + timedelta(seconds=60)))
+    assert loop.status()["energie_heute"]["stand_kwh"]["pv_haus_wh"] == 0.1
+
+
 def test_lease_laeuft_ohne_erneuerung_aus(tmp_path):
     """ADR-005: Wird nach gesetzter Grenze nicht mehr getickt, läuft sie per TTL aus (T4-Kern)."""
     loop, e3dc, goe, guard = build(tmp_path)

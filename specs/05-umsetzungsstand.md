@@ -99,8 +99,8 @@ Neuerungen gegenüber EVCC.
 | ID | Umsetzung | Code | Nachweis |
 |---|---|---|---|
 | REQ-050 Zustand + Grund sichtbar | ✅ | `charge_control.phase_diagnose`, `/api/v1/status` | **T** `test_phase_diagnose_entprellung`, `…_umschaltsperre`, `…_stabil`, `test_phase_diagnose_entprellung` · **L** |
-| REQ-051 Dashboard Haus + Hauptverbraucher | ✅ | `web/index.html`, Spec 04 | **T** `test_status_enthaelt_energieverteilung_und_phaseninfo`, `test_dashboard_wird_ausgeliefert` · **L** |
-| REQ-052 Kennzahlen historisieren | 🔵 Snapshots ja, Kennzahlen gegen Baseline 2025 nein | `store/db.py`, `/api/v1/observation/summary` | **T** `test_snapshots_und_summary`, `test_summary_ohne_daten` — **Historie war bis v0.6.4 nach jedem Update weg** |
+| REQ-051 Dashboard Haus + Hauptverbraucher | ✅ Leistung live, Tagesbilanz („Heute") seit v0.14.0 | `web/index.html`, Spec 04 | **T** `test_status_enthaelt_energieverteilung_und_phaseninfo`, `test_status_traegt_die_tagesbilanz_mit`, `test_dashboard_wird_ausgeliefert` · **L** |
+| REQ-052 Kennzahlen historisieren | 🔵 Tagesbilanz + Diagramme (Tag/Woche/Monat/Jahr) und Autarkie je Zeitraum stehen; der Vergleich gegen die Baseline 2025 fehlt noch | `energy.py`, `store/db.py`, `/api/v1/energie/*`, `web/index.html` (Reiter „Historie", seit v0.14.0) | **T** `test_monats_und_jahressummen`, `test_wochen_gruppieren_auf_den_montag`, `test_fenster_grenzt_auf_tagesebene_ein`, `test_energie_reihe_liefert_alle_ebenen_im_selben_format`, `test_status_traegt_die_tagesbilanz_mit` · **L** — **Snapshot-Historie war bis v0.6.4 nach jedem Update weg** |
 | REQ-053 Benachrichtigungen | 🔵 Geräteausfall wird protokolliert, kein Push | `core/loop.py` | **T** `test_lesefehler_steht_im_status_und_im_protokoll` |
 
 ## G — Sicherheit / Fallback
@@ -153,8 +153,9 @@ Ergänzend zur Laufzeit: `GET /api/v1/diag/devices` (jeder Adapter aktiv gelesen
    2026-07-26 lief fehlerfrei durch, ohne dass der Sollwert folgte. Vermutung:
    Betriebsart `Auto` blockt den Sollwert, es müsste vorher `set_operation_mode`.
    Das ändert Leos Heizungsprogramm → seine Entscheidung, kein Alleingang.
-3. **REQ-052 Kennzahlen** — Autarkie und PV-Anteil gegen die Baseline 2025. Läuft
-   jetzt auf persistenten Daten, also ab heute sinnvoll messbar.
+3. **REQ-052 Kennzahlen** — Autarkie und PV-Anteil gegen die Baseline 2025.
+   Beide Größen stehen seit v0.14.0 je Zeitraum im Reiter „Historie"; was fehlt,
+   ist der **Vergleich** — 2025 gegen 2026 nebeneinander statt nacheinander.
 4. **REQ-061 Wallbox-Override** — „bis Abstecken oder 24 h" fehlt komplett.
 5. **REQ-008 EVCC deinstallieren** — erst nach 1./3., mit belegtem Vergleich.
 6. **API-Tests für `/rules`** — REQ-070 hängt an Endpunkten, die kein Test

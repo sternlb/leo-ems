@@ -150,6 +150,32 @@ def test_energie_monate_und_jahre_summieren():
     assert c.get("/api/v1/energie/jahre", headers=h).json()[0]["pv_haus_kwh"] == 32.345
 
 
+def test_energie_reihe_liefert_alle_ebenen_im_selben_format():
+    """v0.14: Eine Reihe für die Diagramme — `periode` statt mal `tag`, mal `periode`."""
+    c, _ = _client_mit_energie()
+    h = {"Authorization": f"Bearer {TOKEN}"}
+    for ebene in ("tag", "woche", "monat", "jahr"):
+        zeilen = c.get(f"/api/v1/energie/reihe?ebene={ebene}", headers=h).json()
+        assert zeilen and {"periode", "tage", "quellen"} <= zeilen[0].keys()
+        assert "pv_haus_kwh" in zeilen[0] and "pv_haus_wh" not in zeilen[0]
+
+
+def test_energie_reihe_beachtet_das_zeitfenster():
+    c, _ = _client_mit_energie()
+    h = {"Authorization": f"Bearer {TOKEN}"}
+    zeilen = c.get("/api/v1/energie/reihe?ebene=tag&von=2026-08-01", headers=h).json()
+    assert [z["periode"] for z in zeilen] == ["2026-08-01"]
+
+
+def test_energie_csv_folgt_dem_zeitfenster():
+    """Eine CSV, die mehr enthält als das Diagramm darüber, führt beim
+    Nachrechnen in die Irre."""
+    c, _ = _client_mit_energie()
+    r = c.get("/api/v1/energie/export.csv?ebene=tag&von=2026-08-01",
+              headers={"Authorization": f"Bearer {TOKEN}"})
+    assert "2026-08-01" in r.text and "2026-07-30" not in r.text
+
+
 def test_energie_csv_nutzt_semikolon_und_dezimalkomma():
     """Die Datei landet in Excel mit deutscher Ländereinstellung. Mit Komma als
     Trenner und Punkt als Dezimalzeichen stünde dort alles in einer Spalte."""
