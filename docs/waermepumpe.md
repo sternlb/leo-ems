@@ -220,6 +220,33 @@ Warmwasserbereitung real auf **~57,5 °C** und bleibt dort stehen. Mit dem Ziel
 60 wurde die Abbruchbedingung „Ziel erreicht" nie wahr, jeder Boost lief stumpf
 weiter bis der Überschuss wegbrach. Mit 57 greift sie.
 
+### Wenn die Cloud oder die Integration ausfällt
+
+Zwei Annahmen trugen die Sollwert-Logik, und beide haben am 27.08.2026 nicht
+gehalten: dass ein nicht gelieferter Sensor auffällt, und dass ein wiederholter
+Schreibvorgang irgendwann ankommt.
+
+**Ausfall wird als Ausfall gemeldet.** Ein Sensor ist unlesbar, wenn seine
+Abfrage scheitert, wenn HA die Entity nicht kennt (404) **oder** wenn sie
+`unavailable`/`unknown` liefert. Alle drei landen in
+`geraete.vaillant.fehler` („N von M Sensoren nicht lesbar: …"). Bewusst nicht
+dazu zählt `none`/leer bei Textsensoren — die Warmwasser-Sonderfunktion meldet
+im Normalbetrieb genau das. Ist kein einziger Sensor lesbar, wirft der Adapter
+und die Regelschleife geht in den Fail-Safe E7.
+
+**Höchstens `wp_schreib_versuche` Anläufe je Sollwert.** Danach steht die
+Störung im Status (`warmwasser.stoerung`) und im Klartext-Grund, und es wird
+nicht weiter geschrieben. Sinn der Wiederholung war, einen einzelnen verlorenen
+Cloud-Aufruf aufzufangen; sie kann nicht reparieren, dass die Gegenstelle weg
+ist. Vier Versuche entsprechen bei 15 min Gap etwa einer Stunde. Sobald eine
+neue Entscheidung einen anderen Sollwert setzt, beginnt die Zählung von vorn.
+
+Wichtig zu wissen: **Home Assistant quittiert einen Service-Call auch dann,
+wenn die Integration ihn nicht weiterreicht.** Ein erfolgreicher Schreibvorgang
+ist also kein Beleg dafür, dass die Anlage ihn bekommen hat — nur das Rücklesen
+ist einer. Genau deshalb hängt die Störungsmeldung am Rücklesen und nicht am
+Ergebnis des Aufrufs.
+
 ### Heizkreis (REQ-011)
 
 Per Default **abgeschaltet** (`wp_hk_aktiv`, siehe oben) — Leo will die

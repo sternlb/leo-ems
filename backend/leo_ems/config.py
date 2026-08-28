@@ -117,6 +117,13 @@ class RegelConfig:
     wp_entprellung_s: int = 600        # Bedingungszeit vor dem Start
     wp_aus_entprellung_s: int = 300    # Bedingungszeit vor dem Zurückstellen
     wp_cloud_min_gap_s: int = 900      # Mindestabstand Cloud-Schreibzugriffe (REQ-014)
+    # Wie oft ein Sollwert wiederholt wird, bevor er als Störung gilt (Issue #15).
+    # Ein Sollwert bleibt offen, bis das Rücklesen ihn bestätigt — fällt das
+    # Rücklesen aus, wiederholte das EMS ihn bis v0.16 endlos: am 24./25.08.2026
+    # 71-mal denselben Wert, ohne dass ein einziger davon ankam. Vier Versuche
+    # (= rund eine Stunde bei 15 min Gap) sind genug; danach ist es keine
+    # Regelverzögerung mehr, sondern ein Defekt, und gehört gemeldet.
+    wp_schreib_versuche: int = 4
 
     # --- Energie-Historie (Issue #13) ---------------------------------------
     # Tag der Inbetriebnahme der Garagen-Anlage, ISO-Datum oder None. Ab diesem

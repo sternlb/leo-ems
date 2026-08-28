@@ -54,6 +54,7 @@ from datetime import datetime, timedelta
 from ..config import RegelConfig
 
 TOLERANZ_K = 0.5   # Sollwert gilt als erreicht/bestätigt innerhalb dieser Spanne
+NAME = {"ww": "Warmwasser", "hk": "Heizkreis"}   # Klartext für Störungsmeldungen
 
 # Lauf-Erkennung fürs Dashboard (Lüfter-Animation). MyVaillant liefert keine
 # Verdichter- oder Ventilatorleistung, deshalb wird aus den beiden Klartext-
@@ -92,6 +93,11 @@ class HeatPumpController:
         # Regelentscheidung — sie darf nicht bis zu 15 min in der Warteschlange
         # liegen. Gilt nur für den einen Aufruf, danach greift das Gap wieder.
         self._eilig: set[str] = set()
+        # Schreibversuche je Sollwert, bis das Rücklesen bestätigt (Issue #15).
+        self._versuche: dict[str, int] = {"ww": 0, "hk": 0}
+        self._versuch_ziel: dict[str, float | None] = {"ww": None, "hk": None}
+        self._gesendet: set[str] = set()          # was in diesem Tick rausging
+        self._stoerung: dict[str, str | None] = {"ww": None, "hk": None}
         self._grund = "Wärmepumpe noch nicht bewertet"
         self._frei_w = 0.0
         self._ev_zuteilung_w = 0.0
@@ -399,35 +405,73 @@ class HeatPumpController:
         gap_ok = self._last_write is None or (
             now - self._last_write >= timedelta(seconds=self.cfg.wp_cloud_min_gap_s)
         )
+        self._gesendet.clear()
 
-        ziel_ww, ist_ww = self._ziel["ww"], wp.get("ww_soll_c")
-        if ziel_ww is not None:
-            if ist_ww is not None and abs(ist_ww - ziel_ww) <= TOLERANZ_K:
-                self._ziel["ww"] = None       # von der Cloud bestätigt
-                self._eilig.discard("ww")
-            elif gap_ok or "ww" in self._eilig:
-                cmd.ww_soll_c = ziel_ww
-                self._eilig.discard("ww")     # ein Versuch am Gap vorbei, dann normal
-                gap_ok = False                # pro Tick nur ein Cloud-Aufruf
+        cmd.ww_soll_c, gap_ok = self._offen("ww", wp.get("ww_soll_c"), gap_ok)
+        cmd.raum_soll_c, gap_ok = self._offen("hk", wp.get("raum_soll_c"), gap_ok)
 
-        ziel_hk, ist_hk = self._ziel["hk"], wp.get("raum_soll_c")
-        if ziel_hk is not None:
-            if ist_hk is not None and abs(ist_hk - ziel_hk) <= TOLERANZ_K:
-                self._ziel["hk"] = None
-                self._eilig.discard("hk")
-            elif gap_ok or "hk" in self._eilig:
-                cmd.raum_soll_c = ziel_hk
-                self._eilig.discard("hk")
-
+        stoerungen = [t for t in (self._stoerung["ww"], self._stoerung["hk"]) if t]
+        if stoerungen:
+            # In `_grund` und damit ins Protokoll (REQ-062): eine Störung, die
+            # nur in einem Statusfeld steht, sieht niemand.
+            self._grund = " · ".join([self._grund, *stoerungen])
+            cmd.grund = self._grund
         return cmd
+
+    def _offen(self, key: str, ist: float | None, gap_ok: bool) -> tuple[float | None, bool]:
+        """Ein offener Sollwert: bestätigen, wiederholen — oder aufgeben (Issue #15).
+
+        Das Wiederholen war als Selbstheilung gedacht: ein verlorener Cloud-Aufruf
+        wird beim nächsten Gap noch einmal versucht. Ohne Obergrenze wird daraus
+        aber eine Endlosschleife, sobald das Rücklesen selbst ausfällt — die
+        Bestätigung, auf die gewartet wird, kann dann nie kommen. Am 24./25.08.2026
+        ging derselbe Wert deshalb 71-mal raus, ohne dass einer davon ankam.
+
+        Nach `wp_schreib_versuche` Versuchen wird deshalb nicht weiter geschrieben,
+        sondern gemeldet. Aufgehoben wird die Sperre von selbst, sobald eine neue
+        Entscheidung einen anderen Sollwert setzt — eine Störung darf die Regelung
+        nicht dauerhaft lahmlegen.
+        """
+        ziel = self._ziel[key]
+        if ziel is None:
+            return None, gap_ok
+
+        if ziel != self._versuch_ziel[key]:      # neue Entscheidung → frische Versuche
+            self._versuch_ziel[key] = ziel
+            self._versuche[key] = 0
+            self._stoerung[key] = None
+
+        if ist is not None and abs(ist - ziel) <= TOLERANZ_K:
+            self._ziel[key] = None               # von der Cloud bestätigt
+            self._eilig.discard(key)
+            self._versuche[key] = 0
+            self._stoerung[key] = None
+            return None, gap_ok
+
+        if self._versuche[key] >= self.cfg.wp_schreib_versuche:
+            gelesen = f"{ist:.0f} °C" if ist is not None else "nicht lesbar"
+            self._stoerung[key] = (
+                f"{NAME[key]}-Sollwert {ziel:.0f} °C kommt nicht an: "
+                f"{self._versuche[key]} Versuche ohne Bestätigung (Rücklesen: {gelesen})")
+            return None, gap_ok
+
+        if gap_ok or key in self._eilig:
+            self._eilig.discard(key)             # ein Versuch am Gap vorbei, dann normal
+            self._gesendet.add(key)
+            return ziel, False                   # pro Tick nur ein Cloud-Aufruf
+        return None, gap_ok
 
     def schreiben_bestaetigt(self, now: datetime) -> None:
         """Von der Regelschleife aufzurufen, NACHDEM wirklich gesendet wurde.
 
         Im Beobachtungsmodus wird nicht gesendet und damit auch nicht bestätigt —
-        der Status zeigt dann dauerhaft, was das EMS tun *würde*.
+        der Status zeigt dann dauerhaft, was das EMS tun *würde*. Genau deshalb
+        wird hier gezählt und nicht in `_befehl`: gezählt gehören echte Versuche,
+        sonst liefe die Beobachtung nach vier Ticks in eine Scheinstörung.
         """
         self._last_write = now
+        for key in self._gesendet:
+            self._versuche[key] += 1
 
     # --- Anzeige (REQ-050/051) ---------------------------------------------
     @staticmethod
@@ -466,6 +510,7 @@ class HeatPumpController:
                 "wieder_c": self._ww_wieder_c(self.cfg.wp_ww_boost_c),
                 "warm": self._ww_warm,
                 "offen_c": self._ziel["ww"],
+                "stoerung": self._stoerung["ww"],
             },
             "heizkreis": {
                 "aktiv": self.cfg.wp_hk_aktiv,
@@ -479,6 +524,7 @@ class HeatPumpController:
                 "anhebung_k": self.cfg.wp_hk_anhebung_k,
                 "basis_c": self._hk_basis,
                 "offen_c": self._ziel["hk"],
+                "stoerung": self._stoerung["hk"],
             },
             "aussen_c": wp.get("aussen_c"),
             "cop": wp.get("cop"),

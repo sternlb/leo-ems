@@ -9,7 +9,7 @@ from leo_ems.devices.factory import build_adapters
 from leo_ems.devices.forecast import ForecastSimulator
 from leo_ems.devices.skoda import SkodaAdapter, SkodaSimulator
 from leo_ems.devices.sungrow import SungrowStub
-from leo_ems.devices.vaillant import HA_KANDIDATEN, VaillantAdapter
+from leo_ems.devices.vaillant import HA_KANDIDATEN, SENSOREN, VaillantAdapter
 
 
 def test_skoda_simulator_liest_soc():
@@ -147,3 +147,68 @@ def test_skoda_unbekanntes_soc_feld_wird_als_ausfall_gemeldet():
     with pytest.raises(ConnectionError) as fehler:
         SkodaAdapter._soc(_Batterie(irgendwas=1))
     assert "keinen SoC" in str(fehler.value)
+
+
+# --- Vaillant: ausgefallene Sensoren sind keine gültigen Werte (Issue #15) -----
+class _LeseAdapter(VaillantAdapter):
+    """Adapter, dessen Entity-Abfrage aus einer Tabelle antwortet."""
+
+    def __init__(self, werte: dict):
+        super().__init__(base_url="http://ha:8123/api", token="tok")
+        self._werte = werte
+
+    async def _basis(self) -> str:
+        return "http://ha:8123/api"
+
+    async def _state(self, entity_id: str):
+        wert = self._werte[entity_id]
+        if isinstance(wert, Exception):
+            raise wert
+        return wert
+
+
+def _alle_gut() -> dict:
+    """Ein vollständiges Messbild: Zahlen für numerische, Text für den Rest."""
+    return {eid: ("42.0" if numerisch else "Auto") for eid, numerisch in SENSOREN.values()}
+
+
+def test_vaillant_meldet_unavailable_als_ausgefallen():
+    """`unavailable` wurde bis v0.16 still zu None — der Status blieb „in Ordnung"."""
+    werte = _alle_gut()
+    werte["sensor.home_domestic_hot_water_0_setpoint"] = "unavailable"
+    adapter = _LeseAdapter(werte)
+    daten = asyncio.run(adapter.read())
+    assert daten["ww_soll_c"] is None
+    assert "1 von" in adapter.letzter_fehler
+    assert "domestic_hot_water_0_setpoint" in adapter.letzter_fehler
+
+
+def test_vaillant_meldet_verschwundene_entity_als_ausgefallen():
+    """404 → `_state` liefert None. Auch das ist ein Ausfall, kein Messwert."""
+    werte = _alle_gut()
+    werte["sensor.home_domestic_hot_water_0_setpoint"] = None
+    adapter = _LeseAdapter(werte)
+    daten = asyncio.run(adapter.read())
+    assert daten["ww_soll_c"] is None
+    assert "1 von" in adapter.letzter_fehler
+
+
+def test_vaillant_leere_sonderfunktion_bleibt_ein_gueltiger_wert():
+    """`none` ist bei der Warmwasser-Sonderfunktion der Normalbetrieb."""
+    werte = _alle_gut()
+    werte["sensor.home_domestic_hot_water_0_current_special_function"] = "none"
+    adapter = _LeseAdapter(werte)
+    daten = asyncio.run(adapter.read())
+    assert daten["ww_sonderfunktion"] is None
+    assert adapter.letzter_fehler is None
+
+
+def test_vaillant_faellt_ins_failsafe_wenn_nichts_lesbar_ist():
+    """Integration komplett weg → E7 in der Regelschleife, keine Regelung auf None."""
+    adapter = _LeseAdapter({eid: "unavailable" for eid, _ in SENSOREN.values()})
+    try:
+        asyncio.run(adapter.read())
+    except ConnectionError as exc:
+        assert "nicht lesbar" in str(exc)
+    else:
+        raise AssertionError("read() haette ConnectionError werfen muessen")

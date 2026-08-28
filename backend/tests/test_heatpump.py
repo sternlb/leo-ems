@@ -243,6 +243,62 @@ def test_ww_komfortgrenze_hebt_rueckstellwert_an():
     assert wp["ww_soll_c"] == 50.0
 
 
+def _ticks_ohne_ruecklesen(hp, wp, frei_w, stunden, start=T0):
+    """Wie `_ticks`, aber das Rücklesen bestätigt nie — der Sensor ist ausgefallen.
+
+    Zählt, wie viele Schreibvorgänge dabei wirklich rausgehen.
+    """
+    versuche, letzte = 0, None
+    for i in range(int(stunden * 3600 / 10)):
+        now = start + timedelta(seconds=i * 10)
+        letzte = hp.update(now, frei_w=frei_w, wp=wp)
+        if letzte.ww_soll_c is not None:
+            versuche += 1
+            hp.schreiben_bestaetigt(now)
+    return versuche, letzte
+
+
+def test_ww_schreibversuche_sind_gedeckelt():
+    """Issue #15: fällt das Rücklesen aus, wird nicht endlos wiederholt.
+
+    Ohne Deckel gingen bei 15 min Gap in sechs Stunden zwei Dutzend Schreib-
+    vorgänge raus — real waren es am 24./25.08.2026 71 am Stück.
+    """
+    hp = HeatPumpController(RegelConfig())
+    wp = {**SOMMER, "ww_soll_c": None}          # Sensor unavailable
+    versuche, letzte = _ticks_ohne_ruecklesen(hp, wp, 3000, stunden=6)
+    assert versuche == 4
+    assert "kommt nicht an" in letzte.grund
+    assert "nicht lesbar" in hp.status(wp)["warmwasser"]["stoerung"]
+
+
+def test_ww_neue_entscheidung_bekommt_frische_versuche():
+    """Eine Störung darf die Regelung nicht dauerhaft lahmlegen."""
+    hp = HeatPumpController(RegelConfig())
+    wp = {**SOMMER, "ww_soll_c": None}
+    _ticks_ohne_ruecklesen(hp, wp, 3000, stunden=6)
+    assert hp.ww_boost is True
+
+    # Überschuss weg → Rückstellung ist eine neue Entscheidung, neuer Sollwert
+    versuche, _ = _ticks_ohne_ruecklesen(hp, wp, 0, stunden=1, start=T0 + timedelta(hours=6))
+    assert hp.ww_boost is False
+    assert versuche > 0                          # der Deckel gilt nicht für den neuen Wert
+    # …der ohne Rücklesen natürlich genauso wieder auflaufen darf — jetzt aber
+    # mit dem neuen Sollwert im Klartext:
+    assert "45 °C" in hp.status(wp)["warmwasser"]["stoerung"]
+
+
+def test_beobachtungsmodus_laeuft_nicht_in_eine_scheinstoerung():
+    """Im Beobachtungsmodus wird nichts gesendet — also auch nichts gezählt."""
+    hp = HeatPumpController(RegelConfig())
+    wp = {**SOMMER, "ww_soll_c": None}
+    letzte = None
+    for i in range(int(6 * 3600 / 10)):
+        letzte = hp.update(T0 + timedelta(seconds=i * 10), frei_w=3000, wp=wp)
+    assert letzte.ww_soll_c == 57.0             # der Befehl steht weiter an
+    assert hp.status(wp)["warmwasser"]["stoerung"] is None
+
+
 # --- Heizkreis (REQ-011/012) ------------------------------------------------
 def test_heizkreis_im_sommer_unberuehrt():
     """Kein Sollwert im Zeitprogramm + 30 °C draußen → nichts anheben."""

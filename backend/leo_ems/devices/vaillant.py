@@ -101,6 +101,14 @@ SENSOREN: dict[str, tuple[str, bool]] = {
 # HA liefert für nicht gelieferte Werte diese Zustände statt einer Zahl
 LEER = ("unknown", "unavailable", "none", "None", "")
 
+# Davon bedeutet nur diese Teilmenge „der Wert ist gerade nicht zu haben".
+# `none`/`""` sind bei Textsensoren echte Werte — die Warmwasser-Sonderfunktion
+# meldet im Normalbetrieb genau das. Ein `unavailable` dagegen heißt: die
+# Integration liefert nicht, und dann darf das nicht still zu None werden
+# (siehe `read`). `None` steht hier für die 404-Antwort aus `_state()`, also
+# eine Entity, die HA gar nicht mehr kennt — typisch nach einem Rename.
+AUSGEFALLEN = ("unavailable", "unknown")
+
 
 def _zahl(state: str | None) -> float | None:
     if state is None or state in LEER:
@@ -236,23 +244,32 @@ class VaillantAdapter(DeviceAdapter):
         roh = await asyncio.gather(
             *(self._state(SENSOREN[f][0]) for f in felder), return_exceptions=True
         )
-        if all(isinstance(r, Exception) for r in roh):
-            # Home Assistant nicht erreichbar → Fail-Safe E7 in der Regelschleife
-            self.letzter_fehler = (
-                f"Home Assistant antwortet nicht auf {self.base_url}: "
-                f"{type(roh[0]).__name__}: {roh[0]}"
-            )
-            raise ConnectionError(self.letzter_fehler)
-
         daten: dict = {}
         fehlend: list[str] = []
         for feld, wert in zip(felder, roh):
-            if isinstance(wert, Exception):
+            # Drei Wege, auf denen ein Sensor ausfallen kann, und bis v0.16 wurde
+            # nur der erste gezählt: die Abfrage wirft, HA kennt die Entity nicht
+            # mehr (404 → None), oder die Integration meldet `unavailable`. Die
+            # letzten beiden wurden still zu None — der Status meldete weiter
+            # „Wärmepumpe in Ordnung", während das Rücklesen tot war und der
+            # Sollwert-Abgleich endlos ins Leere schrieb (27.08.2026).
+            if isinstance(wert, Exception) or wert is None                     or str(wert).strip().lower() in AUSGEFALLEN:
                 daten[feld] = None
                 fehlend.append(SENSOREN[feld][0])
                 continue
             numerisch = SENSOREN[feld][1]
             daten[feld] = _zahl(wert) if numerisch else (None if wert in LEER else wert)
+
+        # Nichts lesbar → Fail-Safe E7 in der Regelschleife: keine Entscheidung,
+        # keine Befehle. Das gilt jetzt auch, wenn HA selbst antwortet und nur
+        # die MyVaillant-Integration weg ist — vorher wurde dieser Fall als
+        # vollständige Lesung mit lauter None-Werten weitergereicht, und der
+        # Controller regelte auf Daten, die es nicht gab.
+        if len(fehlend) == len(felder):
+            erste = next((r for r in roh if isinstance(r, Exception)), None)
+            grund = f"{type(erste).__name__}: {erste}" if erste else "alle Sensoren unavailable"
+            self.letzter_fehler = f"Wärmepumpe nicht lesbar über {self.base_url}: {grund}"
+            raise ConnectionError(self.letzter_fehler)
 
         # Teil-Ausfall: gelesen wird trotzdem, aber der Grund steht im Status.
         # Häufigste Ursache sind umbenannte Entities (MyVaillant-Neuanbindung).

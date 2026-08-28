@@ -43,6 +43,25 @@ Speicher unter 53 °C fällt. Der Wert steht in der Konfiguration unter
 gedeckelt, damit eine zu hohe Eingabe wirkungslos bleibt statt dauerhaft zu
 sperren.
 
+*Ein ausgefallener Sensor ist jetzt ein Ausfall.* Der Adapter zählte nur solche
+Sensoren als „nicht lesbar", deren Abfrage eine Ausnahme wirft. Ein Sensor, der
+brav `unavailable` antwortet, wurde still zu None — und eine Entity, die HA gar
+nicht mehr kennt (404), ebenso. Der Status meldete deshalb tagelang „Wärmepumpe
+in Ordnung", während das Rücklesen tot war. Beide Fälle stehen jetzt in
+`geraete.vaillant.fehler`. Ist **kein einziger** Sensor lesbar, greift der
+Fail-Safe E7 wie bei einem Verbindungsabbruch: keine Entscheidung, keine
+Befehle — statt auf lauter None-Werten weiterzuregeln.
+
+*Schreibversuche haben eine Obergrenze.* Ein Sollwert galt als offen, bis das
+Rücklesen ihn bestätigt, und wurde bis dahin alle 15 Minuten wiederholt. Fällt
+das Rücklesen aus, kann diese Bestätigung nie kommen: am 24./25.08.2026 ging
+derselbe Wert **71-mal** hintereinander raus, keiner davon kam an. Nach
+`wp_schreib_versuche` (4, rund eine Stunde) wird deshalb nicht weiter
+geschrieben, sondern gemeldet — im Status unter `warmwasser.stoerung` bzw.
+`heizkreis.stoerung` und im Klartext-Grund, also auch im Entscheidungsprotokoll.
+Eine neue Entscheidung mit einem anderen Sollwert bekommt frische Versuche; eine
+Störung legt die Regelung nicht dauerhaft lahm.
+
 ## 0.15.0
 
 **Die Historie zeigt jetzt den Zeitraum, den man auswählt — und der Tag
