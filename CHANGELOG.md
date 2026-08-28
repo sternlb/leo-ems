@@ -8,6 +8,38 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.16.0
+
+**Der Warmwasser-Sollwert kommt jetzt zuverlässig auf 45 °C zurück — und ein
+Boost startet nicht sofort wieder.**
+
+*Der Fehler.* In der Nacht zum 28.08.2026 stand der Warmwasser-Sollwert
+durchgehend auf 57 °C. Gegen 06:20 heizte die Wärmepumpe den Speicher von 52
+auf 57 °C nach — ohne Sonne, also aus der Hausbatterie, die dadurch auf 0 %
+gefahren wurde. Um 06:49 nahm das EMS den Sollwert zurück, weil es die 57 °C
+endlich als „erreicht" sah.
+
+*Die Ursache.* Die Rückstellung auf `wp_ww_normal_c` hing an genau einem
+Ereignis: dem Moment, in dem der Controller den Boost beendet. Geht dieses
+Ereignis verloren — ein Add-on-Neustart mitten im Boost, ein Cloud-Aufruf, der
+über den Neustart hinweg offen blieb —, dann startet der Controller ohne
+Gedächtnis: `ww_boost` steht auf False, es ist kein Sollwert offen, und die
+57 °C auf der Anlage sieht er als fremden Wert an, den er nicht anfasst.
+
+*Die Behebung.* Zurückgestellt wird jetzt nach **Zustand** statt nach Ereignis:
+Läuft kein Boost und steht auf der Anlage trotzdem der Boost-Sollwert, setzt
+das EMS `wp_ww_normal_c` — in jedem Tick aufs Neue, also selbstheilend. Eng
+gefasst auf den eigenen Boost-Wert (≥ `wp_ww_boost_c` − 0,5 K), damit ein von
+Hand in der MyVaillant-App gestellter Zwischenwert stehen bleibt.
+
+*Neu: Wiedereinschalt-Schwelle `wp_ww_wieder_c` (53 °C).* Bisher war ein neuer
+Boost erlaubt, sobald der Speicher unter 56,5 °C fiel — also Minuten nach dem
+letzten. Jetzt sperrt ein erreichtes Boost-Ziel den nächsten Boost, bis der
+Speicher unter 53 °C fällt. Der Wert steht in der Konfiguration unter
+„Wärmepumpe — Überschuss-Nutzung" und wird intern auf `wp_ww_boost_c` − 0,5 K
+gedeckelt, damit eine zu hohe Eingabe wirkungslos bleibt statt dauerhaft zu
+sperren.
+
 ## 0.15.0
 
 **Die Historie zeigt jetzt den Zeitraum, den man auswählt — und der Tag

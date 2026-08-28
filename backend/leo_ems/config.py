@@ -102,6 +102,11 @@ class RegelConfig:
     # Boost lief stumpf bis zum Wegfall des Überschusses weiter.
     wp_ww_boost_c: float = 57.0        # Boost-Sollwert Warmwasser (Issue #1)
     wp_ww_normal_c: float = 45.0       # Rückstellwert (Issue #1)
+    # Wiedereinschalt-Schwelle nach einem beendeten Boost (Issue #15). Ohne sie
+    # reichte ein halbes Grad Abkühlung unter das Boost-Ziel, damit der nächste
+    # Boost wieder loslief — Takten für ein paar hundert Wattstunden. Erst wenn
+    # der Speicher hierunter fällt, ist ein neuer Boost wieder erlaubt.
+    wp_ww_wieder_c: float = 53.0
     wp_hk_an_w: int = 2500             # Heizkreis-Anhebung startet ab
     wp_hk_aus_w: int = 500
     wp_hk_anhebung_k: float = 1.5      # Anhebung des Raum-Sollwerts

@@ -178,8 +178,29 @@ Zwei Festlegungen dahinter:
    - der Speicher die 57 °C erreicht hat (sofort), **oder**
    - der Überschuss 5 min unter `wp_ww_aus_w` liegt **und** die Mindestlaufzeit
      von 30 min um ist (REQ-064).
-3. Eine gesetzte harte Komfortgrenze (`hard_limit_ww_min_temp`, REQ-012) sticht
+3. Ein neuer Boost erst wieder, wenn der Speicher unter `wp_ww_wieder_c`
+   (53 °C) fällt.
+4. Eine gesetzte harte Komfortgrenze (`hard_limit_ww_min_temp`, REQ-012) sticht
    den Rückstellwert — es wird nie darunter gestellt.
+
+**Der Rückweg hängt nicht am Boost-Ende.** In jedem Tick, in dem kein Boost
+läuft und auf der Anlage trotzdem der Boost-Sollwert steht, setzt das EMS
+`wp_ww_normal_c` — auch wenn es selbst nie einen Boost gestartet hat. Ohne das
+war die Rückstellung ein einzelnes Ereignis, und ein Add-on-Neustart mitten im
+Boost ließ die 57 °C stehen: der Controller startet ohne Gedächtnis, sah nur
+einen fremden Sollwert und rührte ihn nie an. Am **28.08.2026** stand der
+Sollwert dadurch die ganze Nacht auf 57 °C; gegen 06:20 heizte die WP den
+Speicher aus der ohnehin fast leeren Hausbatterie nach und drückte sie auf 0 %.
+Zurückgenommen wird nur, was aussieht wie der eigene Boost-Sollwert
+(≥ `wp_ww_boost_c` − 0,5 K) — ein von Hand in der MyVaillant-App gestellter
+Zwischenwert bleibt stehen.
+
+**Warum die Wiedereinschalt-Schwelle.** Der Boost endet bei 57 °C, der Speicher
+kühlt in Minuten auf 56,4 ab — und ohne Sperre startet bei liegendem Überschuss
+sofort der nächste Boost für ein paar hundert Wattstunden. Mit 53 °C liegt
+zwischen zwei Boosts ein sinnvolles Energiepaket. Die Schwelle wird intern auf
+`wp_ww_boost_c` − 0,5 K gedeckelt: eine versehentlich zu hoch gesetzte Schwelle
+ist damit wirkungslos statt eine Dauersperre.
 
 **Warum 57 und nicht 60 °C.** Ursprünglich war das Boost-Ziel 60 °C. Die
 Betriebsdaten vom 31.07.2026 (fünf echte Boosts) zeigen: der Speicher kommt bei

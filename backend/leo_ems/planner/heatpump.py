@@ -2,8 +2,12 @@
 
 Zwei Überschuss-Hebel auf dieselbe Vaillant-Anlage:
 
-  1. **Warmwasser vorziehen** (REQ-010): Sollwert von 45 auf 60 °C anheben,
-     solange PV-Überschuss trägt, und automatisch zurückstellen.
+  1. **Warmwasser vorziehen** (REQ-010): Sollwert von 45 auf 57 °C anheben,
+     solange PV-Überschuss trägt, und automatisch zurückstellen. Zurückgestellt
+     wird nicht nur beim Boost-Ende, sondern in jedem Tick, in dem ohne
+     laufenden Boost noch der Boost-Sollwert auf der Anlage steht
+     (`_ww_rueckstand`, Issue #15) — der Rückweg hängt damit an einem Zustand
+     und nicht an einem einzelnen Ereignis, das verloren gehen kann.
   2. **Heizkreis anheben** (REQ-011): Raum-Sollwert um Δ anheben — nur in der
      Heizperiode und nur, wenn das Zeitprogramm überhaupt einen Sollwert hat.
 
@@ -31,6 +35,10 @@ Drei Eigenheiten, die die Logik prägen:
     und höchstens alle `wp_cloud_min_gap_s`. Ein Sollwert gilt als „gewünscht",
     bis ihn ein Rücklesen bestätigt — dadurch wird ein verlorener Cloud-Aufruf
     von selbst wiederholt, ohne Dauerschleife.
+  * **Hysterese nach oben** (Issue #15). Ein beendeter Boost sperrt den
+    nächsten, bis der Speicher unter `wp_ww_wieder_c` (53 °C) fällt. Ohne diese
+    Sperre reichte ein halbes Grad Abkühlung, damit der nächste Boost lossetzte
+    — Takten um ein paar hundert Wattstunden.
   * **Keine Dauer-Übersteuerung.** Sobald ein Sollwert bestätigt ist, schreibt
     das EMS nicht mehr nach. Wer in der MyVaillant-App etwas von Hand ändert,
     wird nicht überstimmt.
@@ -71,6 +79,9 @@ class HeatPumpController:
         self.cfg = cfg
         self.ww_boost = False
         self.hk_boost = False
+        # Hysterese-Latch Warmwasser (Issue #15): einmal auf Boost-Temperatur,
+        # bleibt gesperrt, bis der Speicher unter `wp_ww_wieder_c` fällt.
+        self._ww_warm = False
         self._ziel: dict[str, float | None] = {"ww": None, "hk": None}
         self._hk_basis: float | None = None      # Raum-Sollwert vor der Anhebung
         self._seit: dict[str, datetime] = {}
@@ -112,6 +123,25 @@ class HeatPumpController:
         """Komfortgrenze Warmwasser (REQ-012): nie unter die harte Grenze stellen."""
         grenze = self.cfg.hard_limit_ww_min_temp
         return max(self.cfg.wp_ww_normal_c, grenze) if grenze is not None else self.cfg.wp_ww_normal_c
+
+    def _ww_wieder_c(self, boost_c: float) -> float:
+        """Ab wo darf ein neuer Boost starten, nachdem der Speicher warm war?
+
+        Gedeckelt auf den Arm-Punkt: eine Schwelle **über** `boost_c - TOLERANZ_K`
+        würde den Latch im selben Tick setzen und wieder löschen — also gar nicht
+        wirken. So ist eine Fehlkonfiguration schlimmstenfalls wirkungslos und
+        nie eine Dauersperre.
+        """
+        return min(self.cfg.wp_ww_wieder_c, boost_c - TOLERANZ_K)
+
+    def _ww_warm_pflegen(self, ist: float | None, boost_c: float) -> None:
+        """Den Latch nachführen — die einzige Stelle, die ihn setzt oder löscht."""
+        if ist is None:
+            return
+        if ist >= boost_c - TOLERANZ_K:
+            self._ww_warm = True
+        elif ist < self._ww_wieder_c(boost_c):
+            self._ww_warm = False
 
     def _aus_schwelle(self, an_w: int, aus_w: int) -> float:
         """Aus-Schwelle, die den eigenen Verbrauch nicht gegen den Boost wendet.
@@ -176,6 +206,7 @@ class HeatPumpController:
         ist = wp.get("ww_ist_c")
         boost_c = self.cfg.wp_ww_boost_c
         normal_c = self._ww_untergrenze()
+        self._ww_warm_pflegen(ist, boost_c)
 
         # Funktion abgeschaltet (Issue #1): laufenden Boost sofort zurückstellen,
         # ohne Mindestlaufzeit. Danach wird Warmwasser gar nicht mehr bewertet.
@@ -210,23 +241,64 @@ class HeatPumpController:
             stand = f"{ist:.0f} → {boost_c:.0f} °C" if ist is not None else f"Ziel {boost_c:.0f} °C"
             return f"Warmwasser-Boost aktiv ({stand}), Überschuss {frei / 1000:.1f} kW"
 
-        # nicht aktiv → Startbedingung
-        if ist is not None and ist >= boost_c - TOLERANZ_K:
+        # Kein Boost aktiv → erstens: steht auf der Anlage noch der Boost-Sollwert?
+        rueck = self._ww_rueckstand(wp, boost_c, normal_c)
+
+        # zweitens: Startbedingung — mit Hysterese (Issue #15)
+        if self._ww_warm:
             self._seit.pop("ww_an", None)
-            return f"Warmwasser schon bei {ist:.0f} °C — kein Boost nötig"
+            stand = f"{ist:.0f} °C" if ist is not None else "warm"
+            return (f"{rueck}Warmwasser {stand} — kein Boost nötig "
+                    f"(wieder ab unter {self._ww_wieder_c(boost_c):.0f} °C)")
         gehalten = self._held("ww_an", frei >= an, now)
         if gehalten >= timedelta(seconds=self.cfg.wp_entprellung_s):
             self.ww_boost = True
             self._start["ww"] = now
             self._ziel["ww"] = boost_c
             self._seit.pop("ww_aus", None)
-            return (f"Warmwasser-Boost startet: Überschuss {frei / 1000:.1f} kW ≥ "
+            return (f"{rueck}Warmwasser-Boost startet: Überschuss {frei / 1000:.1f} kW ≥ "
                     f"{an / 1000:.1f} kW → Sollwert {boost_c:.0f} °C")
         if gehalten > timedelta(0):
             noetig = self.cfg.wp_entprellung_s
-            return (f"Warmwasser: Überschuss reicht, Bedingungszeit läuft "
+            return (f"{rueck}Warmwasser: Überschuss reicht, Bedingungszeit läuft "
                     f"({int(gehalten.total_seconds())}/{noetig} s)")
-        return f"Warmwasser: Überschuss {frei / 1000:.1f} kW < {an / 1000:.1f} kW"
+        return f"{rueck}Warmwasser: Überschuss {frei / 1000:.1f} kW < {an / 1000:.1f} kW"
+
+    def _ww_rueckstand(self, wp: dict, boost_c: float, normal_c: float) -> str:
+        """Boost-Sollwert ohne laufenden Boost → zurücknehmen (Issue #15).
+
+        Bis v0.15 wurde `wp_ww_normal_c` **nur** im Moment des Boost-Endes
+        gestellt. Damit hing der ganze Rückweg an genau einem Ereignis: ging es
+        verloren, stand auf der Anlage weiter das Boost-Ziel — und die WP hat
+        den Speicher nachts ohne Sonne auf 57 °C gehalten. Genau das ist am
+        28.08.2026 passiert (Sollwert 57 von abends bis 06:49, die WP heizte
+        gegen 06:20 aus der leeren Hausbatterie nach).
+
+        Verloren geht das Ereignis leichter, als es aussieht: ein Neustart des
+        Add-ons während eines Boosts setzt `ww_boost` auf False und `_ziel` auf
+        None — der Controller weiß dann nichts mehr von den 57 °C und schreibt
+        sie nie zurück. Dasselbe nach einem fehlgeschlagenen Cloud-Aufruf, der
+        über einen Neustart hinweg offen blieb.
+
+        Statt des Ereignisses wird deshalb der **Zustand** geprüft: kein Boost,
+        aber Boost-Sollwert auf der Anlage → Rückstellwert setzen. Das ist
+        selbstheilend, denn es gilt bei jedem Tick aufs Neue.
+
+        Bewusst eng gefasst: zurückgenommen wird nur, was aussieht wie *unser*
+        Boost-Sollwert (`>= boost_c - TOLERANZ_K`). Ein von Hand in der
+        MyVaillant-App gestellter Zwischenwert bleibt stehen — die Zusage
+        „keine Dauer-Übersteuerung" aus dem Modulkopf gilt weiter.
+        """
+        if self._ziel["ww"] is not None:
+            return ""                      # es ist ohnehin schon einer unterwegs
+        soll = wp.get("ww_soll_c")
+        if soll is None or soll < boost_c - TOLERANZ_K:
+            return ""
+        if normal_c >= boost_c - TOLERANZ_K:
+            return ""                      # Komfortgrenze liegt selbst auf Boost-Höhe
+        self._ziel["ww"] = normal_c
+        return (f"Sollwert stand noch auf {soll:.0f} °C ohne Boost — "
+                f"zurück auf {normal_c:.0f} °C · ")
 
     def _ww_beenden(self, normal_c: float, grund: str) -> str:
         self.ww_boost = False
@@ -382,6 +454,8 @@ class HeatPumpController:
                 "boost": self.ww_boost,
                 "boost_c": self.cfg.wp_ww_boost_c,
                 "normal_c": self._ww_untergrenze(),
+                "wieder_c": self._ww_wieder_c(self.cfg.wp_ww_boost_c),
+                "warm": self._ww_warm,
                 "offen_c": self._ziel["ww"],
             },
             "heizkreis": {

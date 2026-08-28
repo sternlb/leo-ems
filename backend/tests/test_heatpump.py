@@ -186,6 +186,52 @@ def test_ww_kein_boost_wenn_speicher_schon_warm():
     assert hp.ww_boost is False and wp["ww_soll_c"] == 45.0
 
 
+def test_ww_hysterese_sperrt_neustart_bis_zur_wieder_schwelle():
+    """Issue #15: nach erreichten 57 °C erst wieder ab unter 53 °C boosten."""
+    hp = HeatPumpController(RegelConfig())
+    wp = dict(SOMMER)
+    _ticks(hp, wp, 3000, minuten=11)
+    wp["ww_ist_c"] = 57.0
+    _ticks(hp, wp, 3000, minuten=17, start=T0 + timedelta(minutes=11))
+    assert hp.ww_boost is False and wp["ww_soll_c"] == 45.0
+
+    # Speicher kühlt aus, der Überschuss steht die ganze Zeit an
+    for grad in (56.0, 54.0, 53.0):
+        wp["ww_ist_c"] = grad
+        letzte = _ticks(hp, wp, 5000, minuten=30, start=T0 + timedelta(hours=1))
+        assert hp.ww_boost is False, f"bei {grad} °C darf kein Boost starten"
+        assert wp["ww_soll_c"] == 45.0
+    assert "wieder ab unter 53" in letzte.grund
+
+    wp["ww_ist_c"] = 52.5                       # unter die Wiedereinschalt-Schwelle
+    _ticks(hp, wp, 5000, minuten=11, start=T0 + timedelta(hours=2))
+    assert hp.ww_boost is True and wp["ww_soll_c"] == 57.0
+
+
+def test_ww_sollwert_wird_auch_ohne_boost_zurueckgenommen():
+    """Issue #15: ein Neustart mitten im Boost darf die 57 °C nicht stehen lassen.
+
+    Frischer Controller (= Add-on neu gestartet), auf der Anlage steht noch der
+    Boost-Sollwert, es ist Nacht. Ohne Rückstellung heizt die WP den Speicher
+    die ganze Nacht auf 57 °C — genau das Fehlerbild vom 28.08.2026.
+    """
+    hp = HeatPumpController(RegelConfig())
+    wp = {**SOMMER, "ww_ist_c": 54.0, "ww_soll_c": 57.0}
+    erster = hp.update(T0, frei_w=-400, wp=wp)
+    assert hp.ww_boost is False
+    assert erster.ww_soll_c == 45.0 and "stand noch auf 57" in erster.grund
+    _ticks(hp, wp, -400, minuten=2)
+    assert wp["ww_soll_c"] == 45.0
+
+
+def test_ww_rueckstellung_laesst_handbedienung_stehen():
+    """Nur der Boost-Sollwert wird zurückgenommen, kein Zwischenwert aus der App."""
+    hp = HeatPumpController(RegelConfig())
+    wp = {**SOMMER, "ww_ist_c": 48.0, "ww_soll_c": 50.0}
+    _ticks(hp, wp, -400, minuten=30)
+    assert wp["ww_soll_c"] == 50.0
+
+
 def test_ww_komfortgrenze_hebt_rueckstellwert_an():
     """REQ-012: die harte Untergrenze sticht den Rückstellwert."""
     cfg = RegelConfig(hard_limit_ww_min_temp=50.0)

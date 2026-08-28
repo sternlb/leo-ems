@@ -896,6 +896,7 @@
         <label class="f"><span>WW-Boost aus unter (W)</span><input type="number" id="c-wp_ww_aus_w" min="-2000" max="5000" step="100"></label>
         <label class="f"><span>WW-Boost-Temperatur (°C)</span><input type="number" id="c-wp_ww_boost_c" min="35" max="70" step="1"></label>
         <label class="f"><span>WW-Rückstellwert (°C)</span><input type="number" id="c-wp_ww_normal_c" min="35" max="70" step="1"></label>
+        <label class="f"><span>WW-Boost wieder ab (°C)</span><input type="number" id="c-wp_ww_wieder_c" min="35" max="70" step="1"></label>
         <label class="f"><span>Heizkreis-Anhebung (K)</span><input type="number" id="c-wp_hk_anhebung_k" min="0" max="5" step="0.5"></label>
         <label class="f"><span>Raum-Obergrenze (°C)</span><input type="number" id="c-wp_hk_max_raum_c" min="15" max="28" step="0.5"></label>
         <label class="f"><span>Anhebung nur unter (°C außen)</span><input type="number" id="c-wp_hk_max_aussen_c" min="-10" max="25" step="1"></label>
@@ -1760,7 +1761,7 @@ const CFG_FELDER = ["ev_limit_soc","min_current_a","max_current_a","soc_reserve_
                     "priority_soc_pct","batt_schnell_max_w",
                     "residual_power_w","phase_up_w","phase_down_w","phase_min_gap_s",
                     // Wärmepumpe (Issue #1); Timing-Parameter bleiben API-only
-                    "wp_ww_an_w","wp_ww_aus_w","wp_ww_boost_c","wp_ww_normal_c",
+                    "wp_ww_an_w","wp_ww_aus_w","wp_ww_boost_c","wp_ww_normal_c","wp_ww_wieder_c",
                     "wp_hk_anhebung_k","wp_hk_max_raum_c","wp_hk_max_aussen_c"];
 let cfgCache = null;
 
