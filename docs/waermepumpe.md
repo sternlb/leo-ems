@@ -185,15 +185,27 @@ Zwei Festlegungen dahinter:
 
 **Der Rückweg hängt nicht am Boost-Ende.** In jedem Tick, in dem kein Boost
 läuft und auf der Anlage trotzdem der Boost-Sollwert steht, setzt das EMS
-`wp_ww_normal_c` — auch wenn es selbst nie einen Boost gestartet hat. Ohne das
-war die Rückstellung ein einzelnes Ereignis, und ein Add-on-Neustart mitten im
-Boost ließ die 57 °C stehen: der Controller startet ohne Gedächtnis, sah nur
-einen fremden Sollwert und rührte ihn nie an. Am **28.08.2026** stand der
-Sollwert dadurch die ganze Nacht auf 57 °C; gegen 06:20 heizte die WP den
-Speicher aus der ohnehin fast leeren Hausbatterie nach und drückte sie auf 0 %.
-Zurückgenommen wird nur, was aussieht wie der eigene Boost-Sollwert
-(≥ `wp_ww_boost_c` − 0,5 K) — ein von Hand in der MyVaillant-App gestellter
-Zwischenwert bleibt stehen.
+`wp_ww_normal_c` — auch wenn es selbst nie einen Boost gestartet hat und
+unabhängig davon, wer den Wert hochgesetzt hat. Zurückgenommen wird nur, was
+aussieht wie der eigene Boost-Sollwert (≥ `wp_ww_boost_c` − 0,5 K); ein von Hand
+in der MyVaillant-App gestellter Zwischenwert bleibt stehen.
+
+Vorher lief die Rückstellung als offenes Ziel, das so lange wiederholt wurde,
+bis das Rücklesen es bestätigt. Ist die Bestätigung einmal da, gibt es nichts
+mehr zu wiederholen — wird der Sollwert danach von außen wieder hochgesetzt,
+merkt das niemand. Genauso wenig hilft die Wiederholung, wenn die
+MyVaillant-Integration ausgefallen ist: dann kommt keine Bestätigung, und die
+Schreibvorgänge landen ebenfalls nicht auf der Anlage (Home Assistant nimmt den
+Service-Call an, die Integration bringt ihn nicht weiter).
+
+**Der Vorfall vom 27./28.08.2026.** Der Boost endete um 18:38, das EMS schrieb
+45 °C — fünfzehnmal, bis 22:09. Auf der Anlage stand trotzdem 57 °C, als die
+MyVaillant-Integration um 22:19:58 nach einem längeren Ausfall zurückkam. Um
+05:30 öffnete das Warmwasser-Zeitprogramm der Anlage (Mo–Fr 05:30–22:00), die WP
+heizte den Speicher von 52 auf 57 °C und zog dafür rund 1 kW aus der
+Hausbatterie, die dadurch auf 0 % lief. Das Zeitprogramm macht einen stehen
+gebliebenen Boost-Sollwert also **jeden Morgen um 05:30** teuer — genau dann,
+wenn noch keine Sonne da ist.
 
 **Warum die Wiedereinschalt-Schwelle.** Der Boost endet bei 57 °C, der Speicher
 kühlt in Minuten auf 56,4 ab — und ohne Sperre startet bei liegendem Überschuss

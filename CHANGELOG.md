@@ -19,12 +19,15 @@ auf 57 °C nach — ohne Sonne, also aus der Hausbatterie, die dadurch auf 0 %
 gefahren wurde. Um 06:49 nahm das EMS den Sollwert zurück, weil es die 57 °C
 endlich als „erreicht" sah.
 
-*Die Ursache.* Die Rückstellung auf `wp_ww_normal_c` hing an genau einem
-Ereignis: dem Moment, in dem der Controller den Boost beendet. Geht dieses
-Ereignis verloren — ein Add-on-Neustart mitten im Boost, ein Cloud-Aufruf, der
-über den Neustart hinweg offen blieb —, dann startet der Controller ohne
-Gedächtnis: `ww_boost` steht auf False, es ist kein Sollwert offen, und die
-57 °C auf der Anlage sieht er als fremden Wert an, den er nicht anfasst.
+*Die Ursache.* Das EMS hat die Rückstellung sehr wohl versucht: Der Boost endete
+um 18:38, danach ging fünfzehnmal 45 °C raus, bis 22:09. Angekommen ist keiner
+davon — die MyVaillant-Integration war ausgefallen und kam erst um 22:19:58
+zurück, mit 57 °C auf der Anlage. Home Assistant nimmt einen Service-Call auch
+dann an, wenn die Integration ihn nicht weiterreicht; das EMS sieht keinen
+Fehler. Ab 22:20 gab es dann gar kein offenes Ziel mehr, das hätte wiederholt
+werden können, und der Controller sah die 57 °C nur noch als fremden Wert an,
+den er nicht anfasst. Um 05:30 öffnete das Warmwasser-Zeitprogramm der Anlage
+(Mo–Fr 05:30–22:00) und die WP heizte auf die stehen gebliebenen 57 °C hoch.
 
 *Die Behebung.* Zurückgestellt wird jetzt nach **Zustand** statt nach Ereignis:
 Läuft kein Boost und steht auf der Anlage trotzdem der Boost-Sollwert, setzt

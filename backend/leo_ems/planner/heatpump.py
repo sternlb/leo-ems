@@ -268,21 +268,30 @@ class HeatPumpController:
         """Boost-Sollwert ohne laufenden Boost → zurücknehmen (Issue #15).
 
         Bis v0.15 wurde `wp_ww_normal_c` **nur** im Moment des Boost-Endes
-        gestellt. Damit hing der ganze Rückweg an genau einem Ereignis: ging es
-        verloren, stand auf der Anlage weiter das Boost-Ziel — und die WP hat
-        den Speicher nachts ohne Sonne auf 57 °C gehalten. Genau das ist am
-        28.08.2026 passiert (Sollwert 57 von abends bis 06:49, die WP heizte
-        gegen 06:20 aus der leeren Hausbatterie nach).
+        gestellt und danach so lange wiederholt, bis das Rücklesen es bestätigt.
+        Zwei Wege führen daran vorbei, und beide sind am 27./28.08.2026
+        aufgetreten:
 
-        Verloren geht das Ereignis leichter, als es aussieht: ein Neustart des
-        Add-ons während eines Boosts setzt `ww_boost` auf False und `_ziel` auf
-        None — der Controller weiß dann nichts mehr von den 57 °C und schreibt
-        sie nie zurück. Dasselbe nach einem fehlgeschlagenen Cloud-Aufruf, der
-        über einen Neustart hinweg offen blieb.
+        * Die Bestätigung kommt nie, weil der Rücklese-Sensor `unavailable` ist
+          (MyVaillant-Ausfall). Dann schreibt das EMS zwar weiter, aber die
+          Schreibvorgänge landen ebenfalls nirgends — HA nimmt den Service-Call
+          an, die Integration bringt ihn nicht zur Anlage. Auf der Anlage bleibt
+          das Boost-Ziel stehen, ohne dass es jemand merkt.
+        * Der Sollwert wird von außen wieder hochgesetzt (Anlage, App,
+          Zeitprogramm), nachdem der Rückstellwert bestätigt war. Dann ist
+          `_ziel["ww"]` bereits None — es gibt kein offenes Ziel mehr, das
+          wiederholt werden könnte, und der Controller sieht die 57 °C nur noch
+          als fremden Wert an.
+
+        In der Nacht zum 28.08.2026 stand der Sollwert dadurch ab 22:20 auf
+        57 °C. Um 05:30 öffnete das Warmwasser-Zeitprogramm der Anlage
+        (Mo–Fr 05:30–22:00) und die WP heizte den Speicher von 52 auf 57 °C —
+        ohne Sonne, also aus der ohnehin fast leeren Hausbatterie.
 
         Statt des Ereignisses wird deshalb der **Zustand** geprüft: kein Boost,
         aber Boost-Sollwert auf der Anlage → Rückstellwert setzen. Das ist
-        selbstheilend, denn es gilt bei jedem Tick aufs Neue.
+        selbstheilend, denn es gilt bei jedem Tick aufs Neue, und es hängt weder
+        an einem gemerkten Zustand noch daran, wer den Sollwert hochgesetzt hat.
 
         Bewusst eng gefasst: zurückgenommen wird nur, was aussieht wie *unser*
         Boost-Sollwert (`>= boost_c - TOLERANZ_K`). Ein von Hand in der
