@@ -17,12 +17,14 @@ def berechne_ueberschuss(
     cfg: RegelConfig,
     *,
     mit_batterie: bool = False,
+    tor_soc_pct: int | None = None,
 ) -> float:
     """Verfügbare Leistung für den Loadpoint (Spec §2).
 
     P_überschuss = P_lade_ist − P_netz − P_residual
-    Batterie-Behandlung: Ab prioritySoc darf das EV der Batterie die
-    Ladeleistung "wegnehmen" — darunter hat die Hausbatterie Vorrang.
+    Batterie-Behandlung: Ab der Torschwelle (`tor_soc_pct`, sonst prioritySoc)
+    darf der Verbraucher der Batterie die Ladeleistung "wegnehmen" — darunter
+    hat die Hausbatterie Vorrang.
 
     `mit_batterie=True` liefert das Budget für den Modus „PV+Batterie" (Issue
     #11): dort fällt der Batterie-Term **ganz** weg, übrig bleibt die Leistung,
@@ -38,7 +40,13 @@ def berechne_ueberschuss(
     ueberschuss = p_lade_ist_w - p_netz_w - cfg.residual_power_w
     if mit_batterie:
         return ueberschuss
-    if soc_batterie_pct >= cfg.priority_soc_pct and p_batterie_w > 0:
+    # `tor_soc_pct` ist die Schwelle, ab der die Batterie ihre Ladeleistung an
+    # diesen Verbraucher abgibt. Sie kommt seit v0.18 aus der Prioritätenliste
+    # (Issue #16) und kann je Verbraucher verschieden sein — steht ein zweites
+    # Batterie-Tor über nur einem von beiden, gilt sie auch nur für ihn. Ohne
+    # Angabe bleibt es bei `priority_soc_pct`, dem Verhalten bis v0.17.
+    tor = cfg.priority_soc_pct if tor_soc_pct is None else tor_soc_pct
+    if soc_batterie_pct >= tor and p_batterie_w > 0:
         ueberschuss += p_batterie_w
     elif p_batterie_w < 0:
         # Entladung ist kein Überschuss. Seit der dynamischen Entladegrenze

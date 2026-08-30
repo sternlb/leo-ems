@@ -29,6 +29,14 @@ class RegelConfig:
     read_only: bool = True
     residual_power_w: int = 100        # Ziel-Netzbezug (Spec §2)
     priority_soc_pct: int = 25         # Batterie-Vorrang unterhalb (Spec §2)
+    # Reihenfolge der Überschussverwertung (Issue #16, docs/priorisierung.md).
+    # Die Vorgabe bildet das Verhalten bis v0.17 ab — ein Update ändert nichts,
+    # solange niemand umstellt. `field(default_factory=...)`, weil eine
+    # veränderliche Vorgabe als Klassenattribut von allen Instanzen geteilt
+    # würde: Eine Umsortierung schlüge auf jede andere Konfiguration durch.
+    prioritaet: list[str] = field(
+        default_factory=lambda: list(("batterie_vorrang", "wallbox",
+                                      "warmwasser", "batterie_voll")))
     soc_reserve_pct: int = 0           # Batterie-Reserve, Default 0 % (REQ-021)
     interval_s: int = 10               # Regelintervall (Spec §2)
     enable_delay_s: int = 60           # Einschalt-Hysterese (Spec §4.1)
@@ -137,7 +145,14 @@ class RegelConfig:
 def load_config() -> RegelConfig:
     if CONFIG_FILE.exists():
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        return RegelConfig(**{k: v for k, v in data.items() if k in RegelConfig.__dataclass_fields__})
+        cfg = RegelConfig(**{k: v for k, v in data.items() if k in RegelConfig.__dataclass_fields__})
+        # Eine Konfiguration aus einer älteren Version kennt das Feld nicht, eine
+        # von Hand verbogene könnte Unsinn enthalten. Beides darf die
+        # Regelschleife nicht anhalten — hier wird still auf die Vorgabe
+        # zurückgefallen. Der Schreibpfad über die API lehnt dagegen ab.
+        from .planner.prioritaet import normalisiere
+        cfg.prioritaet = normalisiere(cfg.prioritaet)
+        return cfg
     return RegelConfig()
 
 

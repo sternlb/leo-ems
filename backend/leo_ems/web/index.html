@@ -251,6 +251,18 @@
      Auf Desktop bleibt die h2 optisch gleich (nur flex), Inhalt immer sichtbar. */
   /* Anklickbare Kacheln: Der Hinweis darauf muss leise sein — die Kachel ist
      zuerst eine Anzeige und erst danach ein Knopf. */
+  /* Prioritätenliste (Issue #16). Hoch/Runter statt Drag & Drop: Auf dem Handy
+     ist Ziehen unzuverlässig, und die Liste hat vier Einträge. */
+  .prio { display: flex; flex-direction: column; gap: .3rem; margin-top: .5rem; }
+  .prio-z { display: flex; align-items: center; gap: .5rem; padding: .4rem .55rem;
+    border: 1px solid var(--rand); border-radius: 8px; background: var(--panel); }
+  .prio-z.tor { border-style: dashed; }
+  .prio-nr { font-family: var(--mono); font-size: .7rem; color: var(--dim); width: 1.1rem; }
+  .prio-nm { flex: 1; font-size: .85rem; }
+  .prio-w { font-family: var(--mono); font-size: .75rem; color: var(--dim); }
+  .prio-btn { background: none; border: 1px solid var(--rand); border-radius: 6px;
+    width: 28px; height: 28px; cursor: pointer; color: var(--forest); line-height: 1; }
+  .prio-btn:disabled { opacity: .3; cursor: default; }
   .card.klickbar { cursor: pointer; }
   .card.klickbar:hover { border-color: var(--lime); }
   .card.klickbar:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
@@ -892,6 +904,11 @@
         <span>Hausbatterie im Modus „Schnell" mitnutzen</span>
         <span class="badge switch" id="schnell-batt-schalter"
               title="Im Modus Schnell zusätzlich aus der Hausbatterie laden (Netzbezug bleibt erlaubt)">–</span>
+      </div>
+      <h3 style="margin-top:1.1rem">Wer bekommt den Überschuss zuerst?</h3>
+      <div class="prio" id="prio"></div>
+      <div class="sub" id="prio-hinweis" style="margin-top:.4rem">
+        Reihenfolge, nicht Verbot: Was ein Verbraucher nicht abnimmt, geht weiter nach unten.
       </div>
       <div style="margin-top:.9rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap">
         <button class="btn ghost" id="toggle-ro">–</button>
@@ -2489,11 +2506,77 @@ async function ladeHistorie() {
     `<b>${e.ts.slice(11,19)}</b> ${e.regel} <span style="opacity:.6">→ ${e.befehl}</span>`).join("<br>") || "–";
 }
 
+// --- Prioritätenliste (Issue #16, docs/priorisierung.md) ---------------------
+// Zwei Arten von Einträgen, und der Unterschied gehört sichtbar: Verbraucher
+// nehmen aus dem Topf, Batterie-Einträge sind Tore, die den Anteil der Batterie
+// erst freigeben, wenn ihre Schwelle erreicht ist. Tore stehen deshalb
+// gestrichelt und tragen keine Zuteilung — sie bekommen nichts, sie halten
+// zurück.
+const PRIO_TOR = { batterie_vorrang: true, batterie_voll: true };
+function prioName(k) {
+  const schwelle = cfgCache ? cfgCache.priority_soc_pct : 25;
+  return {
+    batterie_vorrang: `Hausbatterie bis ${schwelle} %`,
+    wallbox: "Wallbox — PV-Überschuss",
+    warmwasser: "Warmwasser-Boost",
+    batterie_voll: "Hausbatterie bis voll",
+  }[k] || k;
+}
+
+let prioStand = "";
+function renderPrio(st) {
+  const liste = st.prioritaet || [];
+  if (liste.join(",") !== prioStand) {
+    prioStand = liste.join(",");
+    const host = $("prio");
+    host.innerHTML = "";
+    liste.forEach((k, i) => {
+      const z = document.createElement("div");
+      z.className = "prio-z" + (PRIO_TOR[k] ? " tor" : "");
+      z.innerHTML = `<span class="prio-nr">${i + 1}</span>`
+        + `<span class="prio-nm">${prioName(k)}</span>`
+        + `<span class="prio-w" data-w="${k}"></span>`
+        + `<button class="prio-btn" data-hoch="${i}" ${i === 0 ? "disabled" : ""}
+             aria-label="${prioName(k)} nach oben">↑</button>`
+        + `<button class="prio-btn" data-runter="${i}" ${i === liste.length - 1 ? "disabled" : ""}
+             aria-label="${prioName(k)} nach unten">↓</button>`;
+      host.appendChild(z);
+    });
+    for (const b of host.querySelectorAll("[data-hoch]"))
+      b.onclick = () => prioTauschen(liste, +b.dataset.hoch, +b.dataset.hoch - 1);
+    for (const b of host.querySelectorAll("[data-runter]"))
+      b.onclick = () => prioTauschen(liste, +b.dataset.runter, +b.dataset.runter + 1);
+  }
+  // Zahlen bei jedem Tick, Aufbau nur bei Änderung: Ein Neubau im Sekundentakt
+  // würde jeden Klick verschlucken.
+  for (const el of $("prio").querySelectorAll("[data-w]")) {
+    const w = (st.zuteilung_w || {})[el.dataset.w];
+    el.textContent = w == null ? "" : (w > 0 ? fmtFluss(w) : "—");
+  }
+}
+
+async function prioTauschen(liste, a, b) {
+  const neu = liste.slice();
+  [neu[a], neu[b]] = [neu[b], neu[a]];
+  $("prio-hinweis").textContent = "wird übernommen …";
+  try {
+    cfgCache = await api("api/v1/config", {
+      method: "PUT", body: JSON.stringify({ prioritaet: neu }) });
+    prioStand = "";                       // Neuaufbau beim nächsten Status
+    if (lastStatus) renderPrio({ ...lastStatus, prioritaet: neu });
+    $("prio-hinweis").textContent = "Reihenfolge, nicht Verbot: Was ein Verbraucher "
+      + "nicht abnimmt, geht weiter nach unten.";
+  } catch (e) {
+    $("prio-hinweis").textContent = "Konnte die Reihenfolge nicht ändern: " + e;
+  }
+}
+
 async function poll() {
   try {
     const st = await api("api/v1/status");
     lastStatus = st; statusAlter = Date.now();
     render(st);
+    renderPrio(st);
     $("b-conn").textContent = "online"; $("b-conn").className = "badge on";
     $("offline").classList.add("hidden");
   } catch (e) {

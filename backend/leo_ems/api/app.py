@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..config import DATA_DIR, TOKEN_FILE, RegelConfig, save_config
+from ..planner.prioritaet import pruefe as prioritaet_pruefen
 from ..energy import (KANAELE, ImportBericht, importiere_e3dc_historie,
                      stunden_auffuellen)
 from ..planner.rules import ChargingRule
@@ -235,6 +236,14 @@ def create_app(
             update.get("ev_limit_soc", cfg.ev_limit_soc),
             update.get("hard_limit_ev_max_soc", cfg.hard_limit_ev_max_soc),
         )
+        if "prioritaet" in update:
+            # Streng ablehnen statt still zu ergänzen (Issue #16): Eine
+            # unvollständige Liste würde den fehlenden Eintrag an eine Stelle
+            # setzen, die niemand gewählt hat — und niemand würde es merken.
+            try:
+                update["prioritaet"] = prioritaet_pruefen(update["prioritaet"])
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=f"Priorität: {exc}") from exc
         for key, value in update.items():
             setattr(cfg, key, value)
         save_config(cfg)  # sofort persistent, kein Neustart (REQ-073)

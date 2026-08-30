@@ -8,6 +8,48 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.18.0
+
+**Die Reihenfolge, in der der Überschuss verteilt wird, ist jetzt einstellbar
+(Issue #16, Schritt 1).**
+
+*Vorher stand sie fest im Code* und war über drei Dateien verteilt: das
+Batterie-Tor in der Überschussformel, „Auto vor Wärmepumpe" in der
+Regelschleife. Beides war einzeln gut begründet — Letzteres in Issue #6, weil
+ein laufender WP-Boost das Auto ausgesperrt hatte. Nur ändern konnte es
+niemand, und im Winter ist eine andere Reihenfolge richtig als im Sommer.
+
+*Vier Einträge, frei sortierbar,* auf der Übersicht unter „Betrieb":
+Hausbatterie bis Vorrang-SoC · Wallbox · Warmwasser-Boost · Hausbatterie bis
+voll. Die Vorgabe bildet das bisherige Verhalten ab — ein Update ändert nichts,
+solange niemand umstellt.
+
+*Die beiden Batterie-Einträge sind Tore, keine Verbraucher.* Die Hausbatterie
+bekommt nichts zugeteilt; sie nimmt sich, was sonst niemand abruft, und das
+regelt die E3DC autonom. Das EMS kann sie nur dadurch bevorzugen, dass es ihren
+Anteil **nicht** weiterreicht. Ein Tor sagt deshalb: „Die Ladeleistung der
+Batterie steht allem unter mir erst zur Verfügung, wenn der SoC die Schwelle
+erreicht hat." Sie stehen im Dashboard gestrichelt und tragen keine Zuteilung.
+
+*Reihenfolge ist kein Verbot.* Nimmt ein bevorrechtigter Verbraucher weniger
+ab, als da ist, geht der Rest weiter nach unten — alles andere hieße, Energie
+ins Netz zu schicken, während jemand wartet. Und über der Liste stehen weiter
+die Zusagen und harten Grenzen: Garantieladung, die Modi „Schnell"/„PV+Batterie",
+die Batterie-Reserve und die Komfortgrenzen der Wärmepumpe. Eine
+Prioritätenliste, die eine Abfahrtszeit aushebeln kann, wäre keine Einstellung,
+sondern eine Falle.
+
+*Neben der Liste steht, was sie bewirkt:* die aktuelle Zuteilung je
+Verbraucher. Ohne die Zahl wäre die Reihenfolge eine Behauptung — man sähe, was
+gelten soll, aber nicht, was daraus geworden ist.
+
+Eine ungültige Liste wird mit 422 abgelehnt statt still ergänzt: Der fehlende
+Eintrag landete sonst an einer Stelle, die niemand gewählt hat.
+
+Schritt 2 des Issues — Planung über den Tag anhand des Börsenstrompreises —
+kommt erst mit einem dynamischen Tarif. Modell und Begründungen:
+`docs/priorisierung.md`.
+
 ## 0.17.0
 
 **Die Übersicht zeigt wieder das, was läuft — und ein Klick auf eine Kachel

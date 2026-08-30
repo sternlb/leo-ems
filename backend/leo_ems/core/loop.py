@@ -23,6 +23,7 @@ from ..planner import (
     HeatPumpController,
     berechne_ueberschuss,
     plane_garantieladung,
+    verbraucher_reihenfolge,
 )
 from ..energy import Energiezaehler
 from ..ha_export import HaSensorExport
@@ -156,18 +157,42 @@ class ControlLoop:
         plan = plane_garantieladung(self.store.list_rules(), soc_v if soc_v is not None else 100, now, self.cfg)
         garantie = bool(plan and soc_v is not None and plan.garantie_aktiv(now, soc_v))
 
-        # 7) Zuteilung des Überschusses — Reihenfolge = Priorität (Issue #6).
+        # 7) Zuteilung des Überschusses — die Reihenfolge kommt aus der
+        #    Prioritätenliste (Issue #16, docs/priorisierung.md).
         #
         #    Ein laufender WP-Boost hat keinen Leistungsmesswert: sein Verbrauch
         #    steckt im Hausverbrauch und drückt `surplus` um rund 2 kW. Entschied
-        #    die Wallbox gegen diesen gedrückten Wert, gewann faktisch, wer
-        #    zuerst angelaufen war — läuft die WP auf Warmwasser, kam das Auto
+        #    ein Verbraucher gegen diesen gedrückten Wert, gewänne faktisch, wer
+        #    zuerst angelaufen war — läuft die WP auf Warmwasser, käme das Auto
         #    gar nicht mehr über die Einschaltschwelle (Leos Fehlerbild vom
-        #    31.07.). Deshalb wird der Anteil erst zurückgerechnet, dann
-        #    zugeteilt: Auto zuerst, die WP bekommt den Rest.
+        #    31.07., Issue #6). Deshalb wird der Anteil erst zurückgerechnet,
+        #    dann zugeteilt. Das gilt in **beiden** Reihenfolgen.
         wp_data = await self._safe_read(self.adapters.get("vaillant"), "vaillant")
         wp_boost_w = self.heatpump.leistung_w(wp_data)
-        verteilbar = surplus + wp_boost_w
+
+        reihenfolge = verbraucher_reihenfolge(self.cfg.prioritaet, self.cfg)
+        schwelle = dict(reihenfolge)
+
+        def topf_w(tor_pct: int) -> float:
+            """Verteilbarer Überschuss für einen Verbraucher mit dieser Torschwelle.
+
+            Steht kein zweites Batterie-Tor im Spiel, ist das exakt der Wert von
+            v0.17 — dieselbe geglättete Reihe, nicht eine zweite mit eigenem
+            Mittelwert. Nur eine abweichende Schwelle bekommt eine eigene Reihe.
+            """
+            if tor_pct == self.cfg.priority_soc_pct:
+                roh = surplus
+            else:
+                roh = self._glätten(
+                    berechne_ueberschuss(
+                        p_lade, e_data["p_netz_w"], e_data["p_batterie_w"],
+                        e_data["soc_batterie_pct"], self.cfg, tor_soc_pct=tor_pct,
+                    ),
+                    f"pv_tor{tor_pct}",
+                )
+            return roh + wp_boost_w
+
+        verteilbar = topf_w(schwelle.get("wallbox", self.cfg.priority_soc_pct))
 
         # In PV+Batterie regelt die Ladesteuerung gegen das größere Budget
         # (Issue #11). `batt_verfuegbar` schneidet die Freigabe an der Reserve ab;
@@ -178,20 +203,49 @@ class ControlLoop:
             ev_budget = budget_batt + wp_boost_w
 
         connected = goe_data.get("connected", False) if goe_data else False
-        cmd = self.controller.update(
-            now, surplus_w=ev_budget, connected=connected, mode=self.mode,
-            guarantee_active=garantie, soc_fahrzeug=soc_v,
-            vehicle_limit_soc=self.vehicle_limit_soc, batt_verfuegbar=batt_verfuegbar,
+
+        # Wer zuerst? Die Liste entscheidet — außer der Modus oder eine Zusage
+        # hat die Frage schon beantwortet. Wer „Schnell" wählt, hat die Priorität
+        # gerade von Hand gesetzt; eine Garantieladung ist eine Zusage auf eine
+        # Uhrzeit und keine Optimierung. Beides steht über der Liste.
+        namen = [n for n, _ in reihenfolge]
+        wallbox_zuerst = (
+            self.mode in ("Schnell", "PV+Batterie") or garantie
+            or "warmwasser" not in namen
+            or namen.index("wallbox") < namen.index("warmwasser")
         )
 
-        # 7b) Wärmepumpe (Stufe 2, REQ-010/011): sieht, was nach der Wallbox übrig
-        #     bleibt. `ev_zuteilung_w` unterscheidet dabei „Sonne weg" von
-        #     „das Auto hat es bekommen" — nur im zweiten Fall weicht ein
-        #     laufender Boost sofort, ohne Mindestlaufzeit (Issue #6).
-        ev_zuteilung_w = cmd.current_a * VOLT * cmd.phases if cmd.charging else 0
-        wp_cmd = self.heatpump.update(
-            now, frei_w=verteilbar - ev_zuteilung_w, wp=wp_data, ev_zuteilung_w=ev_zuteilung_w
-        )
+        def lade_entscheidung(budget_w: float):
+            return self.controller.update(
+                now, surplus_w=budget_w, connected=connected, mode=self.mode,
+                guarantee_active=garantie, soc_fahrzeug=soc_v,
+                vehicle_limit_soc=self.vehicle_limit_soc, batt_verfuegbar=batt_verfuegbar,
+            )
+
+        wp_topf = topf_w(schwelle.get("warmwasser", self.cfg.priority_soc_pct))
+        if wallbox_zuerst:
+            cmd = lade_entscheidung(ev_budget)
+            # 7b) Wärmepumpe (Stufe 2, REQ-010/011): sieht, was nach der Wallbox
+            #     übrig bleibt. `ev_zuteilung_w` unterscheidet dabei „Sonne weg"
+            #     von „das Auto hat es bekommen" — nur im zweiten Fall weicht ein
+            #     laufender Boost sofort, ohne Mindestlaufzeit (Issue #6).
+            ev_zuteilung_w = cmd.current_a * VOLT * cmd.phases if cmd.charging else 0
+            wp_cmd = self.heatpump.update(
+                now, frei_w=wp_topf - ev_zuteilung_w, wp=wp_data, ev_zuteilung_w=ev_zuteilung_w
+            )
+            wp_zuteilung_w = self.cfg.wp_leistung_w if (wp_cmd.ww_boost or wp_cmd.hk_boost) else 0
+        else:
+            # Warmwasser steht oben: Die WP entscheidet zuerst und das Auto
+            # bekommt, was danach übrig ist. `ev_zuteilung_w=0`, weil noch nichts
+            # zugeteilt wurde — ein Boost, der hier endet, weicht keinem Auto.
+            wp_cmd = self.heatpump.update(now, frei_w=wp_topf, wp=wp_data, ev_zuteilung_w=0.0)
+            # Abgezogen wird der **geschätzte** Verbrauch, nicht der gemessene:
+            # Ein gerade erst angeforderter Boost zieht noch nichts, belegt das
+            # Budget aber gleich. Rechnete das Auto ohne ihn, liefe beides an und
+            # die Differenz käme aus dem Netz (dasselbe Muster wie Issue #7).
+            wp_zuteilung_w = self.cfg.wp_leistung_w if (wp_cmd.ww_boost or wp_cmd.hk_boost) else 0
+            cmd = lade_entscheidung(max(0.0, ev_budget - wp_zuteilung_w))
+            ev_zuteilung_w = cmd.current_a * VOLT * cmd.phases if cmd.charging else 0
         await self._sende_wp(now, wp_cmd)
 
         # 8) Entladegrenze der Hausbatterie als Lease abgleichen (Spec §5.1)
@@ -232,6 +286,12 @@ class ControlLoop:
             "ueberschuss_w": round(surplus), "soc_fahrzeug": soc_v,
             "verteilbar_w": round(verteilbar), "wp_boost_w": round(wp_boost_w),
             "ev_zuteilung_w": round(ev_zuteilung_w),
+            # Reihenfolge und was sie bewirkt hat (Issue #16). Ohne die
+            # Zuteilung daneben wäre die Liste eine Behauptung: Man sähe, was
+            # gelten soll, aber nicht, was daraus geworden ist.
+            "prioritaet": list(self.cfg.prioritaet),
+            "zuteilung_w": {"wallbox": round(ev_zuteilung_w),
+                            "warmwasser": round(wp_zuteilung_w)},
             # Wogegen die Ladesteuerung wirklich geregelt hat. Weicht in
             # PV+Batterie von `verteilbar_w` ab — die Differenz ist die
             # freigegebene Batterieleistung (Issue #11).

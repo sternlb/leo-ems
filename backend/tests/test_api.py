@@ -215,3 +215,22 @@ def test_energie_import_ohne_faehigen_adapter_meldet_das():
     c, _ = _client_mit_energie()
     r = c.post("/api/v1/energie/import", headers={"Authorization": f"Bearer {TOKEN}"})
     assert r.status_code == 503
+
+
+def test_prioritaet_wird_streng_geprueft():
+    """Issue #16: Eine unvollständige Liste still zu ergänzen setzte den
+    fehlenden Eintrag an eine Stelle, die niemand gewählt hat."""
+    c = make_client(ingress_host="testclient")
+    vorher = c.get("/api/v1/config").json()["prioritaet"]
+    for kaputt in (["wallbox"], ["wallbox", "wallbox", "warmwasser", "batterie_voll"],
+                   ["keller", "wallbox", "warmwasser", "batterie_voll", "batterie_vorrang"]):
+        r = c.put("/api/v1/config", json={"prioritaet": kaputt})
+        assert r.status_code == 422, kaputt
+    assert c.get("/api/v1/config").json()["prioritaet"] == vorher
+
+
+def test_prioritaet_wird_uebernommen():
+    c = make_client(ingress_host="testclient")
+    neu = ["batterie_vorrang", "warmwasser", "wallbox", "batterie_voll"]
+    assert c.put("/api/v1/config", json={"prioritaet": neu}).status_code == 200
+    assert c.get("/api/v1/config").json()["prioritaet"] == neu
