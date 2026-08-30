@@ -37,7 +37,9 @@ CREATE TABLE IF NOT EXISTS snapshots (       -- je Regel-Tick ein Messbild (Cock
     p_sungrow_w REAL,
     wuerde_laden INTEGER, strom_a INTEGER, phasen INTEGER,  -- EMS-Entscheidung (im read_only: "hätte")
     garantie INTEGER, read_only INTEGER,
-    entladelimit_w REAL                      -- Entladegrenze Hausbatterie; NULL = keine (Spec §5.1)
+    entladelimit_w REAL,                     -- Entladegrenze Hausbatterie; NULL = keine (Spec §5.1)
+    wp_ww_boost INTEGER,                     -- lief in diesem Tick ein Warmwasser-Boost? (Issue #14)
+    wp_hk_boost INTEGER                      -- lief eine Heizkreis-Anhebung?
 );
 CREATE INDEX IF NOT EXISTS idx_snap_ts ON snapshots(ts);
 CREATE TABLE IF NOT EXISTS energie_tag (   -- Tagesbilanz je Kanal in Wh (Issue #13)
@@ -72,6 +74,8 @@ CREATE TABLE IF NOT EXISTS energie_stunde ( -- Stundenbilanz je Kanal in Wh (v0.
 # Datenbank auf dem Pi muss deshalb nachträglich erweitert werden.
 NACHRUESTUNG = (
     ("snapshots", "entladelimit_w", "REAL"),
+    ("snapshots", "wp_ww_boost", "INTEGER"),
+    ("snapshots", "wp_hk_boost", "INTEGER"),
 )
 
 
@@ -134,10 +138,11 @@ class Store:
     def log_snapshot(self, ts: datetime, **felder) -> None:
         spalten = ("ueberschuss_w", "p_netz_w", "p_batterie_w", "soc_batt", "soc_v",
                    "p_wallbox_w", "p_sungrow_w", "wuerde_laden", "strom_a", "phasen",
-                   "garantie", "read_only", "entladelimit_w")
+                   "garantie", "read_only", "entladelimit_w", "wp_ww_boost", "wp_hk_boost")
+        ganzzahlig = ("wuerde_laden", "garantie", "read_only", "strom_a", "phasen",
+                      "wp_ww_boost", "wp_hk_boost")
         werte = [ts.isoformat()] + [
-            int(felder.get(s) or 0) if s in ("wuerde_laden", "garantie", "read_only", "strom_a", "phasen")
-            else felder.get(s)
+            int(felder.get(s) or 0) if s in ganzzahlig else felder.get(s)
             for s in spalten
         ]
         self._db.execute(
@@ -367,6 +372,39 @@ class Store:
         cur = self._db.execute(sql + " GROUP BY periode ORDER BY periode", args)
         cols = [c[0] for c in cur.description]
         return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    def wp_aktiv_stunden(self, tag: str) -> list[dict]:
+        """Je Stunde des Tages: Anteil, in dem WW-Boost bzw. Heizkreis-Anhebung lief.
+
+        Die Wärmepumpe hat keinen eigenen Zähler — ihr Verbrauch steckt im
+        Hausverbrauch und lässt sich nicht herausrechnen. Eine Verbrauchskurve
+        wäre also erfunden. Was das EMS dagegen genau weiß, ist **wann es die
+        Anlage angefordert hat**: Das steht in jedem Tick-Snapshot.
+
+        Gezählt wird als Anteil (0…1) und nicht in Minuten: Der Tick liegt bei
+        10 s, war aber nicht immer dort, und nach einem Neustart fehlen Ticks.
+        `treffer / ticks` bleibt auch dann richtig, während eine Minutenzahl aus
+        `treffer × 10 s` still zu klein würde. `ticks` wird mitgeliefert, damit
+        eine Stunde mit dünner Datenlage erkennbar bleibt.
+        """
+        cur = self._db.execute(
+            "SELECT substr(ts, 1, 13) AS stunde, COUNT(*) AS ticks,"
+            " SUM(COALESCE(wp_ww_boost, 0)) AS ww, SUM(COALESCE(wp_hk_boost, 0)) AS hk"
+            " FROM snapshots WHERE ts >= ? AND ts < ? GROUP BY stunde ORDER BY stunde",
+            (tag, tag + "T24"),
+        )
+        roh = {r[0]: r for r in cur.fetchall()}
+        raus = []
+        for h in range(24):
+            r = roh.get(f"{tag}T{h:02d}")
+            ticks = r[1] if r else 0
+            raus.append({
+                "stunde": f"{tag} {h:02d}",
+                "ticks": ticks,
+                "ww": round(r[2] / ticks, 3) if ticks else None,
+                "hk": round(r[3] / ticks, 3) if ticks else None,
+            })
+        return raus
 
     def energie_bekannte_tage(self, quelle: str | None = None) -> set[str]:
         """Welche Tage stehen schon in der Tabelle? Für den Nachimport."""

@@ -294,6 +294,10 @@ class ControlLoop:
             wuerde_laden=cmd.charging, strom_a=cmd.current_a, phasen=cmd.phases,
             garantie=garantie, read_only=self.cfg.read_only,
             entladelimit_w=entscheid.limit_w,
+            # Die WP hat keinen eigenen Zähler; was das EMS sicher weiß, ist
+            # wann es sie angefordert hat. Nur so lassen sich im Dashboard die
+            # aktiven Zeiten kennzeichnen, ohne eine Verbrauchskurve zu erfinden.
+            wp_ww_boost=self.heatpump.ww_boost, wp_hk_boost=self.heatpump.hk_boost,
         )
         # PV-Werte als HA-Sensoren veröffentlichen (v0.12.0). Ganz am Ende des
         # Ticks und ausdrücklich OHNE await: der Push läuft nebenläufig und

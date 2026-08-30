@@ -8,6 +8,39 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.17.0
+
+**Die Übersicht zeigt wieder das, was läuft — und ein Klick auf eine Kachel
+zeigt den Tagesverlauf dahinter (Issue #14).**
+
+*Konfiguration hat die Seite gewechselt.* Wer nachsehen wollte, ob das Auto
+lädt, scrollte bisher an zwölf Zahlenfeldern für Phasenumschaltschwellen
+vorbei. Es gibt jetzt einen dritten Reiter **Einstellungen**; dorthin sind alle
+Zahlenfelder gewandert (Ströme, SoC-Schwellen, WP-Temperaturen, Phasen- und
+Zeitparameter), dazu die Laderegeln und das Protokoll. Die Aufteilung folgt der
+Häufigkeit, mit der man etwas braucht, nicht der technischen Verwandtschaft.
+
+Auf der Übersicht bleibt, was man im Alltag anfasst: der **Lademodus**, der
+Schalter „Hausbatterie im Modus Schnell mitnutzen", die beiden
+Wärmepumpen-Schalter und **Scharf schalten / In Beobachtung wechseln** — der
+wichtigste Schalter des Systems gehört dorthin, wo man ihn sieht.
+
+*Neu: Tagesverlauf im Detailfenster.* Ein Klick auf eine Kachel — PV, Haus,
+Batterie, Netz, Wallbox — öffnet die Einzelheiten dahinter, jetzt mit dem
+Verlauf des heutigen Tages über 24 Stunden. Das Fenster gab es schon, aber nur
+über die Hausansicht-Grafik erreichbar, und die ist auf dem Handy eingeklappt;
+praktisch existierte es dort nicht.
+
+*Die Wärmepumpe bekommt kein Verbrauchsdiagramm, sondern ein Aktivitätsband.*
+Sie hat keinen eigenen Zähler, ihr Verbrauch steckt im Hausverbrauch — eine
+Kurve wäre geraten. Was das EMS sicher weiß, ist, wann es Boost bzw. Anhebung
+angefordert hat: Das steht ab sofort in jedem Tick-Snapshot und wird als Band
+über den Tag gezeigt, mit der Summe in Minuten. Stunden, in denen das EMS nicht
+lief, sind gestreift und nicht etwa leer — „nicht gemessen" ist eine andere
+Aussage als „lief nicht".
+
+Aufbau und Begründungen: `docs/dashboard.md`.
+
 ## 0.16.1
 
 **Die Tagesansicht der Historie zeigt wieder einen ganzen Tag (Issue #17).**

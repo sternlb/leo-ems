@@ -232,7 +232,10 @@
   .panel-back { position: fixed; inset: 0; background: rgba(20,40,28,.35); display: none; z-index: 40; }
   .panel { position: fixed; z-index: 41; top: 50%; left: 50%; transform: translate(-50%,-50%);
     width: min(440px, calc(100vw - 2rem)); background: var(--panel); border: 2px solid var(--lime-ink);
-    border-radius: var(--r); padding: 1rem 1.1rem; display: none; box-shadow: 0 12px 40px rgba(20,40,28,.18); }
+    border-radius: var(--r); padding: 1rem 1.1rem; display: none; box-shadow: 0 12px 40px rgba(20,40,28,.18);
+    max-height: calc(100vh - 2rem); overflow-y: auto; }
+  .panel h4 { font-family: var(--disp); font-size: .82rem; color: var(--forest);
+    margin: 1rem 0 .35rem; border-top: 1px solid var(--rand); padding-top: .7rem; }
   .panel.open, .panel-back.open { display: block; }
   .panel h3 { font-family: var(--disp); font-size: 1rem; margin-bottom: .6rem; color: var(--forest); }
   .panel .x { position: absolute; top: .5rem; right: .7rem; background: none; border: 0; color: var(--dim);
@@ -246,6 +249,21 @@
 
   /* Einklappbare Sektionen (Punkt 6): Chevron/Interaktion nur auf dem Handy.
      Auf Desktop bleibt die h2 optisch gleich (nur flex), Inhalt immer sichtbar. */
+  /* Anklickbare Kacheln: Der Hinweis darauf muss leise sein — die Kachel ist
+     zuerst eine Anzeige und erst danach ein Knopf. */
+  .card.klickbar { cursor: pointer; }
+  .card.klickbar:hover { border-color: var(--lime); }
+  .card.klickbar:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+  .btn.klein { font-size: .72rem; padding: .2rem .55rem; }
+  /* Tagesband der Wärmepumpe: 24 Zellen, Deckkraft = Anteil der Stunde.
+     Eine Stunde ohne Messung ist gestreift und nicht etwa leer — „nicht
+     gemessen" und „lief nicht" sind verschiedene Aussagen. */
+  .band { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; margin: .3rem 0; }
+  .band > i { height: 18px; background: var(--rand); border-radius: 2px; }
+  .band > i.luecke { background: repeating-linear-gradient(45deg,
+      var(--dim) 0 2px, transparent 2px 5px); opacity: .45; }
+  .band-ax { display: grid; grid-template-columns: repeat(24, 1fr);
+             font-family: var(--mono); font-size: .58rem; opacity: .55; }
   .collapsible > h2 { display: flex; align-items: center; justify-content: space-between; }
   .collapsible > h2::after { content: ""; }
 
@@ -396,6 +414,7 @@
   <nav class="tabs" role="tablist" aria-label="Ansicht">
     <button id="tabbtn-live" role="tab" aria-selected="true" aria-controls="tab-live" data-tab="live">Übersicht</button>
     <button id="tabbtn-hist" role="tab" aria-selected="false" aria-controls="tab-hist" data-tab="hist">Historie</button>
+    <button id="tabbtn-conf" role="tab" aria-selected="false" aria-controls="tab-conf" data-tab="conf">Einstellungen</button>
   </nav>
 
 <div class="tabpane" id="tab-live" role="tabpanel" aria-labelledby="tabbtn-live">
@@ -770,16 +789,16 @@
       <div class="schema" id="schema"></div>
     </div>
     <div class="grid tiles" style="margin-top:.75rem">
-      <div class="card"><h3>PV gesamt</h3><div class="kw lime" id="t-pv">–</div>
+      <div class="card klickbar" data-panel="pv" tabindex="0" role="button"><h3>PV gesamt</h3><div class="kw lime" id="t-pv">–</div>
         <div class="sub">E3DC <b id="t-pv-e3dc">–</b> · Garage <b id="t-pv-sg">–</b></div></div>
-      <div class="card"><h3>Haus</h3><div class="kw" id="t-haus">–</div>
+      <div class="card klickbar" data-panel="haus" tabindex="0" role="button"><h3>Haus</h3><div class="kw" id="t-haus">–</div>
         <div class="sub">Überschuss <b id="t-ueb">–</b></div></div>
-      <div class="card"><h3>Batterie</h3><div class="kw" id="t-batt-soc">–</div>
+      <div class="card klickbar" data-panel="batt" tabindex="0" role="button"><h3>Batterie</h3><div class="kw" id="t-batt-soc">–</div>
         <div class="socbar-t" id="t-batt-bar"><div></div></div>
         <div class="sub"><b id="t-batt">–</b><span id="t-sperre"></span></div></div>
-      <div class="card"><h3>Netz</h3><div class="kw" id="t-netz">–</div>
+      <div class="card klickbar" data-panel="netz" tabindex="0" role="button"><h3>Netz</h3><div class="kw" id="t-netz">–</div>
         <div class="sub" id="t-netz-richtung">–</div></div>
-      <div class="card"><h3>Wallbox</h3><div class="kw" id="t-wb">–</div>
+      <div class="card klickbar" data-panel="wallbox" tabindex="0" role="button"><h3>Wallbox</h3><div class="kw" id="t-wb">–</div>
         <div class="sub"><b id="t-wb-detail">–</b><br>Fahrzeug-SoC <b id="t-soc-v">–</b></div></div>
     </div>
   </section>
@@ -788,13 +807,13 @@
   <section>
     <h2>Heute <span class="heute-hint" id="heute-tag">–</span></h2>
     <div class="grid tiles">
-      <div class="card"><h3>Ertrag</h3><div class="kwh lime" id="d-ertrag">–</div>
+      <div class="card klickbar" data-panel="pv" tabindex="0" role="button"><h3>Ertrag</h3><div class="kwh lime" id="d-ertrag">–</div>
         <div class="sub">Haus <b id="d-pv-haus">–</b> · Garage <b id="d-pv-garage">–</b></div></div>
-      <div class="card"><h3>Verbrauch</h3><div class="kwh" id="d-verbrauch">–</div>
+      <div class="card klickbar" data-panel="haus" tabindex="0" role="button"><h3>Verbrauch</h3><div class="kwh" id="d-verbrauch">–</div>
         <div class="sub">Haus <b id="d-haus">–</b> · Wallbox <b id="d-wallbox">–</b></div></div>
-      <div class="card"><h3>Netz</h3><div class="kwh" id="d-bezug">–</div>
+      <div class="card klickbar" data-panel="netz" tabindex="0" role="button"><h3>Netz</h3><div class="kwh" id="d-bezug">–</div>
         <div class="sub">bezogen · eingespeist <b id="d-einspeisung">–</b></div></div>
-      <div class="card"><h3>Batterie</h3><div class="kwh" id="d-batt-laden">–</div>
+      <div class="card klickbar" data-panel="batt" tabindex="0" role="button"><h3>Batterie</h3><div class="kwh" id="d-batt-laden">–</div>
         <div class="sub">geladen · entladen <b id="d-batt-entladen">–</b></div></div>
       <div class="card"><h3>Autarkie</h3><div class="kwh" id="d-autarkie">–</div>
         <div class="socbar-t laedt" id="d-autarkie-bar"><div></div></div>
@@ -804,7 +823,8 @@
 
   <!-- Wärmepumpe: zweigeteilt Warmwasser / Heizkreis (Issue #1) -->
   <section>
-    <h2>Wärmepumpe</h2>
+    <h2>Wärmepumpe
+      <button class="btn ghost klein" id="wp-verlauf" type="button">Tagesverlauf</button></h2>
     <div class="card">
       <div class="wp-split">
         <div id="wp-ww-box">
@@ -854,9 +874,11 @@
     </div>
   </section>
 
-  <!-- Einstellungen -->
-  <section class="collapsible" id="sect-settings">
-    <h2>Einstellungen</h2>
+  <!-- Betrieb: die Schalter, die man im Alltag anfasst. Alles mit Zahlen steht
+       unter „Einstellungen" (Issue #14) — die Übersicht soll zeigen, was gerade
+       läuft, und nicht zum Parametrierbildschirm werden. -->
+  <section id="sect-betrieb">
+    <h2>Betrieb</h2>
     <div class="card">
       <h3>Lademodus</h3>
       <div class="modes" id="modes">
@@ -871,67 +893,11 @@
         <span class="badge switch" id="schnell-batt-schalter"
               title="Im Modus Schnell zusätzlich aus der Hausbatterie laden (Netzbezug bleibt erlaubt)">–</span>
       </div>
-      <div class="form-grid">
-        <label class="f"><span id="c-ev_limit_soc-label">Fahrzeug-Ladelimit (% SoC)</span><input type="number" id="c-ev_limit_soc" min="0" max="100"></label>
-        <label class="f"><span>Min. Ladestrom (A)</span><input type="number" id="c-min_current_a" min="6" max="16"></label>
-        <label class="f"><span>Max. Ladestrom (A)</span><input type="number" id="c-max_current_a" min="6" max="32"></label>
-        <label class="f"><span>Batterie-Reserve (% SoC)</span><input type="number" id="c-soc_reserve_pct" min="0" max="100"></label>
-        <label class="f"><span>Batterie-Vorrang bis (% SoC)</span><input type="number" id="c-priority_soc_pct" min="0" max="100"></label>
-        <label class="f"><span>Batterie-Freigabe max. (W)</span><input type="number" id="c-batt_schnell_max_w" min="0" max="12000" step="100"></label>
-        <label class="f"><span>Ziel-Netzbezug (W)</span><input type="number" id="c-residual_power_w" min="-500" max="1000"></label>
-        <label class="f"><span>1p→3p ab (W)</span><input type="number" id="c-phase_up_w" min="1400" max="11000"></label>
-        <label class="f"><span>3p→1p unter (W)</span><input type="number" id="c-phase_down_w" min="1400" max="11000"></label>
-        <label class="f"><span>Umschaltsperre (s)</span><input type="number" id="c-phase_min_gap_s" min="0" max="3600"></label>
-      </div>
-      <div style="margin-top:1rem">
-        <button class="btn" id="save">Speichern</button>
+      <div style="margin-top:.9rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap">
         <button class="btn ghost" id="toggle-ro">–</button>
-        <span class="savemsg" id="savemsg"></span>
+        <span class="sub">Beobachtung heißt: Das EMS rechnet mit, stellt aber nichts.</span>
       </div>
     </div>
-    <div class="card" style="margin-top:.75rem">
-      <h3>Wärmepumpe — Überschuss-Nutzung</h3>
-      <div class="form-grid">
-        <label class="f"><span>WW-Boost ab (W)</span><input type="number" id="c-wp_ww_an_w" min="500" max="10000" step="100"></label>
-        <label class="f"><span>WW-Boost aus unter (W)</span><input type="number" id="c-wp_ww_aus_w" min="-2000" max="5000" step="100"></label>
-        <label class="f"><span>WW-Boost-Temperatur (°C)</span><input type="number" id="c-wp_ww_boost_c" min="35" max="70" step="1"></label>
-        <label class="f"><span>WW-Rückstellwert (°C)</span><input type="number" id="c-wp_ww_normal_c" min="35" max="70" step="1"></label>
-        <label class="f"><span>WW-Boost wieder ab (°C)</span><input type="number" id="c-wp_ww_wieder_c" min="35" max="70" step="1"></label>
-        <label class="f"><span>Heizkreis-Anhebung (K)</span><input type="number" id="c-wp_hk_anhebung_k" min="0" max="5" step="0.5"></label>
-        <label class="f"><span>Raum-Obergrenze (°C)</span><input type="number" id="c-wp_hk_max_raum_c" min="15" max="28" step="0.5"></label>
-        <label class="f"><span>Anhebung nur unter (°C außen)</span><input type="number" id="c-wp_hk_max_aussen_c" min="-10" max="25" step="1"></label>
-      </div>
-      <div class="sub" style="margin-top:.7rem">
-        Warmwasser und Heizkreis werden oben in der Wärmepumpen-Kachel einzeln
-        ein- und ausgeschaltet; ausgegraute Felder gehören zu einer abgeschalteten
-        Funktion. Der Abstand zwischen An- und Aus-Schwelle sollte mindestens so groß
-        sein wie der WP-Verbrauch im Boost (~2 kW) — sonst schaltet der Boost sich selbst ab.
-      </div>
-    </div>
-  </section>
-
-  <!-- Laderegeln -->
-  <section class="collapsible" id="sect-rules">
-    <h2>Laderegeln (Garantieladung)</h2>
-    <div class="card">
-      <table id="rules">
-        <thead><tr><th>Tage</th><th>Abfahrt</th><th>Mindest-SoC</th><th>Aktiv</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div class="form-grid" style="align-items:end; margin-top:1rem">
-        <label class="f"><span>Wochentage</span><span id="new-days" style="text-transform:none; letter-spacing:0"></span></label>
-        <label class="f"><span>Abfahrt</span><input type="time" id="new-time" value="07:30"></label>
-        <label class="f"><span>Mindest-SoC (%)</span><input type="number" id="new-soc" value="50" min="0" max="100"></label>
-        <div><button class="btn" id="add-rule">Regel anlegen</button></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Energie-Historie (Issue #13) -->
-  <!-- Protokoll -->
-  <section class="collapsible" id="sect-log">
-    <h2>Protokoll</h2>
-    <div class="card"><div class="hist" id="hist">–</div></div>
   </section>
 
 </div><!-- /tab-live -->
@@ -1034,6 +1000,81 @@
   </section>
 
 </div><!-- /tab-hist -->
+
+<div class="tabpane" id="tab-conf" role="tabpanel" aria-labelledby="tabbtn-conf" hidden>
+
+  <section>
+    <h2>Ladeparameter</h2>
+    <div class="card">
+      <div class="form-grid">
+        <label class="f"><span id="c-ev_limit_soc-label">Fahrzeug-Ladelimit (% SoC)</span><input type="number" id="c-ev_limit_soc" min="0" max="100"></label>
+        <label class="f"><span>Min. Ladestrom (A)</span><input type="number" id="c-min_current_a" min="6" max="16"></label>
+        <label class="f"><span>Max. Ladestrom (A)</span><input type="number" id="c-max_current_a" min="6" max="32"></label>
+        <label class="f"><span>Batterie-Reserve (% SoC)</span><input type="number" id="c-soc_reserve_pct" min="0" max="100"></label>
+        <label class="f"><span>Batterie-Vorrang bis (% SoC)</span><input type="number" id="c-priority_soc_pct" min="0" max="100"></label>
+        <label class="f"><span>Batterie-Freigabe max. (W)</span><input type="number" id="c-batt_schnell_max_w" min="0" max="12000" step="100"></label>
+        <label class="f"><span>Ziel-Netzbezug (W)</span><input type="number" id="c-residual_power_w" min="-500" max="1000"></label>
+        <label class="f"><span>1p→3p ab (W)</span><input type="number" id="c-phase_up_w" min="1400" max="11000"></label>
+        <label class="f"><span>3p→1p unter (W)</span><input type="number" id="c-phase_down_w" min="1400" max="11000"></label>
+        <label class="f"><span>Umschaltsperre (s)</span><input type="number" id="c-phase_min_gap_s" min="0" max="3600"></label>
+      </div>
+      <div style="margin-top:1rem">
+        <button class="btn" id="save">Speichern</button>
+        <span class="savemsg" id="savemsg"></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Wärmepumpe</h2>
+    <div class="card">
+      <h3>Überschuss-Nutzung</h3>
+      <div class="form-grid">
+        <label class="f"><span>WW-Boost ab (W)</span><input type="number" id="c-wp_ww_an_w" min="500" max="10000" step="100"></label>
+        <label class="f"><span>WW-Boost aus unter (W)</span><input type="number" id="c-wp_ww_aus_w" min="-2000" max="5000" step="100"></label>
+        <label class="f"><span>WW-Boost-Temperatur (°C)</span><input type="number" id="c-wp_ww_boost_c" min="35" max="70" step="1"></label>
+        <label class="f"><span>WW-Rückstellwert (°C)</span><input type="number" id="c-wp_ww_normal_c" min="35" max="70" step="1"></label>
+        <label class="f"><span>WW-Boost wieder ab (°C)</span><input type="number" id="c-wp_ww_wieder_c" min="35" max="70" step="1"></label>
+        <label class="f"><span>Heizkreis-Anhebung (K)</span><input type="number" id="c-wp_hk_anhebung_k" min="0" max="5" step="0.5"></label>
+        <label class="f"><span>Raum-Obergrenze (°C)</span><input type="number" id="c-wp_hk_max_raum_c" min="15" max="28" step="0.5"></label>
+        <label class="f"><span>Anhebung nur unter (°C außen)</span><input type="number" id="c-wp_hk_max_aussen_c" min="-10" max="25" step="1"></label>
+      </div>
+      <div class="sub" style="margin-top:.7rem">
+        Warmwasser und Heizkreis werden oben in der Wärmepumpen-Kachel einzeln
+        ein- und ausgeschaltet; ausgegraute Felder gehören zu einer abgeschalteten
+        Funktion. Der Abstand zwischen An- und Aus-Schwelle sollte mindestens so groß
+        sein wie der WP-Verbrauch im Boost (~2 kW) — sonst schaltet der Boost sich selbst ab.
+      </div>
+    </div>
+  </section>
+
+  <!-- Laderegeln -->
+  <section class="collapsible" id="sect-rules">
+    <h2>Laderegeln (Garantieladung)</h2>
+    <div class="card">
+      <table id="rules">
+        <thead><tr><th>Tage</th><th>Abfahrt</th><th>Mindest-SoC</th><th>Aktiv</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="form-grid" style="align-items:end; margin-top:1rem">
+        <label class="f"><span>Wochentage</span><span id="new-days" style="text-transform:none; letter-spacing:0"></span></label>
+        <label class="f"><span>Abfahrt</span><input type="time" id="new-time" value="07:30"></label>
+        <label class="f"><span>Mindest-SoC (%)</span><input type="number" id="new-soc" value="50" min="0" max="100"></label>
+        <div><button class="btn" id="add-rule">Regel anlegen</button></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Protokoll -->
+  <section class="collapsible" id="sect-log">
+    <h2>Protokoll</h2>
+    <div class="card"><div class="hist" id="hist">–</div></div>
+  </section>
+
+
+</div><!-- /tab-conf -->
+
 
   <footer><span id="f-ver">Leo-EMS</span><span>basel<span style="color:var(--lime-ink)">AI</span> · lokal, kein Cloud-Zwang</span></footer>
 
@@ -1590,8 +1631,104 @@ function openPanel(k) {
   panelEl().innerHTML = `<button class="x" aria-label="Schließen">×</button>` + (inhalt[k] || "");
   panelEl().querySelector(".x").addEventListener("click", closePanel);
   panelEl().classList.add("open"); $("pback").classList.add("open");
+  // Nachgeladen, nicht blockierend: Das Fenster steht sofort, der Verlauf
+  // kommt, wenn er da ist. Eine Kachel darf sich nicht anfühlen wie ein Aufruf.
+  if (k === "wp") panelWpBand(); else panelVerlauf(k);
 }
 function closePanel() { panelEl().classList.remove("open"); $("pback").classList.remove("open"); }
+
+// --- Tagesverlauf im Detailfenster (Issue #14) ------------------------------
+// „Wenn ich auf einen Erzeuger- oder Verbrauchswert klicke, will ich den
+// Verlauf über den aktuellen Tag sehen." Die Daten dafür liegen seit v0.15 in
+// der Stundentabelle; seit v0.16.1 liefert sie für ein Tagesfenster immer alle
+// 24 Stunden, sodass die Achse nicht von der Aufzeichnungslücke abhängt.
+//
+// Die Wärmepumpe fehlt hier bewusst: Sie hat keinen eigenen Zähler, ihr
+// Verbrauch steckt im Hausverbrauch. Für sie gibt es weiter unten ein Band der
+// aktiven Zeiten — was das EMS wirklich weiß, statt einer erfundenen Kurve.
+// Als Funktion und nicht als Konstante: Die Farbtabelle `F` steht weiter unten
+// im Skript, ein `const` hier oben würde beim Laden in ihre temporale Todzone
+// greifen und die ganze Seite mit einem ReferenceError anhalten.
+const P_REIHEN = () => ({
+  pv:      [{ key: "pv_haus_kwh", name: "Dach", farbe: F.pvHaus },
+            { key: "pv_garage_kwh", name: "Garage", farbe: F.pvGarage }],
+  sungrow: [{ key: "pv_garage_kwh", name: "Garage", farbe: F.pvGarage }],
+  haus:    [{ key: "haus_kwh", name: "Haus", farbe: F.haus }],
+  wallbox: [{ key: "wallbox_kwh", name: "Wallbox", farbe: F.wallbox }],
+  netz:    [{ key: "netz_bezug_kwh", name: "Bezug", farbe: F.netz },
+            { key: "netz_einspeisung_kwh", name: "Einspeisung", farbe: F.einspeisung, vz: -1 }],
+  batt:    [{ key: "batt_laden_kwh", name: "geladen", farbe: F.batt },
+            { key: "batt_entladen_kwh", name: "entladen", farbe: F.batt, vz: -1 }],
+});
+
+const pLabel = per => String(Number(per.slice(11, 13)));
+const pTitel = z => String(Number(z.periode.slice(11, 13))).padStart(2, "0") + ":00 – "
+  + String(Number(z.periode.slice(11, 13)) + 1).padStart(2, "0") + ":00 Uhr";
+
+async function panelVerlauf(k) {
+  const serien = P_REIHEN()[k];
+  if (!serien) return;
+  const wo = document.createElement("div");
+  wo.innerHTML = `<h4>Heute im Tagesverlauf</h4>
+    <div class="legend" id="p-leg"></div>
+    <div class="chart-box"><svg id="p-chart"></svg></div>
+    <div class="ch-leer hidden" id="p-chart-leer">Für heute liegen noch keine Stundenwerte vor.</div>
+    <div class="sub" id="p-summe" style="margin-top:.4rem">–</div>`;
+  panelEl().appendChild(wo);
+
+  let zeilen;
+  const heute = iso(new Date());
+  try { zeilen = await api(`api/v1/energie/reihe?ebene=stunde&von=${heute}&bis=${heute}`); }
+  catch { $("p-summe").textContent = "Der Tagesverlauf ließ sich nicht laden."; return; }
+  // Das Fenster kann inzwischen geschlossen oder gewechselt worden sein.
+  if (!$("p-chart")) return;
+
+  legende("p-leg", serien);
+  const gemessen = zeilen.filter(z => z.stunden !== 0);
+  chartZeichnen("p-chart", "p-chart-leer", gemessen.length ? zeilen : [],
+                [{ name: "Heute", serien }], { label: pLabel, titel: pTitel, dicht: true });
+  $("p-summe").textContent = serien
+    .map(se => se.name + " " + kwh(summe(zeilen, se.key))).join(" · ");
+}
+
+// Wärmepumpe: keine Kurve, sondern ein Band der angeforderten Zeiten.
+async function panelWpBand() {
+  const wo = document.createElement("div");
+  wo.innerHTML = `<h4>Heute angefordert</h4><div id="p-wp">–</div>`;
+  panelEl().appendChild(wo);
+  let zeilen;
+  try { zeilen = await api("api/v1/wp/aktiv"); }
+  catch { $("p-wp").textContent = "Die aktiven Zeiten ließen sich nicht laden."; return; }
+  if (!$("p-wp")) return;
+
+  const band = (feld, farbe) => '<div class="band">' + zeilen.map(z => {
+    const a = z[feld];
+    if (a === null) return '<i class="luecke" title="' + z.stunde.slice(11) + " Uhr: nicht gemessen\"></i>";
+    return `<i style="background:${farbe}; opacity:${(0.12 + 0.88 * a).toFixed(2)}"
+      title="${z.stunde.slice(11)} Uhr: ${Math.round(a * 60)} min"></i>`;
+  }).join("") + "</div>";
+
+  const anteil = f => zeilen.reduce((a, z) => a + (z[f] || 0), 0);
+  $("p-wp").innerHTML =
+    `<div class="sub">Warmwasser-Boost — ${Math.round(anteil("ww") * 60)} min</div>`
+    + band("ww", F.pvHaus)
+    + `<div class="sub" style="margin-top:.6rem">Heizkreis-Anhebung — ${Math.round(anteil("hk") * 60)} min</div>`
+    + band("hk", F.batt)
+    + '<div class="band-ax">' + [0, 6, 12, 18].map(h =>
+        `<span style="grid-column:${h + 1}/span 6">${h}</span>`).join("") + "</div>"
+    + '<p class="note">Die Wärmepumpe hat keinen eigenen Zähler — ihr Verbrauch steckt '
+    + "im Hausverbrauch. Gezeigt ist deshalb, wann das EMS Boost bzw. Anhebung "
+    + "angefordert hat. Gestreifte Stunden sind solche, in denen das EMS nicht lief.</p>";
+}
+// Kacheln öffnen dasselbe Fenster wie die Hausansicht (Issue #14): Bisher ging
+// es nur über die Grafik, und die ist auf dem Handy zugeklappt.
+for (const el of document.querySelectorAll("[data-panel]")) {
+  el.addEventListener("click", () => openPanel(el.dataset.panel));
+  el.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPanel(el.dataset.panel); }
+  });
+}
+$("wp-verlauf").addEventListener("click", () => openPanel("wp"));
 $("pback").addEventListener("click", closePanel);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
 
@@ -2018,6 +2155,11 @@ function chSchritt(spanne, ziel) {
 
 /** @param gruppen [{name, serien:[{key,name,farbe,vz}]}] — vz = -1 zeichnet nach unten. */
 function chartZeichnen(svgId, leerId, zeilen, gruppen, opt = {}) {
+  // Beschriftung und Tooltip kommen per Option herein. Bis v0.16.1 zog der
+  // Renderer sie direkt aus dem Zustand der Historie-Ansicht — im Detailfenster
+  // stuenden dort die Beschriftungen der zuletzt gewaehlten Historie-Ebene.
+  const labelVon = opt.label || enLabel;
+  const titelVon = opt.titel || enTitel;
   const svg = $(svgId);
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   $(leerId).classList.toggle("hidden", zeilen.length > 0);
@@ -2028,8 +2170,13 @@ function chartZeichnen(svgId, leerId, zeilen, gruppen, opt = {}) {
   // die Summe breiter als die Karte, scrollt der Kasten waagerecht — lieber
   // schieben als unlesbar quetschen.
   const platz = Math.max(280, svg.parentElement.clientWidth || 640);
-  const proGruppe = gruppen.length > 1 ? 11 : 16;
-  const breite = Math.max(platz, CH_LINKS + CH_RECHTS + zeilen.length * (gruppen.length * proGruppe + 8));
+  // `dicht` rückt die Säulen zusammen, damit 24 Stunden ohne Seitwärtsscrollen
+  // ins Detailfenster passen (Issue #14). In der Historie bleibt es beim
+  // luftigeren Raster — dort ist die Karte breit genug.
+  const proGruppe = opt.dicht ? (gruppen.length > 1 ? 6 : 9)
+                              : (gruppen.length > 1 ? 11 : 16);
+  const luft = opt.dicht ? 3 : 8;
+  const breite = Math.max(platz, CH_LINKS + CH_RECHTS + zeilen.length * (gruppen.length * proGruppe + luft));
   svg.setAttribute("width", breite);
   svg.setAttribute("height", CH_H);
   svg.setAttribute("viewBox", `0 0 ${breite} ${CH_H}`);
@@ -2082,12 +2229,12 @@ function chartZeichnen(svgId, leerId, zeilen, gruppen, opt = {}) {
       }
       // Nativer Tooltip statt eigenem Overlay: er funktioniert auf Desktop
       // sofort und stört auf dem Handy nicht, wo ohnehin die Tabelle hilft.
-      sEl("title", {}, grp).textContent = enTitel(z) + "\n" + g.name + "\n"
+      sEl("title", {}, grp).textContent = titelVon(z) + "\n" + g.name + "\n"
         + g.serien.map(s => "  " + s.name + ": " + kwh(Math.abs(Number(z[s.key]) || 0))).join("\n");
       if (opt.drill) grp.addEventListener("click", () => opt.drill(z));
     });
     if (i % nth === 0)
-      sEl("text", { class: "ch-ax mitte", x: mitte, y: CH_H - 9 }, svg).textContent = enLabel(z.periode);
+      sEl("text", { class: "ch-ax mitte", x: mitte, y: CH_H - 9 }, svg).textContent = labelVon(z.periode);
   });
 }
 
@@ -2371,7 +2518,8 @@ $("b-conn").onclick = () => { if (tokenAbgelehnt || !token) { tokenAbgelehnt = f
   try { await ladeConfig(); } catch {}
   try { await ladeRegeln(); } catch {}
   try { await ladeHistorie(); } catch {}
-  zeigeTab(localStorage.getItem("leoems_tab") === "hist" ? "hist" : "live");
+  zeigeTab(["hist", "conf"].includes(localStorage.getItem("leoems_tab"))
+  ? localStorage.getItem("leoems_tab") : "live");
   setInterval(poll, 5000);
   setInterval(ladeHistorie, 30000);
   setInterval(renderPhasen, 1000);   // Countdown zwischen den Polls lokal weiterzählen

@@ -81,3 +81,45 @@ def test_snapshots_und_summary():
 def test_summary_ohne_daten():
     store = Store(Path(tempfile.mkdtemp()) / "leer.db")
     assert store.observation_summary()["snapshots"] == 0
+
+
+# --- Aktive Zeiten der Wärmepumpe (Issue #14) --------------------------------
+
+def _snap(store, ts, ww=0, hk=0):
+    store.log_snapshot(ts, ueberschuss_w=0, p_netz_w=0, p_batterie_w=0, soc_batt=50,
+                       soc_v=50, p_wallbox_w=0, p_sungrow_w=0, wuerde_laden=0,
+                       strom_a=0, phasen=1, garantie=0, read_only=1,
+                       entladelimit_w=None, wp_ww_boost=ww, wp_hk_boost=hk)
+
+
+def test_wp_aktive_zeiten_kommen_aus_den_snapshots():
+    """Die WP hat keinen eigenen Zähler — eine Verbrauchskurve wäre erfunden.
+    Wann das EMS sie angefordert hat, steht dagegen in jedem Tick."""
+    store = Store(Path(tempfile.mkdtemp()) / "wp.db")
+    t = datetime(2026, 8, 30, 11, 0)
+    for i in range(60):                                  # eine Stunde à 60 Ticks
+        _snap(store, t + timedelta(seconds=i * 10), ww=1 if i < 30 else 0)
+    zeilen = store.wp_aktiv_stunden("2026-08-30")
+    assert len(zeilen) == 24
+    elf = next(z for z in zeilen if z["stunde"].endswith(" 11"))
+    assert elf["ww"] == 0.5 and elf["ticks"] == 60
+
+
+def test_stunde_ohne_ticks_ist_nicht_null_sondern_unbekannt():
+    """Eine Stunde, in der das EMS nicht lief, ist keine Stunde ohne Boost.
+    Beides als 0 auszuweisen hieße, eine Aussage zu erfinden."""
+    store = Store(Path(tempfile.mkdtemp()) / "wp2.db")
+    _snap(store, datetime(2026, 8, 30, 11, 0), ww=1)
+    zeilen = store.wp_aktiv_stunden("2026-08-30")
+    assert next(z for z in zeilen if z["stunde"].endswith(" 11"))["ww"] == 1.0
+    assert next(z for z in zeilen if z["stunde"].endswith(" 03"))["ww"] is None
+
+
+def test_wp_aktiv_zaehlt_nur_den_angefragten_tag():
+    """substr auf dem Zeitstempel schneidet leicht daneben — ein Tick um
+    Mitternacht des Folgetags gehört nicht in diese Liste."""
+    store = Store(Path(tempfile.mkdtemp()) / "wp3.db")
+    _snap(store, datetime(2026, 8, 30, 23, 59, 50), ww=1)
+    _snap(store, datetime(2026, 8, 31, 0, 0, 0), ww=1)
+    zeilen = store.wp_aktiv_stunden("2026-08-30")
+    assert sum(z["ticks"] for z in zeilen) == 1

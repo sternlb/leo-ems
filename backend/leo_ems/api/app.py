@@ -276,6 +276,17 @@ def create_app(
             raus.append(neu_z)
         return raus
 
+    @app.get("/api/v1/wp/aktiv", dependencies=[auth])
+    async def wp_aktiv(tag: str | None = None):
+        """Wann lief an diesem Tag ein WW-Boost bzw. eine Heizkreis-Anhebung?
+
+        Bewusst kein Kanal in der Energiereihe: Die Wärmepumpe wird nicht
+        separat gemessen, hier steht keine Energie, sondern ein Zustand. 24
+        Zeilen mit dem Anteil je Stunde (0…1) — genug, um im Dashboard die
+        aktiven Zeiten zu kennzeichnen, und nicht mehr, als belegt ist.
+        """
+        return store.wp_aktiv_stunden(tag or date.today().isoformat())
+
     @app.get("/api/v1/energie/tage", dependencies=[auth])
     async def energie_tage(von: str | None = None, bis: str | None = None):
         return _kwh(store.energie_tage(von, bis))
