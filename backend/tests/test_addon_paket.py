@@ -79,3 +79,31 @@ def test_changelog_kennt_die_aktuelle_version():
     from leo_ems import __version__
 
     assert f"## {__version__}" in CHANGELOG.read_text(encoding="utf-8")
+
+
+# --- Icon und Logo (Issue #3) ------------------------------------------------
+
+def _png_groesse(pfad) -> tuple[int, int]:
+    """Breite und Höhe aus dem PNG-Kopf.
+
+    Bewusst ohne Pillow: Das Add-on braucht zur Laufzeit keine Bildbibliothek,
+    und eine Testabhängigkeit, die im Image mitliefe, wäre der falsche Preis für
+    zwei Zahlen. Der IHDR-Block steht bei jedem PNG an derselben Stelle.
+    """
+    kopf = pfad.read_bytes()[:24]
+    assert kopf[:8] == bytes([137, 80, 78, 71, 13, 10, 26, 10]), f"{pfad.name} ist kein PNG"
+    return int.from_bytes(kopf[16:20], "big"), int.from_bytes(kopf[20:24], "big")
+
+
+def test_icon_und_logo_liegen_neben_der_config():
+    """Der Supervisor sucht beide Dateien im Add-on-Verzeichnis — hier also in
+    der Repo-Wurzel, wie CHANGELOG.md auch. Fehlen sie, zeigt der Store das
+    graue Standardbild, ohne sich zu beschweren."""
+    icon, logo = WURZEL / "icon.png", WURZEL / "logo.png"
+    assert icon.is_file() and logo.is_file()
+
+    b, h = _png_groesse(icon)
+    # Quadratisch, weil Store und Seitenleiste quadratisch zuschneiden.
+    assert b == h, f"icon.png ist {b}×{h}, muss quadratisch sein"
+    assert b >= 256, "icon.png sollte mindestens 256 px haben"
+    assert _png_groesse(logo)[0] >= 400

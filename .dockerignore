@@ -3,6 +3,10 @@
 app/
 specs/
 docs/
+tools/
+# Icon und Logo liest der Supervisor aus dem Store-Klon, nicht aus dem Image
+icon.png
+logo.png
 backend/tests/
 backend/spikes/
 **/__pycache__/

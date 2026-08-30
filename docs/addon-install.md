@@ -4,6 +4,15 @@ Das EMS läuft als **Home-Assistant-Add-on aus einem registrierten Add-on-Reposi
 
 > **Changelog gehört neben die `config.yaml`.** Der Supervisor sucht `CHANGELOG.md` im Add-on-Verzeichnis — hier also die Repo-Wurzel. Fehlte sie (so bis v0.9.0), stand im Update-Dialog „No changelog found for app ed35676c_leo_ems!". Zwei Tests in `backend/tests/test_addon_paket.py` halten fest, dass die Datei existiert **und** einen Abschnitt `## <version>` für die aktuelle Version enthält — ein Update ohne Eintrag zeigt sonst die Änderungen der Vorversion, was schlimmer ist als gar kein Changelog, weil es plausibel aussieht. Gelesen wird aus dem **Store-Klon** des Repos, nicht aus dem installierten Image: ein `git push` plus Store-Reload genügt, ein Versionssprung ist dafür nicht nötig.
 
+> **Icon und Logo gehören ebenfalls neben die `config.yaml`** — `icon.png`
+> (quadratisch, 512 px) und `logo.png`. Der Supervisor liest sie wie den
+> Changelog aus dem **Store-Klon**, nicht aus dem Image; ein `git push` plus
+> Store-Reload genügt. Fehlen sie, zeigt der Store kommentarlos das graue
+> Standardbild — deshalb hält `backend/tests/test_addon_paket.py` fest, dass
+> beide existieren und das Icon quadratisch ist. Gezeichnet werden sie von
+> `tools/icon.py` (Issue #3); die Datei ist die Quelle, das PNG nur das
+> Ergebnis.
+
 > **Start immer über `run.sh`** (`CMD ["/run.sh"]`, Shebang `#!/usr/bin/with-contenv bashio`). Die HA-Basis-Images starten über s6-overlay, das das `CMD` mit **bereinigter Umgebung** ausführt — ein direktes `CMD ["python", …]` sieht weder die `ENV`-Zeilen des Dockerfiles noch den `SUPERVISOR_TOKEN`. Bis v0.6.4 war genau das der Fall: die Wärmepumpe kam nicht an die HA-API, und `/data` wurde nie benutzt (Token, Konfiguration und Beobachtungsdaten waren nach jedem Update weg). Details: [waermepumpe.md](waermepumpe.md).
 
 ## Zielsystem (verifiziert 2026-07-12)

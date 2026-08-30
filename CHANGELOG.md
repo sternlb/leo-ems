@@ -8,6 +8,23 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.18.3
+
+**Eigenes Icon (Issue #3).** Der Store und die Seitenleiste zeigten bisher das
+graue Standardbild. `icon.png` und `logo.png` liegen jetzt neben der
+`config.yaml`, wo der Supervisor sie sucht.
+
+Das Motiv nach Leos Entwurf: vier Punkte um eine Mitte — Wallbox und Wärme in
+Orange, PV und Batterie in Blau, dazwischen die Flüsse, in der Mitte das „L"
+mit dem Blitz. Das ist genau die Aufgabe des Geräts: Es sitzt zwischen den vier
+Punkten und entscheidet, wohin die Energie geht.
+
+Gezeichnet wird das Bild von `tools/icon.py` und nicht als fertige Datei
+abgelegt: Farben, Größen und Formen stehen dort als Zahlen, und eine andere
+Auflösung ist eine Zeile statt einer neuen Bildbearbeitung. Ein Test hält fest,
+dass beide Dateien existieren und das Icon quadratisch ist — fehlen sie, zeigt
+der Store kommentarlos wieder das graue Standardbild.
+
 ## 0.18.2
 
 **Das Wärmepumpen-Band behauptet nichts über die Zeit vor seiner Einführung.**
