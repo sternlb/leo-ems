@@ -167,6 +167,28 @@ def test_energie_reihe_beachtet_das_zeitfenster():
     assert [z["periode"] for z in zeilen] == ["2026-08-01"]
 
 
+def test_energie_reihe_stunde_fuellt_den_tag_auf():
+    """Issue #17: Ein Tag hat 24 Säulen, auch wenn nur zwei Stunden gemessen
+    sind — sonst behauptet das Diagramm einen ganzen Tag aus einem Ausschnitt."""
+    c, store = _client_mit_energie()
+    store.energie_stunde_schreiben("2026-08-01 22", {"pv_haus_wh": 500.0})
+    zeilen = c.get("/api/v1/energie/reihe?ebene=stunde&von=2026-08-01&bis=2026-08-01",
+                   headers={"Authorization": f"Bearer {TOKEN}"}).json()
+    assert len(zeilen) == 24
+    assert sum(z["stunden"] for z in zeilen) == 1          # Abdeckung 1 von 24
+    assert sum(z["pv_haus_kwh"] for z in zeilen) == 0.5
+
+
+def test_energie_csv_bleibt_bei_den_echten_stunden():
+    """Das Raster ist Anzeige, keine Messung. In einer Datei, mit der jemand
+    weiterrechnet, haben 23 erfundene Nullzeilen nichts zu suchen."""
+    c, store = _client_mit_energie()
+    store.energie_stunde_schreiben("2026-08-01 22", {"pv_haus_wh": 500.0})
+    r = c.get("/api/v1/energie/export.csv?ebene=stunde&von=2026-08-01&bis=2026-08-01",
+              headers={"Authorization": f"Bearer {TOKEN}"})
+    assert len(r.text.splitlines()) == 2                   # Kopfzeile + eine Stunde
+
+
 def test_energie_csv_folgt_dem_zeitfenster():
     """Eine CSV, die mehr enthält als das Diagramm darüber, führt beim
     Nachrechnen in die Irre."""

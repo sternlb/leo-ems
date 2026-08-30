@@ -2171,6 +2171,19 @@ async function ladeEnergie() {
   try { zeilen = await api("api/v1/energie/reihe?" + q); }
   catch (e) { $("en-hinweis").textContent = "Konnte die Historie nicht laden: " + e; return; }
 
+  // Tagesansicht: Die Stunden sind die Aufschlüsselung, die **Tageszeile ist
+  // die Bilanz** (Issue #17). Stunden gibt es erst seit v0.15 und nur, solange
+  // das EMS lief; die Kennzahlen aus ihnen zu summieren hieße, an einem
+  // unvollständig aufgezeichneten Tag die Bilanz von zwei Stunden als
+  // Tagesbilanz auszuweisen. `energie_tag` kennt den ganzen Tag — auch den aus
+  // der E3DC-Historie nachimportierten.
+  let bilanz = null, abdeckung = 0;
+  if (enSaeule() === "stunde") {
+    abdeckung = zeilen.reduce((a, z) => a + (z.stunden || 0), 0);
+    try { bilanz = (await api("api/v1/energie/reihe?ebene=tag&von=" + f.von + "&bis=" + f.bis))[0] || null; }
+    catch { /* ohne Tageszeile bleibt die Stundensumme — besser als gar nichts */ }
+  }
+
   // PV-Direktanteil: der Rest des Verbrauchs, den weder Netz noch Batterie
   // gedeckt haben. Bewusst aus der Bilanz abgeleitet und nicht separat
   // gemessen — so summiert sich der Stapel exakt auf den Verbrauch. Der
@@ -2183,9 +2196,10 @@ async function ladeEnergie() {
   enState.zeilen = zeilen;
 
   // --- Kennzahlen des Fensters
-  const pvH = summe(zeilen, "pv_haus_kwh"), pvG = summe(zeilen, "pv_garage_kwh");
-  const haus = summe(zeilen, "haus_kwh"), wb = summe(zeilen, "wallbox_kwh");
-  const bez = summe(zeilen, "netz_bezug_kwh"), ein = summe(zeilen, "netz_einspeisung_kwh");
+  const kpi = bilanz ? [bilanz] : zeilen;
+  const pvH = summe(kpi, "pv_haus_kwh"), pvG = summe(kpi, "pv_garage_kwh");
+  const haus = summe(kpi, "haus_kwh"), wb = summe(kpi, "wallbox_kwh");
+  const bez = summe(kpi, "netz_bezug_kwh"), ein = summe(kpi, "netz_einspeisung_kwh");
   const erz = pvH + pvG, verbr = haus + wb;
   $("k-erzeugung").textContent = kwh(erz);
   $("k-pv-haus").textContent = kwh(pvH); $("k-pv-garage").textContent = kwh(pvG);
@@ -2194,26 +2208,36 @@ async function ladeEnergie() {
   $("k-bezug").textContent = kwh(bez); $("k-einspeisung").textContent = kwh(ein);
   $("k-autarkie").textContent = quote(verbr - bez, verbr);
   $("k-eigen").textContent = quote(erz - ein, erz);
+  // In der Tagesansicht zählt nicht die Zahl der Säulen (die sind immer 24),
+  // sondern wie viele davon eine Messung tragen.
+  const gemessen = zeilen.filter(z => z.stunden !== 0);
   $("k-tage").textContent = enSaeule() === "stunde"
-    ? zeilen.length + (zeilen.length === 1 ? " Stunde" : " Stunden")
+    ? abdeckung + " von 24 Stunden"
     : zeilen.reduce((a, z) => a + (z.tage || 0), 0) + " Tage";
-  $("k-spanne").textContent = zeilen.length
-    ? zeilen[0].periode + " – " + zeilen[zeilen.length - 1].periode : "–";
+  const spanne = enSaeule() === "stunde" ? gemessen : zeilen;
+  $("k-spanne").textContent = spanne.length
+    ? spanne[0].periode + " – " + spanne[spanne.length - 1].periode : "–";
 
   // --- Diagramme
   legende("ch1-leg", S_ERZEUGUNG.concat(S_VERBRAUCH));
   legende("ch2-leg", S_DECKUNG);
   legende("ch3-leg", S_NETZ);
   const drill = enSaeule() === "stunde" ? null : enDrill;
-  chartZeichnen("ch1", "ch1-leer", zeilen,
+  // 24 Nullsäulen sind kein Diagramm, sondern eine flache Linie, die so
+  // aussieht, als wäre an dem Tag nichts passiert. Ohne eine einzige gemessene
+  // Stunde zeigt die Karte deshalb ihren Leerzustand.
+  const gezeichnet = (enSaeule() === "stunde" && abdeckung === 0) ? [] : zeilen;
+  chartZeichnen("ch1", "ch1-leer", gezeichnet,
     [{ name: "Erzeugung", serien: S_ERZEUGUNG }, { name: "Verbrauch", serien: S_VERBRAUCH }], { drill });
-  chartZeichnen("ch2", "ch2-leer", zeilen, [{ name: "Deckung", serien: S_DECKUNG }], { drill });
-  chartZeichnen("ch3", "ch3-leer", zeilen, [{ name: "Netz", serien: S_NETZ }], { drill });
+  chartZeichnen("ch2", "ch2-leer", gezeichnet, [{ name: "Deckung", serien: S_DECKUNG }], { drill });
+  chartZeichnen("ch3", "ch3-leer", gezeichnet, [{ name: "Netz", serien: S_NETZ }], { drill });
 
   // --- Tabelle
   const tb = $("en-tab").querySelector("tbody");
   tb.innerHTML = "";
-  for (const z of zeilen) {
+  // Nicht gemessene Stunden gehören nicht in die Tabelle: 22 Nullzeilen sind
+  // keine Information, sondern verstecken die beiden, die eine sind.
+  for (const z of (enSaeule() === "stunde" ? gemessen : zeilen)) {
     const tr = document.createElement("tr");
     tr.innerHTML = "<td>" + z.periode + "</td>"
       + EN_SPALTEN.map(k => "<td>" + (z[k] ?? 0).toFixed(1) + "</td>").join("")
@@ -2224,14 +2248,27 @@ async function ladeEnergie() {
   // Tage aus der E3DC-Historie, die nach der Garagen-Inbetriebnahme liegen,
   // haben einen zu kleinen Hausverbrauch. Das gehört sichtbar an die Zahl und
   // nicht in eine Fußnote, die niemand liest.
-  const unvollstaendig = zeilen.some(z => String(z.quellen || "").includes("ohne-garage"));
-  const stundenLeer = zeilen.length === 0 && enSaeule() === "stunde";
-  $("en-hinweis").textContent = stundenLeer
+  const unvollstaendig = zeilen.some(z => String(z.quellen || "").includes("ohne-garage"))
+    || String(bilanz?.quellen || "").includes("ohne-garage");
+  // Der heutige Tag ist zwangsläufig unvollständig — die Stunden nach jetzt hat
+  // noch niemand gemessen. Das ist kein Mangel und braucht keinen Hinweis.
+  const heute = new Date();
+  const erwartet = (f.von === iso(heute)) ? heute.getHours() + 1 : 24;
+  $("en-hinweis").textContent = enSaeule() === "stunde"
     // Stundenwerte lassen sich nicht nachtragen: die Ticks in `snapshots`
     // führen weder die Dach-PV noch den Hausverbrauch, und die E3DC-Historie
     // liefert Tagessummen. Das gehört hier hin und nicht in eine Fußnote.
-    ? "Für diesen Tag gibt es keine Stundenwerte. Das EMS schreibt sie erst seit v0.15 mit — "
-      + "ältere Tage stehen als Tagessumme in Woche, Monat und Jahr."
+    ? (abdeckung === 0
+        ? (bilanz
+            ? "Für diesen Tag gibt es keine Stundenwerte — das EMS schreibt sie erst seit v0.15 mit. "
+              + "Die Kennzahlen oben sind die vollständige Tagesbilanz, nur die Aufteilung über den Tag fehlt."
+            : "Für diesen Tag gibt es keine Daten. Unten die Historie aus der E3DC holen — "
+              + "das EMS zählt ab jetzt selbst mit.")
+        : (abdeckung < erwartet
+            ? "Nur " + abdeckung + " der 24 Stunden sind aufgezeichnet — in den übrigen lief das EMS nicht. "
+              + "Die Kennzahlen oben zeigen trotzdem den ganzen Tag (aus der Tagesbilanz), "
+              + "das Diagramm nur die gemessenen Stunden."
+            : ""))
     : (zeilen.length === 0
       ? "Keine Daten in diesem Zeitraum. Unten die Historie aus der E3DC holen — das EMS zählt ab jetzt selbst mit."
       : (unvollstaendig ? "Hinweis: Zeiträume mit Quelle „e3dc-ohne-garage“ stammen aus der E3DC-Historie "

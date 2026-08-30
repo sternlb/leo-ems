@@ -23,7 +23,8 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..config import DATA_DIR, TOKEN_FILE, RegelConfig, save_config
-from ..energy import KANAELE, ImportBericht, importiere_e3dc_historie
+from ..energy import (KANAELE, ImportBericht, importiere_e3dc_historie,
+                     stunden_auffuellen)
 from ..planner.rules import ChargingRule
 from ..store import Store
 
@@ -302,9 +303,20 @@ def create_app(
 
         `stunde` kommt aus einer eigenen Tabelle statt aus einer weiteren
         GROUP-BY-Ebene: Stunden lassen sich aus Tageszeilen nicht herleiten.
+        Bei gesetztem Fenster wird die Reihe auf **alle** Stunden des Fensters
+        aufgefüllt (Issue #17); nicht gemessene Stunden tragen `stunden: 0` und
+        eine leere `quellen`.
         """
         if ebene == "stunde":
-            return _kwh(store.energie_stunden(von, bis))
+            zeilen = store.energie_stunden(von, bis)
+            # Ein Tag hat 24 Stunden, auch wenn nur zwei davon aufgezeichnet
+            # sind (Issue #17). Ohne das Raster zieht das Diagramm die
+            # vorhandenen Säulen über die volle Breite und behauptet damit
+            # einen ganzen Tag. Nur mit gesetztem Fenster — ohne von/bis gibt
+            # es keinen Rahmen, den man füllen könnte.
+            if von and bis:
+                zeilen = stunden_auffuellen(zeilen, von, bis)
+            return _kwh(zeilen)
         return _kwh(store.energie_gruppiert(ebene, jahr, von, bis))
 
     @app.get("/api/v1/energie/export.csv", dependencies=[auth])

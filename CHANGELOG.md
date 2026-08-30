@@ -8,6 +8,29 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.16.1
+
+**Die Tagesansicht der Historie zeigt wieder einen ganzen Tag (Issue #17).**
+
+*Der Fehler.* Am 27.08.2026 standen in der Tagesansicht zwei Säulen über die
+volle Breite, und darüber eine Bilanz von 57,9 kWh Erzeugung — aber gerechnet
+aus genau diesen zwei Stunden. Die Stundentabelle kam an dem Tag um 22:46 dazu
+(v0.15), mehr als 22:00 und 23:00 gibt es für den 27. nicht und wird es nie
+geben: Stunden lassen sich nicht nachtragen. Die Ansicht hat daraus stillschweigend
+„der Tag" gemacht.
+
+*Die Behebung, zwei Teile.* Ein Tag hat jetzt **immer 24 Säulen** — nicht
+gemessene Stunden bleiben sichtbar leer, statt dass die vorhandenen sich über
+die Breite verteilen. Und die **Kennzahlen kommen aus der Tageszeile**
+(`energie_tag`) statt aus der Summe der Stunden. Die Tageszeile kennt den ganzen
+Tag, auch den aus der E3DC nachimportierten; die Stunden sind ihre
+Aufschlüsselung, nicht ihre Quelle. Über der Ansicht steht die Abdeckung
+(„2 von 24 Stunden") und, wenn sie unvollständig ist, warum.
+
+*Was bewusst gleich bleibt.* Der CSV-Export liefert weiter nur die echten
+Stundenzeilen. Das Raster ist Anzeige; 22 erfundene Nullzeilen in einer Datei,
+mit der jemand weiterrechnet, wären etwas anderes als eine ehrliche Lücke.
+
 ## 0.16.0
 
 **Der Warmwasser-Sollwert kommt jetzt zuverlässig auf 45 °C zurück — und ein

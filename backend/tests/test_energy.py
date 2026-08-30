@@ -17,6 +17,7 @@ from leo_ems.energy import (
     e3dc_tag_umrechnen,
     importiere_e3dc_historie,
     leistungen_aus_status,
+    stunden_auffuellen,
 )
 from leo_ems.store import Store
 
@@ -223,6 +224,48 @@ def test_stundenfenster_schneidet_am_tagesrand(store):
         store.energie_stunde_schreiben(s, {"pv_haus_wh": 100.0})
     zeilen = store.energie_stunden(von="2026-08-22", bis="2026-08-22")
     assert [z["periode"] for z in zeilen] == ["2026-08-22 00", "2026-08-22 23"]
+
+
+# --- Vollständiges Stundenraster (Issue #17) --------------------------------
+
+def test_tagesfenster_hat_immer_24_stunden(store):
+    """Der 27.08.2026 hatte zwei aufgezeichnete Stunden (die Tabelle kam um
+    22:46 dazu). Gezeichnet wurden zwei Säulen über die volle Breite — das sah
+    aus wie der ganze Tag. Ein Tag hat 24 Stunden, auch wenn nur zwei gemessen
+    sind."""
+    for s in ("2026-08-27 22", "2026-08-27 23"):
+        store.energie_stunde_schreiben(s, {"pv_haus_wh": 100.0})
+    zeilen = stunden_auffuellen(
+        store.energie_stunden(von="2026-08-27", bis="2026-08-27"),
+        "2026-08-27", "2026-08-27")
+    assert len(zeilen) == 24
+    assert [z["periode"][11:] for z in zeilen] == [f"{h:02d}" for h in range(24)]
+
+
+def test_nicht_gemessene_stunde_ist_von_einer_nullstunde_unterscheidbar(store):
+    """Eine Nacht ohne PV ist gemessene Null; eine Stunde vor dem Go-live ist
+    keine Messung. Beide als 0,0 kWh auszuweisen wäre dieselbe Zahl mit zwei
+    verschiedenen Bedeutungen — die Abdeckung hängt daran (`stunden`)."""
+    store.energie_stunde_schreiben("2026-08-27 22", {"pv_haus_wh": 0.0})
+    zeilen = stunden_auffuellen(
+        store.energie_stunden(von="2026-08-27", bis="2026-08-27"),
+        "2026-08-27", "2026-08-27")
+    gemessen = [z for z in zeilen if z["stunden"] == 1]
+    assert [z["periode"] for z in gemessen] == ["2026-08-27 22"]
+    assert gemessen[0]["quellen"] == "ems"
+    assert sum(z["stunden"] for z in zeilen) == 1          # Abdeckung 1 von 24
+    assert all(z["quellen"] == "" for z in zeilen if z["stunden"] == 0)
+
+
+def test_aufgefuellte_stunden_aendern_die_tagessumme_nicht(store):
+    """Die Nullzeilen sind Raster, keine Daten: Was das Fenster an Energie
+    ausweist, darf sich durch das Auffüllen nicht verschieben."""
+    for h in (10, 11):
+        store.energie_stunde_schreiben(f"2026-08-27 {h}", {"pv_haus_wh": 1500.0})
+    roh = store.energie_stunden(von="2026-08-27", bis="2026-08-27")
+    voll = stunden_auffuellen(roh, "2026-08-27", "2026-08-27")
+    assert (sum(z["pv_haus_wh"] for z in voll)
+            == pytest.approx(sum(z["pv_haus_wh"] for z in roh)))
 
 
 # --- E3DC-Import ------------------------------------------------------------

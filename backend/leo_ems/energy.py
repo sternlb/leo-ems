@@ -354,3 +354,38 @@ async def importiere_e3dc_historie(adapter, store, von: date, bis: date,
         bericht.phase = "fertig" if bericht.fehler is None else "abgebrochen"
         bericht.aktueller_tag = None
     return bericht
+
+
+# --- Anzeige-Aufbereitung ---------------------------------------------------
+
+def stunden_auffuellen(zeilen: list[dict], von: str, bis: str) -> list[dict]:
+    """Ein Tagesfenster auf **alle** Stunden auffüllen (Issue #17).
+
+    Die Datenbank kennt nur Stunden, in denen das EMS gelaufen ist. Zeichnet man
+    genau die, wird aus einem Tag mit zwei aufgezeichneten Stunden ein Diagramm
+    mit zwei Säulen über die volle Breite — es sieht aus wie „der Tag", ist aber
+    ein Ausschnitt. Genau das war am 27.08.2026 zu sehen, dem Tag, an dem die
+    Stundentabelle um 22:46 dazukam.
+
+    Deshalb bekommt die Reihe hier ihr vollständiges Raster: 00 bis 23 für jeden
+    Tag des Fensters. Fehlende Stunden kommen mit Nullen, aber mit `stunden: 0`
+    und leerer `quellen` — daran ist „nicht gemessen" von „gemessen, war null"
+    unterscheidbar, und die Summe über `stunden` ist die Abdeckung des Tages.
+
+    Bewusst hier und nicht in der Datenbankschicht: Der CSV-Export soll weiter
+    die echten Zeilen ausliefern. Eine Datei mit 22 erfundenen Nullzeilen wäre
+    nicht dasselbe wie eine ehrliche Lücke, sobald jemand sie weiterrechnet.
+    """
+    vorhanden = {z["periode"]: z for z in zeilen}
+    raus = []
+    tag = date.fromisoformat(von)
+    ende = date.fromisoformat(bis)
+    while tag <= ende:
+        for h in range(24):
+            schluessel = f"{tag.isoformat()} {h:02d}"
+            z = vorhanden.get(schluessel)
+            raus.append(z if z is not None else
+                        {"periode": schluessel, "stunden": 0, "quellen": "",
+                         **{k: 0.0 for k in KANAELE}})
+        tag += timedelta(days=1)
+    return raus

@@ -189,6 +189,27 @@ ein, nicht auf Periodenebene — eine angeschnittene Randwoche ist die Summe
 ihrer Tage im Fenster. Die Spalte `tage` weist aus, wie viele das waren; sonst
 läse man eine kurze Randsäule als schlechten Ertrag.
 
+**Ein Tag hat 24 Säulen (v0.16.1, Issue #17).** Die Reihe wird für ein
+Tagesfenster serverseitig auf alle Stunden aufgefüllt; nicht gemessene Stunden
+tragen `stunden: 0` und eine leere `quellen` und sind damit von einer gemessenen
+Null (Nacht ohne PV) unterscheidbar. Ohne das Raster zog das Diagramm die
+vorhandenen Säulen über die volle Breite — am 27.08.2026 waren das zwei, und es
+sah aus wie der ganze Tag.
+
+Die **Kennzahlen über der Tagesansicht kommen aus der Tageszeile**, nicht aus
+der Summe der Stunden: `energie_tag` kennt den ganzen Tag — auch den aus der
+E3DC nachimportierten —, die Stunden sind seine Aufschlüsselung und existieren
+erst seit v0.15 und nur, solange das EMS lief. Die Kachel rechts weist die
+Abdeckung aus („2 von 24 Stunden"), und bei einer Lücke steht darüber, woran es
+liegt. Der heutige Tag ist davon ausgenommen: Die Stunden nach jetzt fehlen
+zwangsläufig und sind kein Mangel. Gibt es für den Tag **gar keine** Stunde,
+zeigen die Diagramme ihren Leerzustand — 24 Nullsäulen wären eine flache Linie,
+die behauptet, es sei nichts passiert.
+
+Der **CSV-Export bleibt bei den echten Zeilen**: Das Raster ist Anzeige. In
+einer Datei, mit der jemand weiterrechnet, sind 22 erfundene Nullzeilen etwas
+anderes als eine ehrliche Lücke.
+
 **Stundenwerte (v0.15).** Die Tagesansicht braucht eine Auflösung, die
 `energie_tag` nicht hat. Der Zähler schreibt deshalb parallel eine zweite
 Tabelle `energie_stunde` — dieselbe Mechanik (absolute Stände, UPSERT,
@@ -234,6 +255,8 @@ damit das Diagramm seine Achse nicht von der Ebene abhängig machen muss. Die
 `ebene=stunde` kommt aus der eigenen Stundentabelle statt aus einer weiteren
 GROUP-BY-Ebene — aus Tageszeilen lassen sich Stunden nicht herleiten. Die
 Zeilen tragen dort `stunden: 1` statt `tage`; `von`/`bis` bleiben Tage.
+Mit gesetztem Fenster ist die Reihe auf alle Stunden des Fensters aufgefüllt
+(`stunden: 0` für nicht gemessene) — der CSV-Export nicht.
 
 ## Ablageformat und Export
 

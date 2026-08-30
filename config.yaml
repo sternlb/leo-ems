@@ -1,5 +1,5 @@
 name: Leo-EMS
-version: "0.16.0"
+version: "0.16.1"
 slug: leo_ems
 description: Energy Management System — koordiniert E3DC, go-e Wallbox, Enyaq und Vaillant WP
 url: https://github.com/sternlb/leo-ems
