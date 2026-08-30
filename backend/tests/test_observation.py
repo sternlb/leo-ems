@@ -123,3 +123,17 @@ def test_wp_aktiv_zaehlt_nur_den_angefragten_tag():
     _snap(store, datetime(2026, 8, 31, 0, 0, 0), ww=1)
     zeilen = store.wp_aktiv_stunden("2026-08-30")
     assert sum(z["ticks"] for z in zeilen) == 1
+
+
+def test_ticks_von_vor_der_umstellung_gelten_als_unbekannt():
+    """Snapshot-Zeilen aus der Zeit vor v0.17 führen die Spalten als NULL. Über
+    COUNT(*) gemittelt ergäbe das 0,0 — „es lief kein Boost" — und wäre für
+    jede Stunde falsch, in der einer lief."""
+    store = Store(Path(tempfile.mkdtemp()) / "wp4.db")
+    # So sah eine Zeile vor v0.17 aus: ohne die beiden Spalten.
+    store._db.execute("INSERT INTO snapshots (ts, soc_batt) VALUES (?, ?)",
+                      ("2026-08-30T11:00:00", 50.0))
+    store._db.commit()
+    zeilen = store.wp_aktiv_stunden("2026-08-30")
+    elf = next(z for z in zeilen if z["stunde"].endswith(" 11"))
+    assert elf["ticks"] == 0 and elf["ww"] is None

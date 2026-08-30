@@ -385,10 +385,17 @@ class Store:
         10 s, war aber nicht immer dort, und nach einem Neustart fehlen Ticks.
         `treffer / ticks` bleibt auch dann richtig, während eine Minutenzahl aus
         `treffer × 10 s` still zu klein würde. `ticks` wird mitgeliefert, damit
-        eine Stunde mit dünner Datenlage erkennbar bleibt.
+        eine Stunde mit dünner Datenlage erkennbar bleibt — und zählt nur Ticks,
+        die den Zustand überhaupt führen (siehe unten).
         """
+        # Gezählt wird `COUNT(wp_ww_boost)` und nicht `COUNT(*)`: Zeilen aus der
+        # Zeit vor v0.17 haben die Spalte als NULL, weil es sie noch nicht gab.
+        # Über COUNT(*) gemittelt würden daraus 0,0 — also „es lief kein Boost",
+        # und das ist für Stunden, in denen einer lief, schlicht falsch. NULL
+        # zählt hier gar nicht mit, und eine Stunde ganz ohne Wissen fällt damit
+        # in denselben Zweig wie eine ohne Ticks: unbekannt.
         cur = self._db.execute(
-            "SELECT substr(ts, 1, 13) AS stunde, COUNT(*) AS ticks,"
+            "SELECT substr(ts, 1, 13) AS stunde, COUNT(wp_ww_boost) AS ticks,"
             " SUM(COALESCE(wp_ww_boost, 0)) AS ww, SUM(COALESCE(wp_hk_boost, 0)) AS hk"
             " FROM snapshots WHERE ts >= ? AND ts < ? GROUP BY stunde ORDER BY stunde",
             (tag, tag + "T24"),

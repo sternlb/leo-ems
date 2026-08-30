@@ -8,6 +8,20 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.18.2
+
+**Das Wärmepumpen-Band behauptet nichts über die Zeit vor seiner Einführung.**
+
+Die Zustände `wp_ww_boost`/`wp_hk_boost` gibt es erst seit v0.17.0. Ältere
+Snapshot-Zeilen führen die Spalten als NULL — über die Gesamtzahl der Ticks
+gemittelt wurden daraus 0,0 und damit die Aussage „in dieser Stunde lief kein
+Boost". Für den Tag der Umstellung war das nachweislich falsch.
+
+Gezählt werden jetzt nur Ticks, die den Zustand überhaupt führen. Stunden ohne
+dieses Wissen fallen in denselben Zweig wie Stunden ohne Ticks: unbekannt, im
+Band gestreift. Ab dem ersten vollen Tag mit v0.17+ tritt der Fall nicht mehr
+auf.
+
 ## 0.18.1
 
 **Ein Gerät, das nicht antwortet, hält nicht mehr das ganze EMS an.**
