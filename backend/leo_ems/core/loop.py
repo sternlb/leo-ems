@@ -31,6 +31,15 @@ from ..safety import SafetyGuard
 from ..store import Store
 
 E3DC_MAX_ALTER = timedelta(seconds=60)   # Fail-Safe E1 (Spec §7)
+# Obergrenze für einen einzelnen Geräte-Zugriff. Ohne sie hängt die **ganze**
+# Regelschleife an dem einen Adapter, der nicht antwortet — am 30.08.2026 real
+# passiert: Nach einem Update blieb der Škoda-Cloud-Adapter in einem `await`
+# stehen, und das EMS hat danach keinen einzigen Tick mehr zu Ende gebracht.
+# Kein Gerät ist wichtig genug, um die Regelung anzuhalten; ein Timeout ist
+# dasselbe wie „nicht erreichbar", und dafür gibt es die Fail-Safes E1–E7.
+# 15 s liegen über jeder normalen Antwortzeit (RSCP ~10 ms, Cloud ~1–2 s) und
+# unter dem Regelintervall-Vielfachen, ab dem E1 ohnehin greift.
+GERAET_TIMEOUT_S = 15.0
 # Ein dauerhaft ausgefallenes Gerät soll das Protokoll nicht zumüllen (6 Ticks/min),
 # darin aber auch nicht verschwinden: melden bei Wechsel und danach stündlich.
 GERAET_MELDE_INTERVALL = timedelta(minutes=60)
@@ -517,9 +526,11 @@ class ControlLoop:
         z = self._geraet(name)
         now = datetime.now()
         try:
-            daten = await adapter.read()
+            daten = await asyncio.wait_for(adapter.read(), timeout=GERAET_TIMEOUT_S)
         except Exception as exc:
-            text = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+            text = (f"antwortet nicht ({GERAET_TIMEOUT_S:.0f} s)"
+                    if isinstance(exc, asyncio.TimeoutError)
+                    else (f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__))
             if z["ok"] or z["fehler"] != text:
                 z["seit"], z["gemeldet"] = now, None       # neuer Fehler → sofort melden
             z["ok"], z["fehler"] = False, text
@@ -536,7 +547,9 @@ class ControlLoop:
         return daten
 
     async def _safe_cmd(self, coro_func, *args) -> None:
+        # Dieselbe Obergrenze wie beim Lesen: Ein Schreibbefehl, der nicht
+        # zurückkommt, hielte die Regelschleife genauso an.
         try:
-            await coro_func(*args)
+            await asyncio.wait_for(coro_func(*args), timeout=GERAET_TIMEOUT_S)
         except Exception as exc:
             self.store.log_decision(datetime.now(), "cmd_fehler", {"args": str(args)}, "-", f"Fehler: {exc}")

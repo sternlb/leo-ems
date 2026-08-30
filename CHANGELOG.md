@@ -8,6 +8,33 @@ sie im Update-Dialog an. Ohne sie meldet Home Assistant
 Ausführliche Begründungen zu jeder Änderung stehen in den Specs (`specs/`) und in
 der Projektnotiz im Second Brain.
 
+## 0.18.1
+
+**Ein Gerät, das nicht antwortet, hält nicht mehr das ganze EMS an.**
+
+*Der Fehler.* Nach dem Update auf v0.18.0 am Abend des 30.08.2026 brachte das
+EMS **keinen einzigen Regeltick** mehr zu Ende. Im Dashboard stand
+„Regelschleife initialisiert", das Protokoll endete mit dem letzten Tick der
+Vorversion, und die Tagesbilanz blieb auf null.
+
+*Die Ursache.* Beim Update baut der Supervisor das Image neu, und dabei kam eine
+neuere `myskoda`-Version mit. Deren Client blieb beim Verbindungsaufbau in einem
+`await` stehen, statt einen Fehler zu liefern. Und weil `_safe_read()` zwar jede
+Exception abfing, aber **keine Zeitgrenze** hatte, wartete die Regelschleife
+mit — unbegrenzt. Aus einem Problem in einer Auto-Cloud wurde so ein totes EMS,
+das weder die Wallbox noch die Wärmepumpe noch die Batteriegrenze bedient hätte.
+
+*Die Behebung.* Jeder Geräte-Zugriff hat jetzt eine Obergrenze von 15 Sekunden —
+Lesen wie Schreiben. Ein Timeout wird behandelt wie „nicht erreichbar", und
+genau dafür gibt es die Fail-Safes E1–E7: Die Regelung läuft ohne dieses Gerät
+weiter, im Status steht „antwortet nicht (15 s)". 15 s liegen weit über jeder
+normalen Antwortzeit (RSCP ~10 ms, Cloud ~1–2 s).
+
+Das ist keine Umgehung des Škoda-Problems, sondern die Behebung des
+eigentlichen Fehlers: **Kein Gerät ist wichtig genug, um die Regelung
+anzuhalten.** Der fehlende Fahrzeug-SoC ist ein bekannter Fall (Fail-Safe E3,
+die Zielladung schätzt dann) — eine stehende Regelschleife war keiner.
+
 ## 0.18.0
 
 **Die Reihenfolge, in der der Überschuss verteilt wird, ist jetzt einstellbar
